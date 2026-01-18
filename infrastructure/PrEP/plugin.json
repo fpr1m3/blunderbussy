@@ -1,0 +1,149 @@
+{
+  "$schema": "https://claude.ai/plugin-schema.json",
+  "name": "agent-opulence",
+  "version": "1.0.0",
+  "description": "Personal AI Infrastructure plugin for Agent Opulence - autonomous offensive security orchestration",
+
+  "author": "fprime",
+  "repository": "https://github.com/fprime/agent-opulence",
+
+  "main": "src/lib/index.ts",
+
+  "components": {
+    "hooks": {
+      "PreToolUse": [
+        {
+          "name": "scope-firewall",
+          "description": "Validates targets against engagement scope before tool execution",
+          "path": "src/hooks/scope-firewall.ts",
+          "events": ["mcp:*", "builtin:Bash"]
+        },
+        {
+          "name": "policy-enforcer",
+          "description": "Enforces namespace policy (ALLOW/ASK/DENY) for tool calls",
+          "path": "src/hooks/policy-enforcer.ts",
+          "events": ["*"]
+        }
+      ],
+      "PostToolUse": [
+        {
+          "name": "output-processor",
+          "description": "Processes tool output with hybrid masking and finding extraction",
+          "path": "src/hooks/output-processor.ts",
+          "events": ["mcp:hexstrike:*", "mcp:metasploit:*", "mcp:sliver:*"]
+        },
+        {
+          "name": "manifest-updater",
+          "description": "Updates engagement manifest with tool results",
+          "path": "src/hooks/manifest-updater.ts",
+          "events": ["mcp:*"]
+        }
+      ],
+      "SessionStart": [
+        {
+          "name": "session-restore",
+          "description": "Restores sticky session state on plugin load",
+          "path": "src/hooks/session-restore.ts"
+        }
+      ],
+      "SessionEnd": [
+        {
+          "name": "session-save",
+          "description": "Persists session state on exit",
+          "path": "src/hooks/session-save.ts"
+        }
+      ]
+    },
+
+    "commands": [
+      {
+        "name": "opulence-init",
+        "description": "Initialize a new engagement with scope definition",
+        "path": "src/commands/init.ts"
+      },
+      {
+        "name": "opulence-status",
+        "description": "Show current engagement status and findings",
+        "path": "src/commands/status.ts"
+      },
+      {
+        "name": "opulence-scope",
+        "description": "View or modify engagement scope",
+        "path": "src/commands/scope.ts"
+      },
+      {
+        "name": "opulence-findings",
+        "description": "List all findings from current engagement",
+        "path": "src/commands/findings.ts"
+      },
+      {
+        "name": "opulence-end",
+        "description": "End current engagement and generate report",
+        "path": "src/commands/end.ts"
+      }
+    ],
+
+    "agents": [
+      {
+        "name": "the-dame",
+        "description": "Master orchestrator agent - plans and coordinates specialist agents",
+        "path": "src/agents/the-dame.md"
+      },
+      {
+        "name": "date-planner",
+        "description": "Exploitation specialist - handles Metasploit operations",
+        "path": "src/agents/date-planner.md"
+      },
+      {
+        "name": "party-line-operator",
+        "description": "C2 specialist - manages Sliver beacons and post-exploitation",
+        "path": "src/agents/party-line-operator.md"
+      }
+    ],
+
+    "skills": [
+      {
+        "name": "htb-init",
+        "description": "Initialize HTB machine engagement with auto-scope",
+        "path": "src/skills/htb-init.md"
+      }
+    ]
+  },
+
+  "config": {
+    "policyPath": "./policy.json",
+    "sessionDir": ".opulence/sessions",
+    "manifestDir": ".opulence/manifest",
+    "artifactDir": ".opulence/artifacts"
+  },
+
+  "mcp": {
+    "servers": [
+      {
+        "name": "opulence-artifacts",
+        "description": "Artifact storage MCP server",
+        "type": "stdio",
+        "command": "node",
+        "args": ["dist/mcp/artifacts-server.js"]
+      },
+      {
+        "name": "opulence-manifest",
+        "description": "Manifest query MCP server",
+        "type": "stdio",
+        "command": "node",
+        "args": ["dist/mcp/manifest-server.js"]
+      },
+      {
+        "name": "opulence-scope",
+        "description": "Scope validation MCP server",
+        "type": "stdio",
+        "command": "node",
+        "args": ["dist/mcp/scope-server.js"]
+      }
+    ]
+  },
+
+  "dependencies": {
+    "uuid": "^9.0.0"
+  }
+}

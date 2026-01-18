@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<?xml-stylesheet href="file:///usr/bin/../share/nmap/nmap.xsl" type="text/xsl"?>
+<!-- Nmap 7.94 scan initiated Wed Jan 15 12:00:00 2026 as: nmap -sV -sC -p 22,80,443,3306 -oX sample_scripts.xml 172.16.5.100 -->
+<nmaprun scanner="nmap" args="nmap -sV -sC -p 22,80,443,3306 -oX sample_scripts.xml 172.16.5.100" start="1736944800" startstr="Wed Jan 15 12:00:00 2026" version="7.94" xmloutputversion="1.05">
+<scaninfo type="syn" protocol="tcp" numservices="4" services="22,80,443,3306"/>
+<verbose level="0"/>
+<debugging level="0"/>
+<host starttime="1736944800" endtime="1736944823"><status state="up" reason="echo-reply" reason_ttl="64"/>
+<address addr="172.16.5.100" addrtype="ipv4"/>
+<hostnames>
+<hostname name="db-server.internal.corp" type="PTR"/>
+</hostnames>
+<ports><port protocol="tcp" portid="22"><state state="open" reason="syn-ack" reason_ttl="64"/><service name="ssh" product="OpenSSH" version="9.2p1 Debian 2+deb12u2" extrainfo="protocol 2.0" ostype="Linux" method="probed" conf="10"><cpe>cpe:/a:openbsd:openssh:9.2p1</cpe><cpe>cpe:/o:linux:linux_kernel</cpe></service><script id="ssh-hostkey" output="&#xa;  2048 3e:c1:45:ba:8f:2d:9a:71:e3:4f:c8:91:d2:7a:3b:e5 (RSA)&#xa;  256 4a:2f:7b:c8:e1:9d:3f:a5:6b:8c:d1:e2:f3:4a:5b:6c (ECDSA)&#xa;  256 e7:9a:2b:3c:d4:5e:6f:7a:8b:9c:0d:1e:2f:3a:4b:5c (ED25519)"><elem key="type">ssh-rsa</elem>
+<elem key="bits">2048</elem>
+<elem key="fingerprint">3ec145ba8f2d9a71e34fc891d27a3be5</elem>
+</script></port>
+<port protocol="tcp" portid="80"><state state="open" reason="syn-ack" reason_ttl="64"/><service name="http" product="Apache httpd" version="2.4.57" extrainfo="(Debian)" method="probed" conf="10"><cpe>cpe:/a:apache:http_server:2.4.57</cpe></service><script id="http-title" output="Apache2 Debian Default Page: It works"><elem key="title">Apache2 Debian Default Page: It works</elem>
+</script><script id="http-server-header" output="Apache/2.4.57 (Debian)"><elem>Apache/2.4.57 (Debian)</elem>
+</script></port>
+<port protocol="tcp" portid="443"><state state="open" reason="syn-ack" reason_ttl="64"/><service name="ssl/http" product="Apache httpd" version="2.4.57" extrainfo="(Debian)" tunnel="ssl" method="probed" conf="10"><cpe>cpe:/a:apache:http_server:2.4.57</cpe></service><script id="ssl-cert" output="Subject: commonName=db-server.internal.corp/organizationName=Example Corp&#xa;Not valid before: 2025-12-01T00:00:00&#xa;Not valid after:  2026-12-01T23:59:59"><table key="subject">
+<elem key="commonName">db-server.internal.corp</elem>
+<elem key="organizationName">Example Corp</elem>
+</table>
+</script></port>
+<port protocol="tcp" portid="3306"><state state="open" reason="syn-ack" reason_ttl="64"/><service name="mysql" product="MySQL" version="8.0.35-0ubuntu0.22.04.1" method="probed" conf="10"><cpe>cpe:/a:mysql:mysql:8.0.35</cpe></service><script id="mysql-info" output="&#xa;  Protocol: 10&#xa;  Version: 8.0.35-0ubuntu0.22.04.1&#xa;  Thread ID: 42&#xa;  Status: Autocommit"><elem key="Protocol">10</elem>
+<elem key="Version">8.0.35-0ubuntu0.22.04.1</elem>
+</script></port>
+</ports>
+<times srtt="1567" rttvar="678" to="100000"/>
+</host>
+<runstats><finished time="1736944823" timestr="Wed Jan 15 12:00:23 2026" summary="Nmap done at Wed Jan 15 12:00:23 2026; 1 IP address (1 host up) scanned in 23.18 seconds" elapsed="23.18" exit="success"/><hosts up="1" down="0" total="1"/>
+</runstats>
+</nmaprun>

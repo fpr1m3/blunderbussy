@@ -1,0 +1,283 @@
+{
+  "$schema": "./schemas/policy.schema.json",
+  "version": "1.0.0",
+  "updated": "2026-01-15T00:00:00Z",
+  "description": "Agent Opulence namespace policy configuration",
+
+  "defaultAction": "ASK",
+
+  "rules": [
+    {
+      "id": "read-artifacts-allow",
+      "namespace": "mcp:opulence-artifacts",
+      "tool": "read",
+      "action": "ALLOW",
+      "reason": "Reading artifacts is always safe"
+    },
+    {
+      "id": "list-artifacts-allow",
+      "namespace": "mcp:opulence-artifacts",
+      "tool": "list",
+      "action": "ALLOW",
+      "reason": "Listing artifacts is always safe"
+    },
+    {
+      "id": "search-artifacts-allow",
+      "namespace": "mcp:opulence-artifacts",
+      "tool": "search",
+      "action": "ALLOW",
+      "reason": "Searching artifacts is always safe"
+    },
+    {
+      "id": "manifest-read-allow",
+      "namespace": "mcp:opulence-manifest",
+      "tool": "query",
+      "action": "ALLOW",
+      "reason": "Querying manifest is always safe"
+    },
+    {
+      "id": "manifest-sessions-allow",
+      "namespace": "mcp:opulence-manifest",
+      "tool": "get_sessions",
+      "action": "ALLOW",
+      "reason": "Getting session info is always safe"
+    },
+    {
+      "id": "manifest-update-ask",
+      "namespace": "mcp:opulence-manifest",
+      "tool": "update",
+      "action": "ASK",
+      "reason": "Updating manifest should be reviewed"
+    },
+    {
+      "id": "scope-validate-allow",
+      "namespace": "mcp:opulence-scope",
+      "tool": "validate",
+      "action": "ALLOW",
+      "reason": "Validating scope is always safe"
+    },
+    {
+      "id": "scope-list-allow",
+      "namespace": "mcp:opulence-scope",
+      "tool": "list",
+      "action": "ALLOW",
+      "reason": "Listing scope is always safe"
+    },
+    {
+      "id": "scope-expand-ask",
+      "namespace": "mcp:opulence-scope",
+      "tool": "request_expansion",
+      "action": "ASK",
+      "reason": "Scope expansion requires human approval"
+    },
+    {
+      "id": "recon-passive-allow",
+      "namespace": "mcp:hexstrike",
+      "tool": "subfinder",
+      "action": "ALLOW",
+      "conditions": [
+        {
+          "field": "target",
+          "operator": "in_scope",
+          "value": "domain"
+        }
+      ],
+      "reason": "Passive subdomain enumeration is safe when in scope"
+    },
+    {
+      "id": "recon-httpx-allow",
+      "namespace": "mcp:hexstrike",
+      "tool": "httpx",
+      "action": "ALLOW",
+      "conditions": [
+        {
+          "field": "target",
+          "operator": "in_scope",
+          "value": "any"
+        }
+      ],
+      "reason": "HTTP probing is safe when in scope"
+    },
+    {
+      "id": "scan-nmap-ask",
+      "namespace": "mcp:hexstrike",
+      "tool": "nmap",
+      "action": "ASK",
+      "conditions": [
+        {
+          "field": "target",
+          "operator": "in_scope",
+          "value": "any"
+        }
+      ],
+      "reason": "Active scanning requires confirmation even when in scope"
+    },
+    {
+      "id": "scan-nmap-deny-oos",
+      "namespace": "mcp:hexstrike",
+      "tool": "nmap",
+      "action": "DENY",
+      "conditions": [
+        {
+          "field": "target",
+          "operator": "in_scope",
+          "value": "none"
+        }
+      ],
+      "reason": "Active scanning out of scope is forbidden"
+    },
+    {
+      "id": "vuln-nuclei-ask",
+      "namespace": "mcp:hexstrike",
+      "tool": "nuclei",
+      "action": "ASK",
+      "conditions": [
+        {
+          "field": "target",
+          "operator": "in_scope",
+          "value": "any"
+        }
+      ],
+      "reason": "Vulnerability scanning requires confirmation"
+    },
+    {
+      "id": "msf-info-allow",
+      "namespace": "mcp:metasploit",
+      "tool": "search",
+      "action": "ALLOW",
+      "reason": "Searching exploits is informational"
+    },
+    {
+      "id": "msf-info-modules-allow",
+      "namespace": "mcp:metasploit",
+      "tool": "info",
+      "action": "ALLOW",
+      "reason": "Getting module info is informational"
+    },
+    {
+      "id": "msf-session-list-allow",
+      "namespace": "mcp:metasploit",
+      "tool": "sessions_list",
+      "action": "ALLOW",
+      "reason": "Listing sessions is safe"
+    },
+    {
+      "id": "msf-exploit-ask",
+      "namespace": "mcp:metasploit",
+      "tool": "exploit/*",
+      "action": "ASK",
+      "conditions": [
+        {
+          "field": "target",
+          "operator": "in_scope",
+          "value": "any"
+        }
+      ],
+      "reason": "Running exploits requires explicit approval"
+    },
+    {
+      "id": "msf-exploit-deny-oos",
+      "namespace": "mcp:metasploit",
+      "tool": "exploit/*",
+      "action": "DENY",
+      "conditions": [
+        {
+          "field": "target",
+          "operator": "in_scope",
+          "value": "none"
+        }
+      ],
+      "reason": "Exploiting out-of-scope targets is forbidden"
+    },
+    {
+      "id": "msf-payload-ask",
+      "namespace": "mcp:metasploit",
+      "tool": "payload/*",
+      "action": "ASK",
+      "reason": "Generating payloads requires approval"
+    },
+    {
+      "id": "msf-session-interact-ask",
+      "namespace": "mcp:metasploit",
+      "tool": "session_interact",
+      "action": "ASK",
+      "reason": "Interacting with sessions requires approval"
+    },
+    {
+      "id": "sliver-beacon-list-allow",
+      "namespace": "mcp:sliver",
+      "tool": "beacons",
+      "action": "ALLOW",
+      "reason": "Listing beacons is safe"
+    },
+    {
+      "id": "sliver-implant-ask",
+      "namespace": "mcp:sliver",
+      "tool": "generate",
+      "action": "ASK",
+      "reason": "Generating implants requires approval"
+    },
+    {
+      "id": "sliver-interact-ask",
+      "namespace": "mcp:sliver",
+      "tool": "use",
+      "action": "ASK",
+      "reason": "Interacting with beacons requires approval"
+    },
+    {
+      "id": "sliver-command-ask",
+      "namespace": "mcp:sliver",
+      "tool": "*",
+      "action": "ASK",
+      "reason": "C2 commands require approval by default"
+    },
+    {
+      "id": "htb-info-allow",
+      "namespace": "mcp:htb",
+      "tool": "machine_info",
+      "action": "ALLOW",
+      "reason": "Getting machine info is safe"
+    },
+    {
+      "id": "htb-spawn-ask",
+      "namespace": "mcp:htb",
+      "tool": "spawn_machine",
+      "action": "ASK",
+      "reason": "Spawning machines should be confirmed"
+    },
+    {
+      "id": "htb-flag-ask",
+      "namespace": "mcp:htb",
+      "tool": "submit_flag",
+      "action": "ASK",
+      "reason": "Submitting flags should be confirmed"
+    },
+    {
+      "id": "file-read-allow",
+      "namespace": "builtin",
+      "tool": "Read",
+      "action": "ALLOW",
+      "reason": "Reading files is generally safe"
+    },
+    {
+      "id": "file-write-ask",
+      "namespace": "builtin",
+      "tool": "Write",
+      "action": "ASK",
+      "reason": "Writing files should be reviewed"
+    },
+    {
+      "id": "bash-allow-local",
+      "namespace": "builtin",
+      "tool": "Bash",
+      "action": "ASK",
+      "reason": "Bash commands should be reviewed"
+    }
+  ],
+
+  "toolOverrides": {
+    "mcp:metasploit:exploit/*": "ASK",
+    "mcp:sliver:*": "ASK",
+    "builtin:Bash": "ASK"
+  }
+}

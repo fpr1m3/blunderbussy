@@ -1,0 +1,39 @@
+{
+  "timestamp": "2026-01-15T10:30:45.123Z",
+  "hash": {
+    "body_md5": "8d777f385d3dfec8815d20f7496026dc",
+    "body_mmh3": "-1234567890",
+    "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "body_simhash": "9863210987654321",
+    "header_md5": "5d41402abc4b2a76b9719d911017c592",
+    "header_mmh3": "-987654321",
+    "header_sha256": "d74ff0ee8da3b9806b18c877dbf29bbde50b5bd8e4dad7a3a725000feb82e8f1",
+    "header_simhash": "1234567890123456"
+  },
+  "port": "443",
+  "url": "https://example.com",
+  "input": "example.com",
+  "title": "Example Domain",
+  "scheme": "https",
+  "webserver": "nginx/1.20.1",
+  "body_preview": "Example Domain\nThis domain is for use in illustrative examples in documents.",
+  "content_type": "text/html; charset=UTF-8",
+  "method": "GET",
+  "host": "example.com",
+  "path": "/",
+  "favicon": "-1234567890",
+  "favicon_path": "/favicon.ico",
+  "time": "245ms",
+  "a": [
+    "93.184.216.34"
+  ],
+  "words": 100,
+  "lines": 47,
+  "status_code": 200,
+  "content_length": 1256,
+  "failed": false,
+  "knowledgebase": {
+    "PageType": "nonerror",
+    "pHash": 0
+  }
+}

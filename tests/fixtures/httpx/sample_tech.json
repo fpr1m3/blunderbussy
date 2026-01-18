@@ -1,0 +1,60 @@
+{
+  "timestamp": "2026-01-15T10:31:22.456Z",
+  "hash": {
+    "body_md5": "7f8d9c8b6a5e4d3c2b1a0f9e8d7c6b5a",
+    "body_mmh3": "-2147483648",
+    "body_sha256": "a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2",
+    "body_simhash": "1357924680246813",
+    "header_md5": "9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f",
+    "header_mmh3": "1234567890",
+    "header_sha256": "f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5",
+    "header_simhash": "2468135790246813"
+  },
+  "port": "443",
+  "url": "https://api.github.com",
+  "input": "api.github.com",
+  "title": "GitHub REST API",
+  "scheme": "https",
+  "webserver": "GitHub.com",
+  "body_preview": "{\"current_user_url\":\"https://api.github.com/user\",\"current_user_authorizations_html_url\":\"https://github.com/settings/connections/applications{/client_id}\"",
+  "content_type": "application/json; charset=utf-8",
+  "method": "GET",
+  "host": "api.github.com",
+  "path": "/",
+  "time": "156ms",
+  "a": [
+    "140.82.121.6"
+  ],
+  "tech": [
+    "GitHub",
+    "Ruby",
+    "nginx"
+  ],
+  "cnames": [
+    "github.com"
+  ],
+  "words": 50,
+  "lines": 30,
+  "status_code": 200,
+  "content_length": 2048,
+  "failed": false,
+  "chain_status_codes": [
+    200
+  ],
+  "header": {
+    "server": "GitHub.com",
+    "date": "Wed, 15 Jan 2026 10:31:22 GMT",
+    "content-type": "application/json; charset=utf-8",
+    "x-github-request-id": "ABC123:DEF456:789GHI:JKL012:65A7B8C9",
+    "x-ratelimit-limit": "60",
+    "x-ratelimit-remaining": "59",
+    "x-ratelimit-reset": "1737800482"
+  },
+  "cdn": [
+    "Fastly"
+  ],
+  "knowledgebase": {
+    "PageType": "nonerror",
+    "pHash": 0
+  }
+}

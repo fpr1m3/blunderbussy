@@ -1,0 +1,32 @@
+{
+  "template": "dns/caa-fingerprint.yaml",
+  "template-url": "https://templates.nuclei.sh/public/caa-fingerprint",
+  "template-id": "caa-fingerprint",
+  "template-path": "/home/user/nuclei-templates/dns/caa-fingerprint.yaml",
+  "info": {
+    "name": "CAA Record",
+    "author": ["pdteam"],
+    "tags": ["dns", "caa"],
+    "description": "A CAA record was discovered. A CAA record is used to specify which certificate authorities (CAs) are allowed to issue certificates for a domain.",
+    "reference": ["https://support.dnsimple.com/articles/caa-record/#whats-a-caa-record"],
+    "severity": "info",
+    "metadata": {
+      "max-request": 1
+    },
+    "classification": {
+      "cve-id": null,
+      "cwe-id": null,
+      "cvss-metrics": null,
+      "cvss-score": null
+    }
+  },
+  "type": "dns",
+  "host": "example.com",
+  "matched-at": "example.com",
+  "extracted-results": ["0 issue letsencrypt.org"],
+  "timestamp": "2026-01-15T10:30:45.123456789Z",
+  "matcher-status": true,
+  "curl-command": "",
+  "matcher-name": "caa",
+  "ip": "93.184.216.34"
+}

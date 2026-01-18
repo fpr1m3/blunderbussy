@@ -1,0 +1,172 @@
+services:
+  gluetun:
+    image: docker.io/qmcgaw/gluetun:v3.41.0
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - ./infrastructure/gluetun:/gluetun
+    environment:
+      - VPN_SERVICE_PROVIDER=custom
+      - VPN_TYPE=openvpn
+      - OPENVPN_CUSTOM_CONFIG=/gluetun/htb.ovpn
+      # Allow DNS (1.1.1.1) outside VPN for health checks - acceptable for HTB
+      - FIREWALL_OUTBOUND_SUBNETS=172.19.0.0/16,172.17.0.0/16,1.1.1.1/32
+      # DNS settings
+      - DNS_SERVER=off
+      - DNS_KEEP_NAMESERVER=on
+      - PUBLICIP_ENABLED=no
+      - VERSION_INFORMATION=off
+      - UPDATER_PERIOD=0
+      # Health check config - use HTB VPN gateway (only responds to ICMP)
+      - HEALTH_TARGET_ADDRESSES=38.46.226.72:1337
+      - HEALTH_ICMP_TARGET_IPS=10.10.14.1
+      - HEALTH_RESTART_VPN=off
+    sysctls:
+      - net.core.somaxconn=1024
+    restart: always
+
+  # Enrichment Pipeline - Stream B
+  # Watches for raw scans and processes through enrichment pipeline
+  enrichment:
+    build:
+      context: ./infrastructure/enrichment
+      dockerfile: Dockerfile
+    container_name: enrichment
+    volumes:
+      # Shared artifacts volume
+      - artifacts:/artifacts
+      # CVE cache persistence
+      - enrichment-cache:/artifacts/cache
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+      - MANIFEST_PATH=/artifacts/manifest.yaml
+      # Optional: NVD API key for faster CVE lookups
+      - NVD_API_KEY=${NVD_API_KEY:-}
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "watcher.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    depends_on:
+      - gluetun
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Stream E - Tool Containers & MCP Integration
+  # ═══════════════════════════════════════════════════════════════════════════
+  #
+  # Architecture:
+  #   metatool-ai/metamcp (aggregator) --> MSF MCP, Sliver MCP, HTB MCP, HexStrike
+  #
+  # MetaMCP runs separately via:
+  #   podman-compose -f infrastructure/metamcp-real/docker-compose.metamcp.yml up -d
+  #
+  # See: infrastructure/metamcp-real/README.md for setup instructions
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  # MSF MCP Server (lightweight Python wrapper)
+  # Backend for MetaMCP - provides Metasploit tools via MCP protocol
+  msf-mcp:
+    build:
+      context: ./infrastructure/msf
+      dockerfile: Dockerfile
+    container_name: msf-mcp
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MSF_HOST=${MSF_HOST:-msf}
+      - MSF_PORT=${MSF_PORT:-55553}
+      - MSF_TOKEN=${MSF_TOKEN:-msfrpc_token}
+    restart: unless-stopped
+
+  # Sliver MCP Server (lightweight Python wrapper)
+  # Backend for MetaMCP - provides Sliver C2 tools via MCP protocol
+  sliver-mcp:
+    build:
+      context: ./infrastructure/sliver
+      dockerfile: Dockerfile
+    container_name: sliver-mcp
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SLIVER_HOST=${SLIVER_HOST:-sliver}
+      - SLIVER_PORT=${SLIVER_PORT:-31337}
+    restart: unless-stopped
+
+  # HexStrike-AI - Offensive Security Tools Container
+  # Provides 150+ security tools (nmap, nuclei, gobuster, etc.)
+  # Requires privileged mode for raw socket operations
+  hexstrike:
+    build:
+      context: ./infrastructure/hexstrike
+      dockerfile: Dockerfile
+    container_name: hexstrike
+    privileged: true
+    network_mode: "service:gluetun"
+    volumes:
+      - artifacts:/artifacts
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HEXSTRIKE_HOST=0.0.0.0
+      - HEXSTRIKE_PORT=8888
+      # HTB target vhost resolution (set via .env or CLI)
+      # Example: HTB_TARGET=10.129.2.163 HTB_HOSTNAME="conversor.htb api.conversor.htb"
+      - HTB_TARGET=${HTB_TARGET:-}
+      - HTB_HOSTNAME=${HTB_HOSTNAME:-}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    depends_on:
+      - gluetun
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Backend Services (Optional - for live testing)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  # Metasploit Framework (optional - for real exploitation)
+  # Uncomment when ready for live testing
+  # msf:
+  #   image: docker.io/metasploitframework/metasploit-framework:latest
+  #   container_name: msf
+  #   network_mode: "service:gluetun"
+  #   volumes:
+  #     - msf-data:/root/.msf4
+  #     - artifacts:/artifacts
+  #   environment:
+  #     - MSF_RPC_HOST=0.0.0.0
+  #     - MSF_RPC_PORT=55553
+  #   command: ["msfrpcd", "-P", "${MSF_TOKEN:-msfrpc_token}", "-S", "-a", "0.0.0.0"]
+  #   restart: unless-stopped
+
+  # Sliver C2 (optional - for real C2 operations)
+  # Uncomment when ready for live testing
+  # sliver:
+  #   image: docker.io/bishopfox/sliver:latest
+  #   container_name: sliver
+  #   network_mode: "service:gluetun"
+  #   volumes:
+  #     - sliver-data:/root/.sliver
+  #     - artifacts:/artifacts
+  #   restart: unless-stopped
+
+volumes:
+  # Shared artifacts volume for scan data and CAS documents
+  artifacts:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${ARTIFACTS_PATH:-./artifacts}
+  # CVE enrichment cache
+  enrichment-cache:
+
+networks:
+  default:
+    name: opulence_network

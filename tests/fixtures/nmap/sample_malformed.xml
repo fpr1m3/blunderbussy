@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<!-- This is intentionally malformed XML for testing error handling -->
+<nmaprun scanner="nmap" args="nmap -oX sample_malformed.xml 10.10.10.5">
+<scaninfo type="syn" protocol="tcp"
+<verbose level="0"/>
+<host><status state="up"/>
+<address addr="10.10.10.5" addrtype="ipv4">
+<ports><port protocol="tcp" portid="22"><state state="open"/></port>
+<!-- Missing closing tags and broken structure -->

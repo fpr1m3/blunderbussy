@@ -1,0 +1,44 @@
+{
+  "name": "@agent-opulence/PrEP",
+  "version": "1.0.0",
+  "description": "Personal AI Infrastructure plugin for Agent Opulence",
+  "main": "dist/lib/index.js",
+  "types": "dist/lib/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write src/**/*.ts"
+  },
+  "keywords": [
+    "claude-code",
+    "plugin",
+    "offensive-security",
+    "penetration-testing",
+    "agent-opulence"
+  ],
+  "author": "fprime",
+  "license": "MIT",
+  "dependencies": {
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/uuid": "^9.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0",
+    "eslint": "^8.0.0",
+    "prettier": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "plugin.json",
+    "policy.json"
+  ]
+}

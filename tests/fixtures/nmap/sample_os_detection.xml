@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<?xml-stylesheet href="file:///usr/bin/../share/nmap/nmap.xsl" type="text/xsl"?>
+<!-- Nmap 7.94 scan initiated Wed Jan 15 13:45:00 2026 as: nmap -O -sV -p 22,80,135,139,445 -oX sample_os_detection.xml 192.168.50.25 -->
+<nmaprun scanner="nmap" args="nmap -O -sV -p 22,80,135,139,445 -oX sample_os_detection.xml 192.168.50.25" start="1736951100" startstr="Wed Jan 15 13:45:00 2026" version="7.94" xmloutputversion="1.05">
+<scaninfo type="syn" protocol="tcp" numservices="5" services="22,80,135,139,445"/>
+<verbose level="0"/>
+<debugging level="0"/>
+<host starttime="1736951100" endtime="1736951118"><status state="up" reason="echo-reply" reason_ttl="128"/>
+<address addr="192.168.50.25" addrtype="ipv4"/>
+<hostnames>
+<hostname name="workstation-win10.corp.local" type="PTR"/>
+</hostnames>
+<ports><port protocol="tcp" portid="22"><state state="closed" reason="reset" reason_ttl="128"/></port>
+<port protocol="tcp" portid="80"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="http" product="Microsoft IIS httpd" version="10.0" method="probed" conf="10"><cpe>cpe:/a:microsoft:iis:10.0</cpe></service></port>
+<port protocol="tcp" portid="135"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="msrpc" product="Microsoft Windows RPC" method="probed" conf="10"><cpe>cpe:/o:microsoft:windows</cpe></service></port>
+<port protocol="tcp" portid="139"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="netbios-ssn" product="Microsoft Windows netbios-ssn" method="probed" conf="10"><cpe>cpe:/o:microsoft:windows</cpe></service></port>
+<port protocol="tcp" portid="445"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="microsoft-ds" product="Microsoft Windows Server 2008 R2 - 2012 microsoft-ds" method="probed" conf="10"><cpe>cpe:/o:microsoft:windows_server_2008:r2</cpe></service></port>
+</ports>
+<os><portused state="open" proto="tcp" portid="80"/>
+<portused state="closed" proto="tcp" portid="22"/>
+<osmatch name="Microsoft Windows 10 1607" accuracy="98" line="98765">
+<osclass type="general purpose" vendor="Microsoft" osfamily="Windows" osgen="10" accuracy="98"><cpe>cpe:/o:microsoft:windows_10:1607</cpe></osclass>
+</osmatch>
+<osmatch name="Microsoft Windows 10 1703" accuracy="95" line="98780">
+<osclass type="general purpose" vendor="Microsoft" osfamily="Windows" osgen="10" accuracy="95"><cpe>cpe:/o:microsoft:windows_10:1703</cpe></osclass>
+</osmatch>
+<osmatch name="Microsoft Windows Server 2016" accuracy="93" line="98801">
+<osclass type="general purpose" vendor="Microsoft" osfamily="Windows" osgen="2016" accuracy="93"><cpe>cpe:/o:microsoft:windows_server_2016</cpe></osclass>
+</osmatch>
+</os>
+<uptime seconds="432156" lastboot="Wed Jan 10 13:23:04 2026"/>
+<distance value="2"/>
+<times srtt="2134" rttvar="945" to="100000"/>
+</host>
+<runstats><finished time="1736951118" timestr="Wed Jan 15 13:45:18 2026" summary="Nmap done at Wed Jan 15 13:45:18 2026; 1 IP address (1 host up) scanned in 18.47 seconds" elapsed="18.47" exit="success"/><hosts up="1" down="0" total="1"/>
+</runstats>
+</nmaprun>

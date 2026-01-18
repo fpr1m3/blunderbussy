@@ -1,0 +1,15 @@
+{"host":"www.example.com","ip":"93.184.216.34","source":["certspotter","crtsh"],"timestamp":"2026-01-15T10:35:00Z"}
+{"host":"mail.example.com","ip":"93.184.216.35","source":["dnsdumpster","hackertarget"],"timestamp":"2026-01-15T10:35:01Z"}
+{"host":"api.example.com","ip":"198.51.100.75","source":["crtsh","sublist3r","threatcrowd"],"timestamp":"2026-01-15T10:35:02Z"}
+{"host":"blog.example.com","ip":"192.0.2.50","source":["virustotal","certspotter"],"timestamp":"2026-01-15T10:35:03Z"}
+{"host":"dev.example.com","ip":"203.0.113.100","source":["bufferover","threatcrowd"],"timestamp":"2026-01-15T10:35:04Z"}
+{"host":"staging.example.com","ip":"203.0.113.101","source":["waybackarchive"],"timestamp":"2026-01-15T10:35:05Z"}
+{"host":"admin.example.com","ip":"10.0.1.50","source":["crtsh","certspotter","censys"],"timestamp":"2026-01-15T10:35:06Z"}
+{"host":"cdn.example.com","ip":"151.101.1.195","source":["dnsdumpster","securitytrails"],"timestamp":"2026-01-15T10:35:07Z"}
+{"host":"static.example.com","ip":"151.101.65.195","source":["alienvault","threatminer"],"timestamp":"2026-01-15T10:35:08Z"}
+{"host":"app.example.com","ip":"93.184.216.36","source":["crtsh","certspotter","virustotal"],"timestamp":"2026-01-15T10:35:09Z"}
+{"host":"mobile.example.com","ip":"93.184.216.37","source":["hackertarget","sublist3r"],"timestamp":"2026-01-15T10:35:10Z"}
+{"host":"test.example.com","ip":"203.0.113.25","source":["waybackarchive"],"timestamp":"2026-01-15T10:35:11Z"}
+{"host":"docs.example.com","ip":"192.0.2.75","source":["crtsh","censys"],"timestamp":"2026-01-15T10:35:12Z"}
+{"host":"support.example.com","ip":"192.0.2.76","source":["dnsdumpster","securitytrails","threatcrowd"],"timestamp":"2026-01-15T10:35:13Z"}
+{"host":"portal.example.com","ip":"93.184.216.38","source":["virustotal","alienvault"],"timestamp":"2026-01-15T10:35:14Z"}
