@@ -85,18 +85,41 @@ class CASFormatter:
         return summary
 
     def _format_vulnerability_summary(self, vuln: Dict) -> Dict:
-        """Format a vulnerability into CAS summary format."""
-        return {
-            'id': vuln.get('template_id', ''),
-            'name': self._truncate(vuln.get('template_name', ''), 80),
-            'severity': vuln.get('severity', 'unknown'),
-            'host': vuln.get('host', ''),
-            'matched_at': vuln.get('matched_at', ''),
-            'cves': vuln.get('cves', [])[:3],
-            'cvss': vuln.get('cvss_score', 0),
-            'exploitable': bool(vuln.get('cve_enriched', {}).values() and
-                               any(e.get('exploit_available') for e in vuln.get('cve_enriched', {}).values()))
-        }
+        """Format a vulnerability into CAS summary format.
+
+        Handles multiple source formats:
+        - Nuclei: template_id, template_name, host, matched_at, cves
+        - Nikto: osvdb, path, description, severity
+        """
+        # Detect source type
+        is_nikto = 'description' in vuln and 'path' in vuln
+        is_nuclei = 'template_id' in vuln or 'template_name' in vuln
+
+        if is_nikto:
+            return {
+                'id': vuln.get('osvdb', ''),
+                'name': self._truncate(vuln.get('description', ''), 80),
+                'severity': vuln.get('severity', 'info'),
+                'host': vuln.get('target', ''),  # From parser metadata
+                'matched_at': vuln.get('path', ''),
+                'cves': [],
+                'cvss': 0,
+                'exploitable': False,
+                'source': 'nikto'
+            }
+        else:  # Nuclei or unknown
+            return {
+                'id': vuln.get('template_id', ''),
+                'name': self._truncate(vuln.get('template_name', ''), 80),
+                'severity': vuln.get('severity', 'unknown'),
+                'host': vuln.get('host', ''),
+                'matched_at': vuln.get('matched_at', ''),
+                'cves': vuln.get('cves', [])[:3],
+                'cvss': vuln.get('cvss_score', 0),
+                'exploitable': bool(vuln.get('cve_enriched', {}).values() and
+                                   any(e.get('exploit_available') for e in vuln.get('cve_enriched', {}).values())),
+                'source': 'nuclei'
+            }
 
     def _format_web_service_summary(self, service: Dict) -> Dict:
         """Format a web service into CAS summary format."""
@@ -124,6 +147,76 @@ class CASFormatter:
             'sources': subdomain.get('sources', [])[:3],
             'patterns': domain_info.get('patterns', [])[:3],
             'env': domain_info.get('environment', '')
+        }
+
+    def _format_smb_share(self, share: Dict) -> Dict:
+        """Format an SMB share into CAS summary format."""
+        return {
+            'name': share.get('name', ''),
+            'type': share.get('type', 'Disk'),
+            'readable': share.get('readable', share.get('accessible', False)),
+            'writable': share.get('writable', False),
+            'permissions': share.get('permissions', ''),
+            'comment': self._truncate(share.get('comment', ''), 80)
+        }
+
+    def _format_smb_enum_summary(self, enum_data: List[Dict]) -> Dict:
+        """Format enum4linux/SMB enumeration data into CAS summary."""
+        summary = {
+            'users': [],
+            'groups': [],
+            'password_policy': {},
+            'os_info': {},
+            'sessions': []
+        }
+
+        for data in enum_data:
+            # Merge users
+            for user in data.get('users', []):
+                user_summary = {
+                    'username': user.get('username', ''),
+                    'type': user.get('type', ''),
+                    'sid': user.get('sid', '')
+                }
+                if user_summary not in summary['users']:
+                    summary['users'].append(user_summary)
+
+            # Merge groups
+            for category, groups in data.get('groups', {}).items():
+                for group in groups:
+                    group_summary = {
+                        'name': group.get('name', ''),
+                        'category': category,
+                        'rid': group.get('rid', '')
+                    }
+                    if group_summary not in summary['groups']:
+                        summary['groups'].append(group_summary)
+
+            # Take most recent password policy
+            if data.get('password_policy'):
+                summary['password_policy'] = data['password_policy']
+
+            # Merge OS info
+            if data.get('os_info'):
+                summary['os_info'].update(data['os_info'])
+
+            # Merge sessions
+            for session in data.get('sessions', []):
+                if session not in summary['sessions']:
+                    summary['sessions'].append(session)
+
+        # Truncate lists
+        summary['users'] = summary['users'][:self.max_items_per_section]
+        summary['groups'] = summary['groups'][:self.max_items_per_section]
+
+        return summary
+
+    def _format_autorecon_meta(self, data: Dict) -> Dict:
+        """Format AutoRecon metadata into CAS format."""
+        return {
+            'scan_types': data.get('scan_types', []),
+            'total_scan_files': len(data.get('raw_files', [])),
+            'source': 'autorecon'
         }
 
     def _generate_attack_guidance(self, data: Dict) -> Dict:
@@ -224,10 +317,16 @@ class CASFormatter:
         if 'vulnerabilities' in data:
             for vuln in data['vulnerabilities']:
                 if vuln.get('severity') in ['critical', 'high']:
+                    # Handle both nikto and nuclei formats
+                    if 'description' in vuln:  # Nikto
+                        summary = self._truncate(vuln.get('description', 'Unknown vulnerability'), 100)
+                    else:  # Nuclei
+                        summary = f"{vuln.get('template_name', 'Unknown')} at {vuln.get('host', 'unknown')}"
+
                     findings.append({
                         'type': 'vulnerability',
                         'severity': vuln.get('severity'),
-                        'summary': f"{vuln.get('template_name', 'Unknown')} at {vuln.get('host', 'unknown')}",
+                        'summary': summary,
                         'cves': vuln.get('cves', [])[:2]
                     })
 
@@ -272,7 +371,7 @@ class CASFormatter:
 
         # Build CAS document
         cas = {
-            'cas_version': '1.0',
+            'cas_version': '1.1',
             'generated_at': datetime.utcnow().isoformat(),
             'target': {
                 'identifier': target,
@@ -285,7 +384,10 @@ class CASFormatter:
                 'web_services_found': len(data.get('web_services', [])),
                 'subdomains_found': len(data.get('subdomains', [])),
                 'directories_found': 0,
+                'smb_shares_found': len(data.get('smb_shares', [])),
+                'smb_users_found': 0,
                 'critical_findings': 0,
+                'low_priority_vulns_count': 0,
                 'exploitable_cves': len(data.get('exploit_available', []))
             },
             'key_findings': [],
@@ -296,24 +398,40 @@ class CASFormatter:
             'subdomains': [],
             'directories': [],
             'nikto_findings': [],
+            'smb_shares': [],
+            'smb_enum': {},
+            'autorecon_meta': {},
             'enrichment_metadata': {},
-            'raw_artifacts': []
+            'raw_artifacts': [],
+            'low_priority_vulns': []  # medium/low/info - available on request
         }
 
-        # Process hosts
+        # Process hosts - deduplicate by IP
         if 'hosts' in data:
+            seen_ips = set()
             for host in data['hosts'][:self.max_items_per_section]:
-                cas['hosts'].append(self._format_host_summary(host))
+                ip = host.get('ip', '')
+                if ip and ip not in seen_ips:
+                    cas['hosts'].append(self._format_host_summary(host))
+                    seen_ips.add(ip)
 
-        # Process vulnerabilities
+        # Process vulnerabilities - split by severity
+        # critical/high go to main vulnerabilities list (immediate attention)
+        # medium/low/info go to low_priority_vulns (available on request)
+        HIGH_PRIORITY_SEVERITIES = {'critical', 'high'}
         if 'vulnerabilities' in data:
             critical_count = 0
-            for vuln in data['vulnerabilities'][:self.max_items_per_section]:
+            low_priority_count = 0
+            for vuln in data['vulnerabilities'][:self.max_items_per_section * 2]:  # Allow more since we're splitting
                 formatted = self._format_vulnerability_summary(vuln)
-                cas['vulnerabilities'].append(formatted)
-                if formatted['severity'] in ['critical', 'high']:
+                if formatted['severity'] in HIGH_PRIORITY_SEVERITIES:
+                    cas['vulnerabilities'].append(formatted)
                     critical_count += 1
+                else:
+                    cas['low_priority_vulns'].append(formatted)
+                    low_priority_count += 1
             cas['summary']['critical_findings'] = critical_count
+            cas['summary']['low_priority_vulns_count'] = low_priority_count
 
         # Process web services
         if 'web_services' in data:
@@ -345,6 +463,24 @@ class CASFormatter:
                     'severity': finding.get('severity', 'info'),
                     'description': self._truncate(finding.get('description', ''), 150)
                 })
+
+        # Process SMB shares (from smbmap/enum4linux)
+        if 'smb_shares' in data:
+            for share in data['smb_shares'][:self.max_items_per_section]:
+                cas['smb_shares'].append(self._format_smb_share(share))
+
+        # Process SMB enumeration data (from enum4linux)
+        if 'smb_enum' in data and data['smb_enum']:
+            cas['smb_enum'] = self._format_smb_enum_summary(data['smb_enum'])
+            # Update summary with user count
+            cas['summary']['smb_users_found'] = len(cas['smb_enum'].get('users', []))
+
+        # Process AutoRecon metadata
+        if data.get('type') == 'autorecon':
+            cas['autorecon_meta'] = self._format_autorecon_meta(data)
+            # Update scan types from AutoRecon
+            if 'scan_types' in data:
+                cas['target']['scan_types'] = data['scan_types']
 
         # Generate key findings
         cas['key_findings'] = self._build_key_findings(data)
@@ -405,21 +541,23 @@ class CASFormatter:
         existing.setdefault('target', {})['scan_types'] = list(existing_types | new_types)
 
         # Merge lists (deduplicate by key fields)
-        for field in ['hosts', 'vulnerabilities', 'web_services', 'subdomains', 'directories', 'nikto_findings']:
+        for field in ['hosts', 'vulnerabilities', 'low_priority_vulns', 'web_services', 'subdomains', 'directories', 'nikto_findings', 'smb_shares']:
             existing_items = existing.get(field, [])
             new_items = new.get(field, [])
 
             # Create lookup for existing items
             if field == 'hosts':
                 key_func = lambda x: x.get('ip', '')
-            elif field == 'vulnerabilities':
-                key_func = lambda x: f"{x.get('id', '')}_{x.get('host', '')}"
+            elif field in ('vulnerabilities', 'low_priority_vulns'):
+                key_func = lambda x: f"{x.get('id', '')}_{x.get('host', '')}_{x.get('matched_at', '')}"
             elif field == 'web_services':
                 key_func = lambda x: x.get('url', '')
             elif field == 'directories':
                 key_func = lambda x: x.get('path', '')
             elif field == 'nikto_findings':
                 key_func = lambda x: f"{x.get('path', '')}_{x.get('osvdb', '')}"
+            elif field == 'smb_shares':
+                key_func = lambda x: x.get('name', '')
             else:
                 key_func = lambda x: x.get('host', '')
 
@@ -432,14 +570,52 @@ class CASFormatter:
 
             existing[field] = existing_items
 
+        # Merge SMB enumeration data
+        if new.get('smb_enum'):
+            existing_smb = existing.get('smb_enum', {})
+            new_smb = new.get('smb_enum', {})
+
+            # Merge users
+            existing_users = existing_smb.get('users', [])
+            for user in new_smb.get('users', []):
+                if user not in existing_users:
+                    existing_users.append(user)
+            existing_smb['users'] = existing_users
+
+            # Merge groups
+            existing_groups = existing_smb.get('groups', [])
+            for group in new_smb.get('groups', []):
+                if group not in existing_groups:
+                    existing_groups.append(group)
+            existing_smb['groups'] = existing_groups
+
+            # Update password policy (take newest)
+            if new_smb.get('password_policy'):
+                existing_smb['password_policy'] = new_smb['password_policy']
+
+            # Merge OS info
+            if new_smb.get('os_info'):
+                existing_smb.setdefault('os_info', {}).update(new_smb['os_info'])
+
+            existing['smb_enum'] = existing_smb
+
+        # Merge AutoRecon metadata
+        if new.get('autorecon_meta'):
+            existing['autorecon_meta'] = new['autorecon_meta']
+
         # Update summary
+        high_priority_count = len(existing.get('vulnerabilities', []))
+        low_priority_count = len(existing.get('low_priority_vulns', []))
         existing['summary'] = {
             'hosts_discovered': len(existing.get('hosts', [])),
-            'vulnerabilities_found': len(existing.get('vulnerabilities', [])),
+            'vulnerabilities_found': high_priority_count + low_priority_count,  # Total count
             'web_services_found': len(existing.get('web_services', [])),
             'subdomains_found': len(existing.get('subdomains', [])),
             'directories_found': len(existing.get('directories', [])),
-            'critical_findings': new['summary'].get('critical_findings', 0),
+            'smb_shares_found': len(existing.get('smb_shares', [])),
+            'smb_users_found': len(existing.get('smb_enum', {}).get('users', [])),
+            'critical_findings': high_priority_count,  # Critical/high only
+            'low_priority_vulns_count': low_priority_count,  # Medium/low/info
             'exploitable_cves': new['summary'].get('exploitable_cves', 0)
         }
 
