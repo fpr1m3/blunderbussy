@@ -1,0 +1,191 @@
+description = "Execute initial access workflow against a target. Reads CAS, analyzes attack surface, and attempts exploitation."
+prompt = """
+# /attack - Initial Access Automation
+
+You are executing an initial access attempt against target: {{args}}
+
+## Phase 1: Intelligence Gathering
+
+### Step 1.1: Read the CAS
+Read the Context-Aware Summary for this target:
+- Path: `/artifacts/{{args}}/context.yaml`
+- Extract: hosts, ports, services, versions, vulnerabilities, attack_guidance
+
+### Step 1.2: Identify Platform
+From CAS `hosts[].os`, determine if target is Linux or Windows.
+This affects payload selection and post-exploitation.
+
+### Step 1.3: Analyze Attack Surface
+From CAS `attack_guidance`:
+- List `quick_wins` - these are P1 priority
+- List `priority_targets` - high-value services
+- Note `recommended_commands` - pre-built attack commands
+
+### Step 1.4: Check Existing Intel
+Look for additional artifacts:
+- `/artifacts/{{args}}/ptt.yaml` - Previous task tree state
+- `/artifacts/{{args}}/*.log` - Previous session logs
+- `/artifacts/{{args}}/source_code*` - Any leaked source code
+- `/artifacts/{{args}}/*.tar.gz` - Downloaded archives
+
+If source code exists, extract and analyze it for vulnerabilities before attacking.
+
+## Phase 2: Network Setup
+
+### Step 2.1: Discover LHOST (CRITICAL)
+**ALWAYS call this before any callback payload:**
+```
+lhost_result = pwncat__get_lhost()
+```
+Expected: `{"lhost": "10.10.14.x", "interface": "tun0"}`
+
+Store `LHOST = lhost_result["lhost"]` for all payloads.
+
+**NEVER use:**
+- Your container's IP (10.89.x.x)
+- Hardcoded IPs
+- Results from `ip addr` in your container
+
+### Step 2.2: Verify Target Reachability
+```bash
+curl --connect-timeout 5 --max-time 10 http://{{args}}/ -v
+```
+Confirm target responds before proceeding.
+
+## Phase 3: Technique Selection
+
+### Step 3.1: Prioritization
+Select techniques based on priority:
+
+1. **P1 - Quick Wins** (try first):
+   - Default credentials
+   - Anonymous access (FTP, SMB, NFS)
+   - Known vulnerable versions with public exploits
+   - File upload vulnerabilities
+   - Command injection points
+
+2. **P2 - Known Vulnerabilities**:
+   - CVEs with public exploits
+   - CISA KEV entries
+   - Version-specific exploits
+
+3. **P3 - Misconfigurations**:
+   - Writable shares/directories
+   - Exposed admin panels
+   - Debug endpoints
+   - Information disclosure
+
+4. **P4 - Credential Attacks**:
+   - Brute force (last resort, risk of lockout)
+
+### Step 3.2: Research Technique
+Before executing, query the skills database:
+```
+qdrant-find "<platform> <service> <technique_name>"
+```
+
+### Step 3.3: Analyze Source Code (if available)
+If source code was found in artifacts:
+1. Extract and review the code
+2. Identify input validation flaws
+3. Find hardcoded credentials or secrets
+4. Map routes/endpoints to functionality
+5. Look for dangerous functions (eval, exec, system, etc.)
+6. Check for path traversal, injection points, file operations
+
+## Phase 4: Exploitation Execution
+
+### Step 4.1: Pre-Flight Checklist
+Before any exploit:
+- [ ] Target IP/port verified accessible
+- [ ] LHOST obtained via `pwncat__get_lhost()`
+- [ ] Payload configured for target OS
+- [ ] Command timeouts set (--connect-timeout, --max-time)
+- [ ] Listener ready if callback-based attack
+
+### Step 4.2: Start Listener (if callback-based)
+```
+pwncat__listen(port=4444, timeout=300)
+```
+
+### Step 4.3: Execute Technique
+Run the selected technique with proper error handling.
+
+**All network commands MUST have timeouts:**
+- curl: `--connect-timeout 5 --max-time 30`
+- wget: `--timeout=30`
+- nc: `-w 5`
+- ssh: `-o ConnectTimeout=10`
+
+### Step 4.4: Handle Result
+
+**On Success (shell received):**
+1. Verify access: `pwncat__command(session_id, "id && hostname")`
+2. Capture flags: Check standard locations based on platform
+3. Record in PTT as EXPLOITED
+4. Enumerate for privilege escalation vectors
+
+**On Failure:**
+1. Classify error type (CONNECTION_FAILURE, PAYLOAD_BLOCKED, etc.)
+2. Apply recovery action from GEMINI.md error handling
+3. Retry up to 3 times with modifications
+4. If 3 failures, move to next technique
+
+## Phase 5: Iteration
+
+### Step 5.1: Exhaust Quick Wins
+Continue through P1 techniques until one succeeds or all exhausted.
+
+### Step 5.2: Escalate Priority
+Move to P2, P3, P4 techniques as needed.
+
+### Step 5.3: Re-enumerate
+After 5 failed techniques, consider:
+- Re-reading CAS for missed details
+- Running additional enumeration
+- Pivoting to different attack surface
+
+### Step 5.4: Report Status
+After each significant attempt, update PTT with:
+- Technique attempted
+- Result (success/failure)
+- Error classification if failed
+- New information discovered
+
+## Output Format
+
+Report results in structured format:
+
+```
+## Attack Result: {{args}}
+
+**Status:** SUCCESS / FAILED / IN_PROGRESS
+**Technique:** <technique used>
+**Access Level:** none / user / root
+
+### Timeline
+- HH:MM:SS - Started attack
+- HH:MM:SS - <action taken>
+- HH:MM:SS - <result>
+
+### Findings
+- User: <username if shell obtained>
+- Flags: <captured flags>
+- Credentials: <any creds found>
+- Vulnerabilities: <confirmed vulns>
+
+### Next Steps
+- <recommended follow-up actions>
+```
+
+## Error Recovery Reference
+
+| Error | Recovery |
+|-------|----------|
+| Connection timeout | Increase timeout, verify target up |
+| Callback not received | Check LHOST (must use pwncat__get_lhost), try different port (443, 8080) |
+| Payload blocked | Encode payload, try different format |
+| Auth required | Register account, find creds, check for defaults |
+| Permission denied | Check file permissions, try different path |
+| Service crashed | Wait for recovery, try gentler approach |
+"""

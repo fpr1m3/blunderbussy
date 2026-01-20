@@ -13,6 +13,13 @@
         "QDRANT_READ_ONLY": "true",
         "TOOL_FIND_DESCRIPTION": "Search Dame's technique library for attack skills matching CAS observations. Query with service names (e.g. 'vsftpd 2.3.4'), CVE IDs (e.g. 'CVE-2011-2523'), vulnerability indicators (e.g. 'anonymous FTP login'), or attack categories (e.g. 'privilege escalation linux'). Returns ranked techniques with execution steps, prerequisites, and success indicators."
       }
+    },
+    "pwncat": {
+      "command": "python3",
+      "args": ["/ext/opulence/pwncat-server.py"],
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      }
     }
   }
 }
