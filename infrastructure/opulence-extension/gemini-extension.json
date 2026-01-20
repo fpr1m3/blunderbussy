@@ -1,0 +1,18 @@
+{
+  "name": "opulence",
+  "version": "1.0.0",
+  "description": "Dame's offensive security extension - skill retrieval and engagement tools",
+  "mcpServers": {
+    "grimoire": {
+      "command": "uvx",
+      "args": ["mcp-server-qdrant"],
+      "env": {
+        "QDRANT_URL": "http://qdrant:6333",
+        "COLLECTION_NAME": "skills",
+        "EMBEDDING_MODEL": "sentence-transformers/all-MiniLM-L6-v2",
+        "QDRANT_READ_ONLY": "true",
+        "TOOL_FIND_DESCRIPTION": "Search Dame's technique library for attack skills matching CAS observations. Query with service names (e.g. 'vsftpd 2.3.4'), CVE IDs (e.g. 'CVE-2011-2523'), vulnerability indicators (e.g. 'anonymous FTP login'), or attack categories (e.g. 'privilege escalation linux'). Returns ranked techniques with execution steps, prerequisites, and success indicators."
+      }
+    }
+  }
+}
