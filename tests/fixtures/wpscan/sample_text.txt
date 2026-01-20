@@ -1,0 +1,96 @@
+_______________________________________________________________
+         __          _______   _____
+         \ \        / /  __ \ / ____|
+          \ \  /\  / /| |__) | (___   ___  __ _ _ __
+           \ \/  \/ / |  ___/ \___ \ / __|/ _` | '_ \
+            \  /\  /  | |     ____) | (__| (_| | | | |
+             \/  \/   |_|    |_____/ \___|\__,_|_| |_|
+
+         WordPress Security Scanner by the WPScan Team
+                         Version 3.8.24
+       Sponsored by Automattic - https://automattic.com/
+       @_WPScan_, @ethicalhack3r, @erwan_lr, @firefart
+_______________________________________________________________
+
+[+] URL: http://10.10.10.88/
+[+] Started: Mon Nov 13 14:30:00 2023
+
+Interesting Finding(s):
+
+[+] Headers
+ | Interesting Entry: Server: Apache/2.4.18 (Ubuntu)
+ | Interesting Entry: X-Powered-By: PHP/7.0.22-0ubuntu0.16.04.1
+ | Found By: Headers (Passive Detection)
+ | Confidence: 100%
+
+[+] XML-RPC seems to be enabled: http://10.10.10.88/xmlrpc.php
+ | Found By: Direct Access (Aggressive Detection)
+ | Confidence: 100%
+ | References:
+ |  - http://codex.wordpress.org/XML-RPC_Pingback_API
+
+[+] Upload directory has listing enabled: http://10.10.10.88/wp-content/uploads/
+ | Found By: Direct Access (Aggressive Detection)
+ | Confidence: 100%
+
+[+] WordPress version 4.9.4 identified (Insecure, released on 2018-02-06).
+ | Found By: RSS Generator (Passive Detection)
+ |  - http://10.10.10.88/feed/, <generator>https://wordpress.org/?v=4.9.4</generator>
+ | Confidence: 100%
+
+[!] 25 vulnerabilities identified:
+ |
+ | [!] Title: WordPress 4.9.4 - Authenticated Code Execution
+ |     Fixed in: 4.9.7
+ |     References:
+ |      - https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2018-12895
+ |      - https://blog.ripstech.com/2018/wordpress-file-delete-to-code-execution/
+ |
+ | [!] Title: WordPress 3.7-5.0 - Authenticated Object Injection
+ |     Fixed in: 5.0.1
+ |     References:
+ |      - https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2019-8942
+ |      - https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2019-8943
+
+[+] WordPress theme in use: flavor
+ | Location: http://10.10.10.88/wp-content/themes/flavor/
+ | Style URL: http://10.10.10.88/wp-content/themes/flavor/style.css
+ | Found By: CSS Style In Homepage (Passive Detection)
+ | Version: 1.0 (80% confidence)
+
+[+] Enumerating Vulnerable Plugins (via Aggressive Methods)
+
+[+] Gwolle Guestbook
+ | Location: http://10.10.10.88/wp-content/plugins/gwolle-gb/
+ | Version: 2.3.10 (100% confidence)
+ | Found By: Readme - Stable Tag (Aggressive Detection)
+ |
+ | [!] 1 vulnerability identified:
+ |
+ | [!] Title: Gwolle Guestbook 2.3.10 - Remote File Inclusion
+ |     Fixed in: 2.4.0
+ |     References:
+ |      - https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2015-8351
+ |      - https://www.exploit-db.com/exploits/38861/
+
+[+] Akismet
+ | Location: http://10.10.10.88/wp-content/plugins/akismet/
+ | Version: 4.0.3 (100% confidence)
+ | Found By: Known Locations (Aggressive Detection)
+
+[+] Enumerating Users (via Passive and Aggressive Methods)
+
+[+] Users Found:
+
+ | ID | Login | Name    |
+ | -- | ----- | ------- |
+ | 1  | admin | Admin   |
+ | 2  | garry | Garry B |
+
+[+] Finished: Mon Nov 13 14:32:00 2023
+[+] Requests Done: 1500
+[+] Cached Requests: 10
+[+] Data Sent: 500.0 KB
+[+] Data Received: 2.0 MB
+[+] Memory used: 75.0 MB
+[+] Elapsed time: 00:02:00

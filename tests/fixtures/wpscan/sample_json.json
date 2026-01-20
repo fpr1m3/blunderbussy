@@ -1,0 +1,131 @@
+{
+  "banner": {
+    "description": "WordPress Security Scanner by the WPScan Team",
+    "version": "3.8.24"
+  },
+  "start_time": 1699900000,
+  "start_memory": 52428800,
+  "target_url": "http://10.10.10.88/",
+  "target_ip": "10.10.10.88",
+  "effective_url": "http://10.10.10.88/",
+  "interesting_findings": [
+    {
+      "url": "http://10.10.10.88/",
+      "to_s": "Headers",
+      "type": "headers",
+      "found_by": "Headers (Passive Detection)",
+      "confidence": 100,
+      "interesting_entries": [
+        "Server: Apache/2.4.18 (Ubuntu)",
+        "X-Powered-By: PHP/7.0.22-0ubuntu0.16.04.1"
+      ]
+    },
+    {
+      "url": "http://10.10.10.88/xmlrpc.php",
+      "to_s": "XML-RPC",
+      "type": "xmlrpc",
+      "found_by": "Headers (Passive Detection)",
+      "confidence": 100,
+      "references": {
+        "url": ["http://codex.wordpress.org/XML-RPC_Pingback_API"]
+      }
+    }
+  ],
+  "version": {
+    "number": "4.9.4",
+    "release_date": "2018-02-06",
+    "status": "insecure",
+    "found_by": "RSS Generator (Passive Detection)",
+    "confidence": 100,
+    "interesting_entries": [
+      "http://10.10.10.88/feed/, <generator>https://wordpress.org/?v=4.9.4</generator>"
+    ],
+    "vulnerabilities": [
+      {
+        "title": "WordPress 4.9.4 - Authenticated Code Execution",
+        "fixed_in": "4.9.7",
+        "references": {
+          "cve": ["2018-12895"],
+          "url": ["https://blog.ripstech.com/2018/wordpress-file-delete-to-code-execution/"]
+        }
+      },
+      {
+        "title": "WordPress 3.7-5.0 (except 4.9.9) - Authenticated Object Injection",
+        "fixed_in": "5.0.1",
+        "references": {
+          "cve": ["2019-8942", "2019-8943"]
+        }
+      }
+    ]
+  },
+  "main_theme": {
+    "slug": "flavor",
+    "location": "http://10.10.10.88/wp-content/themes/flavor/",
+    "style_url": "http://10.10.10.88/wp-content/themes/flavor/style.css",
+    "found_by": "CSS Style In Homepage (Passive Detection)",
+    "confidence": 100,
+    "version": {
+      "number": "1.0",
+      "found_by": "Style (Passive Detection)"
+    },
+    "vulnerabilities": []
+  },
+  "plugins": {
+    "gwolle-gb": {
+      "slug": "gwolle-gb",
+      "location": "http://10.10.10.88/wp-content/plugins/gwolle-gb/",
+      "found_by": "URLs In Homepage (Passive Detection)",
+      "confidence": 80,
+      "version": {
+        "number": "2.3.10",
+        "found_by": "Readme - Stable Tag (Aggressive Detection)"
+      },
+      "vulnerabilities": [
+        {
+          "title": "Gwolle Guestbook 2.3.10 - Remote File Inclusion",
+          "fixed_in": "2.4.0",
+          "references": {
+            "cve": ["2015-8351"],
+            "exploitdb": ["38861"],
+            "url": ["https://www.exploit-db.com/exploits/38861/"]
+          }
+        }
+      ]
+    },
+    "akismet": {
+      "slug": "akismet",
+      "location": "http://10.10.10.88/wp-content/plugins/akismet/",
+      "found_by": "Known Locations (Aggressive Detection)",
+      "confidence": 100,
+      "version": {
+        "number": "4.0.3",
+        "found_by": "Readme - Stable Tag (Aggressive Detection)"
+      },
+      "vulnerabilities": []
+    }
+  },
+  "users": {
+    "admin": {
+      "id": 1,
+      "slug": "admin",
+      "found_by": "Author Posts (Passive Detection)",
+      "confidence": 100
+    },
+    "garry": {
+      "id": 2,
+      "slug": "garry",
+      "found_by": "Author Posts (Passive Detection)",
+      "confidence": 100
+    }
+  },
+  "stop_time": 1699900120,
+  "elapsed": 120,
+  "requests_done": 1500,
+  "cached_requests": 10,
+  "data_sent": 512000,
+  "data_sent_humanised": "500.0 KB",
+  "data_received": 2048000,
+  "data_received_humanised": "2.0 MB",
+  "used_memory": 78643200,
+  "used_memory_humanised": "75.0 MB"
+}

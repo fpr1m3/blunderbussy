@@ -1,0 +1,69 @@
+[
+  {
+    "type": "A",
+    "name": "example.com",
+    "address": "93.184.216.34"
+  },
+  {
+    "type": "A",
+    "name": "www.example.com",
+    "address": "93.184.216.34"
+  },
+  {
+    "type": "A",
+    "name": "admin.example.com",
+    "address": "93.184.216.35"
+  },
+  {
+    "type": "AAAA",
+    "name": "example.com",
+    "address": "2606:2800:220:1:248:1893:25c8:1946"
+  },
+  {
+    "type": "MX",
+    "name": "example.com",
+    "exchange": "mail.example.com",
+    "priority": 10
+  },
+  {
+    "type": "MX",
+    "name": "example.com",
+    "exchange": "mail2.example.com",
+    "priority": 20
+  },
+  {
+    "type": "NS",
+    "name": "example.com",
+    "target": "ns1.example.com"
+  },
+  {
+    "type": "NS",
+    "name": "example.com",
+    "target": "ns2.example.com"
+  },
+  {
+    "type": "TXT",
+    "name": "example.com",
+    "strings": "v=spf1 include:_spf.google.com ~all"
+  },
+  {
+    "type": "TXT",
+    "name": "_dmarc.example.com",
+    "strings": "v=DMARC1; p=reject; rua=mailto:dmarc@example.com"
+  },
+  {
+    "type": "TXT",
+    "name": "example.com",
+    "strings": "google-site-verification=abc123xyz"
+  },
+  {
+    "type": "SOA",
+    "mname": "ns1.example.com",
+    "rname": "admin.example.com",
+    "serial": 2024011501,
+    "refresh": 7200,
+    "retry": 3600,
+    "expire": 1209600,
+    "minimum": 86400
+  }
+]

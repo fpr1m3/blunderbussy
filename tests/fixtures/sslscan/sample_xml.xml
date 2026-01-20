@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document>
+  <ssltest host="10.10.10.5" port="443">
+    <protocol type="ssl" version="2" enabled="0" />
+    <protocol type="ssl" version="3" enabled="0" />
+    <protocol type="tls" version="1.0" enabled="0" />
+    <protocol type="tls" version="1.1" enabled="0" />
+    <protocol type="tls" version="1.2" enabled="1" />
+    <protocol type="tls" version="1.3" enabled="1" />
+
+    <cipher status="accepted" sslversion="TLSv1.3" bits="256" cipher="TLS_AES_256_GCM_SHA384" />
+    <cipher status="accepted" sslversion="TLSv1.3" bits="256" cipher="TLS_CHACHA20_POLY1305_SHA256" />
+    <cipher status="accepted" sslversion="TLSv1.3" bits="128" cipher="TLS_AES_128_GCM_SHA256" />
+    <cipher status="accepted" sslversion="TLSv1.2" bits="256" cipher="ECDHE-RSA-AES256-GCM-SHA384" />
+    <cipher status="accepted" sslversion="TLSv1.2" bits="128" cipher="ECDHE-RSA-AES128-GCM-SHA256" />
+    <cipher status="rejected" sslversion="TLSv1.2" bits="56" cipher="DES-CBC-SHA" />
+
+    <heartbleed vulnerable="0" />
+
+    <certificate>
+      <subject>CN=example.com</subject>
+      <issuer>C=US, O=Let's Encrypt, CN=R3</issuer>
+      <not-valid-before>Jan  1 00:00:00 2024 GMT</not-valid-before>
+      <not-valid-after>Mar 31 23:59:59 2024 GMT</not-valid-after>
+      <expired>false</expired>
+      <self-signed>false</self-signed>
+      <signature-algorithm>sha256WithRSAEncryption</signature-algorithm>
+      <pk bits="2048" />
+      <altname>DNS:example.com</altname>
+      <altname>DNS:www.example.com</altname>
+    </certificate>
+  </ssltest>
+</document>

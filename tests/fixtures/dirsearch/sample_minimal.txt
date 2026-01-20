@@ -1,0 +1,6 @@
+Target: http://10.10.10.100/
+
+200 /
+200 /index.html
+301 /images
+404 /notfound

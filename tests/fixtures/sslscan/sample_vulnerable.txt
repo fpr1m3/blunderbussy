@@ -1,0 +1,46 @@
+Version: 2.0.15
+OpenSSL 1.1.1n  15 Mar 2022
+
+Connected to 10.10.10.100
+
+Testing SSL server 10.10.10.100 on port 443 using SNI name 10.10.10.100
+
+  SSL/TLS Protocols:
+SSLv2     disabled
+SSLv3     enabled
+TLSv1.0   enabled
+TLSv1.1   enabled
+TLSv1.2   enabled
+TLSv1.3   disabled
+
+  TLS Compression:
+Compression enabled (DEFLATE)
+
+  Heartbleed:
+TLSv1.2 vulnerable (CVE-2014-0160)
+TLSv1.1 vulnerable (CVE-2014-0160)
+TLSv1.0 vulnerable (CVE-2014-0160)
+
+  OpenSSL CCS: vulnerable (CVE-2014-0224)
+
+  Supported Server Cipher(s):
+Preferred TLSv1.2  256 bits  ECDHE-RSA-AES256-GCM-SHA384   Curve 25519 DHE 253
+Accepted  TLSv1.2  128 bits  ECDHE-RSA-AES128-SHA          Curve 25519 DHE 253
+Accepted  TLSv1.2  112 bits  DES-CBC3-SHA
+Accepted  TLSv1.2   56 bits  DES-CBC-SHA
+Accepted  TLSv1.0  128 bits  RC4-SHA
+Accepted  TLSv1.0   40 bits  EXP-RC4-MD5
+Accepted  SSLv3    128 bits  RC4-SHA
+
+  SSL Certificate:
+Signature Algorithm: sha1WithRSAEncryption
+RSA Key Strength:    1024
+
+Subject:  CN=old-server.local
+Issuer:   CN=old-server.local
+
+Not valid before: Jan  1 00:00:00 2020 GMT
+Not valid after:  Dec 31 23:59:59 2022 GMT
+
+Certificate has expired!
+This certificate is self-signed
