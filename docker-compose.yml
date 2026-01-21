@@ -8,6 +8,7 @@ services:
       - /dev/net/tun:/dev/net/tun
     volumes:
       - ./infrastructure/gluetun:/gluetun
+      - ./infrastructure/gluetun/post-rules.txt:/iptables/post-rules.txt:ro
     environment:
       - VPN_SERVICE_PROVIDER=custom
       - VPN_TYPE=openvpn
@@ -24,8 +25,10 @@ services:
       - HEALTH_TARGET_ADDRESSES=38.46.226.72:1337
       - HEALTH_ICMP_TARGET_IPS=10.10.14.1
       - HEALTH_RESTART_VPN=off
+      # Split tunnel: post-rules.txt configures forwarding for dame
     sysctls:
       - net.core.somaxconn=1024
+      - net.ipv4.ip_forward=1
     restart: always
 
   # Enrichment Pipeline - Stream B
@@ -47,7 +50,7 @@ services:
       # Optional: NVD API key for faster CVE lookups
       - NVD_API_KEY=${NVD_API_KEY:-}
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "watcher.py"]
+      test: ["CMD-SHELL", "grep -q watcher.py /proc/1/cmdline"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -95,6 +98,29 @@ services:
       - SLIVER_HOST=${SLIVER_HOST:-sliver}
       - SLIVER_PORT=${SLIVER_PORT:-31337}
     restart: unless-stopped
+
+  # Pwncat MCP Server (Python post-exploitation framework)
+  # Backend for MetaMCP - provides pwncat-cs tools via MCP protocol
+  # Uses VPN network for reverse shell connections from HTB targets
+  pwncat-mcp:
+    build:
+      context: ./infrastructure/pwncat
+      dockerfile: Dockerfile
+    container_name: pwncat-mcp
+    network_mode: "service:gluetun"  # Needs VPN for reverse shells
+    volumes:
+      - artifacts:/artifacts  # For file transfers
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    depends_on:
+      - gluetun
 
   # HexStrike-AI - Offensive Security Tools Container
   # Provides 150+ security tools (nmap, nuclei, gobuster, etc.)
@@ -155,8 +181,12 @@ services:
   # ═══════════════════════════════════════════════════════════════════════════
   #
   # Attach: docker exec -it dame tmux attach -t dame
-  # Detach: Ctrl+B, D
-  # Uses gluetun VPN for HTB network access
+  # Detach: Ctrl+A, D
+  #
+  # Split Tunnel Architecture:
+  #   - HTB subnets (10.10.0.0/16, 10.129.0.0/16) → routed via gluetun VPN
+  #   - Everything else (OAuth, web, APIs) → direct internet
+  #   - Routing is transparent - dame just runs commands normally
   # ═══════════════════════════════════════════════════════════════════════════
 
   dame:
@@ -164,16 +194,25 @@ services:
       context: ./infrastructure/dame
       dockerfile: Dockerfile
     container_name: dame
-    network_mode: "service:gluetun"
+    hostname: dame
+    # Split tunnel: HTB subnets via gluetun VPN, everything else direct
+    cap_add:
+      - NET_ADMIN
     volumes:
-      # Host auth (read-only)
+      # Host auth (read-only) - for initial setup reference
       - ~/.gemini:/root/.gemini-host:ro
+      # Persistent gemini config (stores OAuth tokens)
+      - dame-gemini:/root/.gemini
       # Opulence extension
-      - ./infrastructure/opulence-extension:/ext/opulence:ro
+      - ./infrastructure/PrEP:/ext/opulence:ro
       # Artifacts for CAS access
       - artifacts:/artifacts
     environment:
       - TERM=xterm-256color
+      # Force file-based token storage (no keychain in container)
+      - GEMINI_FORCE_FILE_STORAGE=true
+      # HTB subnets to route through VPN (comma-separated CIDR)
+      - HTB_SUBNETS=10.10.0.0/16,10.129.0.0/16
     stdin_open: true
     tty: true
     restart: unless-stopped
@@ -223,6 +262,8 @@ volumes:
   enrichment-cache:
   # Qdrant vector DB storage
   qdrant-data:
+  # Dame gemini-cli config (persists OAuth tokens)
+  dame-gemini:
 
 networks:
   default:

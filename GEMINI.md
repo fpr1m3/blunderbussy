@@ -34,9 +34,27 @@ Agent Opulence strictly separates **automated reconnaissance** from **AI-driven 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
 | AI Runtime | `gemini-cli` + extension | Dame's brain |
-| Tool Container | `kali-gemini` (Kali + gemini-cli) | Exploitation environment |
+| Tool Container | `dame` (Kali + gemini-cli) | Exploitation environment |
 | Network Isolation | `gluetun` | VPN tunnel + killswitch |
 | Data Pipeline | `enrichment` container | CAS generation |
+
+### Dame Container Builds
+
+Build with `TARGET_PLATFORM` arg for platform-specific tools:
+
+```bash
+# Linux targets (default)
+podman build --build-arg TARGET_PLATFORM=linux -t dame:linux ...
+
+# Windows/AD targets
+podman build --build-arg TARGET_PLATFORM=windows -t dame:windows ...
+```
+
+**Core tools (all builds):** nc, ping, traceroute, wget, socat, rlwrap, git, jq, dig, proxychains4, nbtscan, onesixtyone, snmpwalk, nmap, feroxbuster, ffuf, gobuster, whatweb, sqlmap, nikto, enum4linux, smbmap, smbclient, impacket-scripts, crackmapexec
+
+**Linux-specific:** searchsploit (exploitdb)
+
+**Windows-specific:** evil-winrm, responder, ldap-utils, bloodhound
 
 ### Network Architecture
 
@@ -122,7 +140,7 @@ findings:
 ### Extension Structure
 
 ```
-infrastructure/opulence-extension/
+infrastructure/PrEP/
 ├── gemini-extension.json      # Extension manifest
 ├── GEMINI.md                  # Dame's context/personality
 ├── commands/
@@ -211,12 +229,11 @@ All design documentation: `$HOME/Notes/Obsidian/10 - PROJECTS/Agent Opulence/`
 
 ## Current Status
 
-**Phase:** PoC - Single Target E2E on Lame (10.10.10.3)
+**Phase:** PoC - Single Target E2E
 
 - [x] Gluetun VPN + killswitch
 - [x] Enrichment pipeline (parsers, enrichers, CAS)
-- [ ] Automated recon script
-- [ ] Missing parsers (gobuster, nikto, whatweb)
-- [ ] Kali + gemini-cli container
-- [ ] Dame extension
-- [ ] E2E test
+- [x] Kali + gemini-cli container (dame:linux / dame:windows)
+- [x] Dame extension + pwncat MCP server
+- [ ] Automated recon script (using AutoRecon)
+- [ ] E2E test on easy Linux HTB box
