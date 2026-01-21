@@ -9,6 +9,8 @@ services:
     volumes:
       - ./infrastructure/gluetun:/gluetun
       - ./infrastructure/gluetun/post-rules.txt:/iptables/post-rules.txt:ro
+    ports:
+      - "9998:9998"  # pwncat-mcp HTTP server (LHOST queries, health)
     environment:
       - VPN_SERVICE_PROVIDER=custom
       - VPN_TYPE=openvpn
