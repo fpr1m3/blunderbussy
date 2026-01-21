@@ -1,0 +1,26 @@
+# AutoRecon HTB Configuration
+# Agent Opulence - Optimized for HackTheBox targets
+# Reference: https://github.com/Tib3rius/AutoRecon
+
+# Global AutoRecon options (top-level, no section)
+max-scans = 16
+max-port-scans = 4
+
+# Directory busting (feroxbuster/gobuster/etc)
+[dirbuster]
+threads = 50
+wordlist = ['/usr/share/seclists/Discovery/Web-Content/common.txt']
+ext = 'txt,html,php,asp,aspx,jsp'
+
+# Virtual host enumeration (ffuf)
+[vhost-enum]
+threads = 50
+
+# Subdomain enumeration
+[subdomain-enum]
+threads = 50
+
+# Global wordlists
+[global]
+username-wordlist = '/usr/share/seclists/Usernames/top-usernames-shortlist.txt'
+password-wordlist = '/usr/share/seclists/Passwords/Common-Credentials/10-million-password-list-top-1000.txt'
