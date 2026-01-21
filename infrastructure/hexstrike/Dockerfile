@@ -42,7 +42,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Enumeration
     enum4linux \
     smbclient \
+    smbmap \
     nbtscan \
+    dnsrecon \
+    impacket-scripts \
+    # SNMP tools
+    snmp \
+    onesixtyone \
+    # SSL/TLS
+    sslscan \
+    # VoIP
+    sipvicious \
+    # Database tools
+    oscanner \
+    tnscmd10g \
+    redis-tools \
     # Password attacks
     hydra \
     john \
@@ -57,13 +71,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Templates stored in /root/nuclei-templates
 RUN nuclei -update-templates -silent
 
+# Install AutoRecon via pipx (isolated environment)
+RUN apt-get update && apt-get install -y --no-install-recommends pipx seclists && \
+    rm -rf /var/lib/apt/lists/* && \
+    pipx ensurepath && \
+    pipx install git+https://github.com/Tib3rius/AutoRecon.git
+
+# Ensure pipx binaries are in PATH
+ENV PATH="/root/.local/bin:${PATH}"
+
+# Create AutoRecon config directory and copy HTB config
+# VERSION file prevents "outdated config" warning
+RUN mkdir -p /root/.config/AutoRecon
+COPY autorecon-htb.toml /root/.config/AutoRecon/config.toml
+RUN touch /root/.config/AutoRecon/VERSION-2.0.36
+
 WORKDIR /app
 
 # Clone HexStrike-AI
 RUN git clone --depth 1 https://github.com/0x4m4/HexStrike-AI.git /app/hexstrike
 
 # Install Python dependencies from HexStrike requirements
-RUN pip3 install --no-cache-dir --break-system-packages \
+# --ignore-installed needed for Kali system packages without RECORD files
+RUN pip3 install --no-cache-dir --break-system-packages --ignore-installed \
     # Core framework
     flask>=2.3.0 \
     requests>=2.31.0 \
@@ -90,9 +120,10 @@ ENV HEXSTRIKE_PORT=8888
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Copy recon script
+# Copy recon scripts
 COPY run-recon.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/run-recon.sh
+COPY run-autorecon.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/run-recon.sh /usr/local/bin/run-autorecon.sh
 
 # Expose Flask API port
 EXPOSE 8888
