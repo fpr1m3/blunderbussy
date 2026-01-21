@@ -1,4 +1,7 @@
 {
+  "context": {
+    "includeDirectories": ["/artifacts"]
+  },
   "experimental": {
     "introspectionAgentSettings": {
       "enabled": true
