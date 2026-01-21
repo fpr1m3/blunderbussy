@@ -600,8 +600,8 @@ class PwncatClient:
     async def get_lhost(self, interface: str = "tun0") -> Dict[str, Any]:
         """Get the VPN IP address for reverse shell callbacks.
 
-        Since pwncat-mcp shares gluetun's network namespace, this returns
-        the VPN tunnel IP that HTB targets can reach for reverse shells.
+        Queries pwncat-mcp container (which shares gluetun's network namespace)
+        via HTTP to get the actual VPN tunnel IP.
 
         Args:
             interface: Network interface to query (default: tun0 for VPN)
@@ -612,41 +612,32 @@ class PwncatClient:
             - interface: The interface queried
             - error: Error message if IP couldn't be determined
         """
-        import socket
-        import fcntl
-        import struct
+        import urllib.request
+        import json as json_module
 
-        def _get_interface_ip(ifname: str) -> Optional[str]:
-            """Get IP address of a network interface using ioctl."""
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                # SIOCGIFADDR = 0x8915
-                result = fcntl.ioctl(
-                    s.fileno(),
-                    0x8915,
-                    struct.pack('256s', ifname[:15].encode('utf-8'))
-                )
-                ip = socket.inet_ntoa(result[20:24])
-                s.close()
-                return ip
-            except OSError:
-                return None
+        # pwncat-mcp runs on gluetun's network at port 9999
+        # gluetun is reachable from Dame via split-tunnel routing
+        PWNCAT_MCP_URL = "http://gluetun:9999/lhost"
 
         try:
-            ip = await asyncio.to_thread(_get_interface_ip, interface)
-
-            if ip:
-                logger.info(f"LHOST discovered: {ip} on {interface}")
-                return {
-                    "lhost": ip,
-                    "interface": interface
-                }
-            else:
-                return {
-                    "error": f"Interface {interface} not found or has no IPv4 address",
-                    "interface": interface
-                }
-
+            req = urllib.request.Request(PWNCAT_MCP_URL)
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json_module.loads(response.read().decode())
+                if "lhost" in data:
+                    logger.info(f"LHOST discovered via pwncat-mcp: {data['lhost']}")
+                    return data
+                else:
+                    return {
+                        "error": data.get("error", "Unknown error from pwncat-mcp"),
+                        "interface": interface
+                    }
+        except urllib.error.URLError as e:
+            logger.error(f"Failed to query pwncat-mcp for LHOST: {e}")
+            return {
+                "error": f"Cannot reach pwncat-mcp: {e}",
+                "interface": interface,
+                "hint": "Ensure pwncat-mcp container is running"
+            }
         except Exception as e:
             logger.error(f"Failed to get LHOST: {e}")
             return {
@@ -1002,42 +993,9 @@ async def handle_request(request: Dict[str, Any]) -> Dict[str, Any]:
         }
 
 
-async def start_lhost_http_server():
-    """Start a simple HTTP server that returns the VPN LHOST.
-
-    This allows other containers (like Dame) to query the VPN IP
-    without needing to share the network namespace.
-    """
-    from aiohttp import web
-
-    async def handle_lhost(request):
-        pwncat = get_client()
-        result = await pwncat.get_lhost()
-        return web.json_response(result)
-
-    async def handle_health(request):
-        return web.json_response({"status": "ok"})
-
-    app = web.Application()
-    app.router.add_get('/lhost', handle_lhost)
-    app.router.add_get('/health', handle_health)
-
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 9999)
-    await site.start()
-    logger.info("LHOST HTTP server started on port 9999")
-
-
 async def main():
     """Main entry point - stdio JSON-RPC server."""
     logger.info("Pwncat MCP server starting...")
-
-    # Start HTTP server for LHOST queries (non-blocking)
-    try:
-        asyncio.create_task(start_lhost_http_server())
-    except Exception as e:
-        logger.warning(f"Failed to start LHOST HTTP server: {e}")
 
     reader = asyncio.StreamReader()
     protocol = asyncio.StreamReaderProtocol(reader)
