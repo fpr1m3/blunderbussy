@@ -1,0 +1,85 @@
+[*] Detected 1 hosts serving SMB
+[*] Established 1 SMB connections(s) and 1 authenticated session(s)
+
+[+] IP: 10.10.10.40:445	Name: blue.htb          	Status: ADMIN!!!
+	Disk                                                  	Permissions	Comment
+	----                                                  	-----------	-------
+ADMIN$          Disk      READ, WRITE    Remote Admin
+C$              Disk      READ, WRITE    Default share
+IPC$            IPC       NO ACCESS      Remote IPC
+Share           Disk      READ, WRITE    Custom share
+Users           Disk      READ           User profiles
+
+[+] Starting recursive listing: ./C$
+./C$
+dr--r--r--                0 Wed Apr 22 14:50:29 2020	$Recycle.Bin
+fr--r--r--             4284 Wed Oct  3 10:16:24 2018	ActivityLog.xsl
+dr--r--r--                0 Tue Nov 21 10:47:06 2023	Config.Msi
+dw--w--w--                0 Thu Nov 23 13:04:51 2023	Documents and Settings
+dr--r--r--                0 Sat Jul 16 09:29:26 2016	PerfLogs
+dw--w--w--                0 Tue Apr 12 01:15:07 2016	Program Files
+dr--r--r--                0 Thu Jul 14 03:54:58 2016	Program Files (x86)
+dr--r--r--                0 Sat Jul 16 09:34:25 2016	ProgramData
+dr--r--r--                0 Thu Jul 14 03:54:44 2016	Recovery
+dr--r--r--                0 Sat Jul 16 09:35:27 2016	System Volume Information
+dw--w--w--                0 Thu Nov 23 13:04:51 2023	Users
+dr--r--r--                0 Thu Nov 23 13:04:51 2023	Windows
+
+./C$/Users
+dr--r--r--                0 Fri Jul 21 02:56:23 2017	Administrator
+dr--r--r--                0 Thu Jul 14 03:52:06 2016	All Users
+dr--r--r--                0 Sat Jul 16 09:35:13 2016	Default
+dr--r--r--                0 Thu Jul 14 03:52:06 2016	Default User
+fr--r--r--              174 Thu Jul 14 03:52:10 2016	desktop.ini
+dr--r--r--                0 Tue Jul 14 01:45:23 2009	Public
+dr--r--r--                0 Fri Jul 21 02:55:25 2017	haris
+
+./C$/Users/Administrator
+dr--r--r--                0 Fri Jul 21 02:56:36 2017	Contacts
+dr--r--r--                0 Thu Nov 23 12:47:03 2023	Desktop
+dr--r--r--                0 Fri Jul 21 02:56:36 2017	Documents
+dr--r--r--                0 Fri Jul 21 02:56:36 2017	Downloads
+dr--r--r--                0 Fri Jul 21 02:56:36 2017	Favorites
+dr--r--r--                0 Fri Jul 21 02:56:36 2017	Links
+dr--r--r--                0 Fri Jul 21 02:56:36 2017	Music
+dr--r--r--                0 Fri Jul 21 02:56:36 2017	Pictures
+dr--r--r--                0 Fri Jul 21 02:56:36 2017	Saved Games
+dr--r--r--                0 Fri Jul 21 02:56:36 2017	Searches
+dr--r--r--                0 Fri Jul 21 02:56:36 2017	Videos
+
+./C$/Users/Administrator/Desktop
+fr--r--r--               34 Thu Nov 23 12:47:03 2023	root.txt
+
+./C$/Users/haris
+dr--r--r--                0 Fri Jul 21 02:55:35 2017	Contacts
+dr--r--r--                0 Thu Nov 23 12:44:10 2023	Desktop
+dr--r--r--                0 Fri Jul 21 02:55:35 2017	Documents
+dr--r--r--                0 Fri Jul 21 02:55:35 2017	Downloads
+dr--r--r--                0 Fri Jul 21 02:55:35 2017	Favorites
+dr--r--r--                0 Fri Jul 21 02:55:35 2017	Links
+dr--r--r--                0 Fri Jul 21 02:55:35 2017	Music
+dr--r--r--                0 Fri Jul 21 02:55:35 2017	Pictures
+dr--r--r--                0 Fri Jul 21 02:55:35 2017	Saved Games
+dr--r--r--                0 Fri Jul 21 02:55:35 2017	Searches
+dr--r--r--                0 Fri Jul 21 02:55:35 2017	Videos
+
+./C$/Users/haris/Desktop
+fr--r--r--               34 Thu Nov 23 12:44:10 2023	user.txt
+
+[+] Starting recursive listing: ./Share
+./Share
+dr--r--r--                0 Tue Jan 14 09:15:00 2026	Documents
+dr--r--r--                0 Tue Jan 14 09:15:00 2026	Backups
+fr--r--r--             1024 Tue Jan 14 09:15:00 2026	readme.txt
+
+./Share/Documents
+fr--r--r--            15234 Mon Jan 13 14:30:00 2026	meeting_notes.docx
+fr--r--r--             8192 Mon Jan 13 14:30:00 2026	passwords.xlsx
+fr--r--r--             2048 Mon Jan 13 14:30:00 2026	config.xml
+
+./Share/Backups
+fr--r--r--          1048576 Sun Jan 12 08:00:00 2026	database.bak
+fr--r--r--            32768 Sun Jan 12 08:00:00 2026	web.config.bak
+fr--r--r--             4096 Sun Jan 12 08:00:00 2026	id_rsa.bak
+
+[*] Closed 1 connections

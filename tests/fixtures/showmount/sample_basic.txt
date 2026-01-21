@@ -1,0 +1,5 @@
+Export list for 10.10.10.1:
+/home          *
+/var/backups   192.168.1.0/24
+/srv/nfs       (everyone)
+/data          server1.local,server2.local

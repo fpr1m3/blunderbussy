@@ -1,0 +1,147 @@
+cas_version: '1.1'
+generated_at: '2026-01-20T01:40:58.752409'
+target:
+  identifier: 10.129.4.182
+  session_id: 10.129.4.182_20260120_014058
+  scan_types: &id001
+  - nikto
+  - feroxbuster
+  - whatweb
+  - nmap
+summary:
+  hosts_discovered: 1
+  vulnerabilities_found: 6
+  web_services_found: 0
+  subdomains_found: 0
+  directories_found: 0
+  smb_shares_found: 0
+  smb_users_found: 0
+  critical_findings: 1
+  exploitable_cves: 0
+key_findings:
+- type: vulnerability
+  severity: high
+  summary: The X-Content-Type-Options header is not set. This could allow the user
+    agent to render the conte...
+  cves: []
+attack_guidance:
+  priority_targets:
+  - target: 10.129.4.182
+    priority: 7
+    reason: High-value service
+  quick_wins:
+  - SSH found - look for key leaks via LFI, .git, backups
+  - Run web vulnerability scan (nuclei, nikto)
+  recommended_next:
+  - Review high-priority services for exploitation
+  - Run targeted nuclei scans on discovered services
+  tools_to_run: []
+hosts:
+- ip: 10.129.4.182
+  hostname: conversor.htb
+  status: up
+  os:
+    name: Linux 4.15 - 5.19
+    accuracy: 100
+  ports:
+  - port: 22
+    proto: tcp
+    service: ssh
+    version: OpenSSH 8.9p1 Ubuntu 3ubuntu0.13
+    state: open
+    priority: 7
+    vulns: []
+    vectors:
+    - private_key_disclosure
+    - username_enum
+    - version_specific_exploits
+  - port: 80
+    proto: tcp
+    service: http
+    version: Apache httpd 2.4.52
+    state: open
+    priority: 6
+    vulns: []
+    vectors:
+    - directory_traversal
+    - misconfig
+    - cgi_vuln
+  priority: 7
+  vulns: []
+vulnerabilities:
+- id: null
+  name: 'The anti-clickjacking X-Frame-Options header is not present. See: https://dev...'
+  severity: info
+  host: 10.129.4.182
+  matched_at: '/:'
+  cves: []
+  cvss: 0
+  exploitable: false
+  source: nikto
+- id: null
+  name: The X-Content-Type-Options header is not set. This could allow the user agent...
+  severity: high
+  host: 10.129.4.182
+  matched_at: '/:'
+  cves: []
+  cvss: 0
+  exploitable: false
+  source: nikto
+- id: null
+  name: 'Root page / redirects to: /login'
+  severity: info
+  host: 10.129.4.182
+  matched_at: null
+  cves: []
+  cvss: 0
+  exploitable: false
+  source: nikto
+- id: null
+  name: 'OPTIONS: Allowed HTTP Methods: OPTIONS, HEAD, GET .'
+  severity: info
+  host: 10.129.4.182
+  matched_at: null
+  cves: []
+  cvss: 0
+  exploitable: false
+  source: nikto
+- id: null
+  name: 'ERROR: Error limit (20) reached for host, giving up. Last error: opening
+    stre...'
+  severity: info
+  host: 10.129.4.182
+  matched_at: null
+  cves: []
+  cvss: 0
+  exploitable: false
+  source: nikto
+- id: null
+  name: 'Scan terminated: 18 error(s) and 4 item(s) reported on remote host'
+  severity: info
+  host: 10.129.4.182
+  matched_at: null
+  cves: []
+  cvss: 0
+  exploitable: false
+  source: nikto
+web_services: []
+subdomains: []
+directories: []
+nikto_findings: []
+smb_shares: []
+smb_enum: {}
+autorecon_meta:
+  scan_types: *id001
+  total_scan_files: 4
+  source: autorecon
+enrichment_metadata:
+  cve_enrichment:
+    enriched_at: '2026-01-20T01:40:58.694653'
+    total_cves: 0
+    exploitable: 0
+    critical: 0
+    in_kev: 0
+  service_enrichment: {}
+  web_enrichment: {}
+raw_artifacts:
+- /artifacts/results/10.129.4.182/scans

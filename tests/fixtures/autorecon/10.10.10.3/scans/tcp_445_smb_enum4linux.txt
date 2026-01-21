@@ -1,0 +1,186 @@
+Starting enum4linux v0.9.1 ( http://labs.portcullis.co.uk/tools/enum4linux/ ) on Sun Jan 19 10:00:00 2026
+
+ ==========================
+|    Target Information    |
+ ==========================
+Target ........... 10.10.10.3
+RID Range ........ 500-550,1000-1050
+Username ......... ''
+Password ......... ''
+Known Usernames .. administrator, guest, krbtgt, domain admins, root, bin, none
+
+
+ ====================================================
+|    Enumerating Workgroup/Domain on 10.10.10.3     |
+ ====================================================
+[+] Got domain/workgroup name: WORKGROUP
+
+
+ ============================================
+|    Nbtstat Information for 10.10.10.3     |
+ ============================================
+Looking up status of 10.10.10.3
+	LAME            <00> -         B <ACTIVE>  Workstation Service
+	LAME            <03> -         B <ACTIVE>  Messenger Service
+	LAME            <20> -         B <ACTIVE>  File Server Service
+	..__MSBROWSE__. <01> - <GROUP> B <ACTIVE>  Master Browser
+	WORKGROUP       <00> - <GROUP> B <ACTIVE>  Domain/Workgroup Name
+	WORKGROUP       <1d> -         B <ACTIVE>  Master Browser
+	WORKGROUP       <1e> - <GROUP> B <ACTIVE>  Browser Service Elections
+
+	MAC Address = 00-00-00-00-00-00
+
+
+ =====================================
+|    OS information on 10.10.10.3    |
+ =====================================
+[+] Got OS info for 10.10.10.3 from smbclient:
+Native OS: Unix
+Native LAN Manager: Samba 3.0.20-Debian
+[+] Got OS info for 10.10.10.3 from srvinfo:
+	LAME           Wk Sv PrQ Unx NT SNT lame server (Samba 3.0.20-Debian)
+	platform_id     :	500
+	os version      :	4.9
+	server type     :	0x9a03
+
+
+ =============================
+|    Users on 10.10.10.3     |
+ =============================
+index: 0x1 RID: 0x3f2 acb: 0x00000011 Account: games	Name: games	Desc: (null)
+index: 0x2 RID: 0x1f5 acb: 0x00000010 Account: nobody	Name: nobody	Desc: (null)
+index: 0x3 RID: 0x4ba acb: 0x00000010 Account: bind	Name: (null)	Desc: (null)
+index: 0x4 RID: 0x402 acb: 0x00000011 Account: proxy	Name: proxy	Desc: (null)
+index: 0x5 RID: 0x4b4 acb: 0x00000010 Account: syslog	Name: (null)	Desc: (null)
+index: 0x6 RID: 0xbba acb: 0x00000010 Account: user	Name: just a user,111,,	Desc: (null)
+index: 0x7 RID: 0x42a acb: 0x00000011 Account: www-data	Name: www-data	Desc: (null)
+index: 0x8 RID: 0x3e8 acb: 0x00000011 Account: root	Name: root	Desc: (null)
+index: 0x9 RID: 0x3fa acb: 0x00000011 Account: news	Name: news	Desc: (null)
+index: 0xa RID: 0x4c0 acb: 0x00000010 Account: postgres	Name: PostgreSQL administrator,,,	Desc: (null)
+index: 0xb RID: 0x3ec acb: 0x00000011 Account: bin	Name: bin	Desc: (null)
+index: 0xc RID: 0x3f8 acb: 0x00000011 Account: mail	Name: mail	Desc: (null)
+index: 0xd RID: 0x4c6 acb: 0x00000010 Account: distccd	Name: (null)	Desc: (null)
+index: 0xe RID: 0x4ca acb: 0x00000010 Account: proftpd	Name: (null)	Desc: (null)
+index: 0xf RID: 0x4b2 acb: 0x00000010 Account: dhcp	Name: (null)	Desc: (null)
+index: 0x10 RID: 0x3ea acb: 0x00000011 Account: daemon	Name: daemon	Desc: (null)
+index: 0x11 RID: 0x4b8 acb: 0x00000010 Account: sshd	Name: (null)	Desc: (null)
+index: 0x12 RID: 0x3f4 acb: 0x00000011 Account: man	Name: man	Desc: (null)
+index: 0x13 RID: 0x3f6 acb: 0x00000011 Account: lp	Name: lp	Desc: (null)
+index: 0x14 RID: 0x4c4 acb: 0x00000010 Account: mysql	Name: MySQL Server,,,	Desc: (null)
+index: 0x15 RID: 0x43a acb: 0x00000011 Account: gnats	Name: Gnats Bug-Reporting System (admin)	Desc: (null)
+index: 0x16 RID: 0x4b0 acb: 0x00000010 Account: libuuid	Name: (null)	Desc: (null)
+index: 0x17 RID: 0x42c acb: 0x00000011 Account: backup	Name: backup	Desc: (null)
+index: 0x18 RID: 0xbb8 acb: 0x00000010 Account: msfadmin	Name: msfadmin,,,	Desc: (null)
+index: 0x19 RID: 0x4c2 acb: 0x00000010 Account: telnetd	Name: (null)	Desc: (null)
+index: 0x1a RID: 0x3ee acb: 0x00000011 Account: sys	Name: sys	Desc: (null)
+index: 0x1b RID: 0x4bc acb: 0x00000010 Account: klog	Name: (null)	Desc: (null)
+index: 0x1c RID: 0x4be acb: 0x00000010 Account: postfix	Name: (null)	Desc: (null)
+index: 0x1d RID: 0xbbc acb: 0x00000010 Account: service	Name: ,,,	Desc: (null)
+
+user:[games] rid:[0x3f2]
+user:[nobody] rid:[0x1f5]
+user:[bind] rid:[0x4ba]
+user:[proxy] rid:[0x402]
+user:[syslog] rid:[0x4b4]
+user:[user] rid:[0xbba]
+user:[www-data] rid:[0x42a]
+user:[root] rid:[0x3e8]
+user:[news] rid:[0x3fa]
+user:[postgres] rid:[0x4c0]
+user:[bin] rid:[0x3ec]
+user:[mail] rid:[0x3f8]
+user:[distccd] rid:[0x4c6]
+user:[proftpd] rid:[0x4ca]
+user:[dhcp] rid:[0x4b2]
+user:[daemon] rid:[0x3ea]
+user:[sshd] rid:[0x4b8]
+user:[man] rid:[0x3f4]
+user:[lp] rid:[0x3f6]
+user:[mysql] rid:[0x4c4]
+user:[gnats] rid:[0x43a]
+user:[libuuid] rid:[0x4b0]
+user:[backup] rid:[0x42c]
+user:[msfadmin] rid:[0xbb8]
+user:[telnetd] rid:[0x4c2]
+user:[sys] rid:[0x3ee]
+user:[klog] rid:[0x4bc]
+user:[postfix] rid:[0x4be]
+user:[service] rid:[0xbbc]
+
+
+ =========================================
+|    Share Enumeration on 10.10.10.3     |
+ =========================================
+
+	Sharename       Type      Comment
+	---------       ----      -------
+	print$          Disk      Printer Drivers
+	tmp             Disk      oh nance!
+	opt             Disk
+	IPC$            IPC       IPC Service (lame server (Samba 3.0.20-Debian))
+	ADMIN$          IPC       IPC Service (lame server (Samba 3.0.20-Debian))
+
+[+] Attempting to map shares on 10.10.10.3
+//10.10.10.3/print$	Mapping: DENIED, Listing: N/A
+//10.10.10.3/tmp	Mapping: OK, Listing: OK
+//10.10.10.3/opt	Mapping: DENIED, Listing: N/A
+//10.10.10.3/IPC$	Mapping: OK	Listing: DENIED
+//10.10.10.3/ADMIN$	Mapping: DENIED, Listing: N/A
+
+
+ ====================================================
+|    Password Policy Information for 10.10.10.3    |
+ ====================================================
+[+] Attaching to 10.10.10.3 using a NULL share
+[+] Trying protocol 445/SMB...
+[+] Found domain(s):
+	[+] LAME
+	[+] Builtin
+[+] Password Info for Domain: LAME
+	[+] Minimum password length: 5
+	[+] Password history length: None
+	[+] Maximum password age: Not Set
+	[+] Password Complexity Flags: 000000
+		[+] Domain Refuse Password Change: 0
+		[+] Domain Password Store Cleartext: 0
+		[+] Domain Password Lockout Admins: 0
+		[+] Domain Password No Clear Change: 0
+		[+] Domain Password No Anon Change: 0
+		[+] Domain Password Complex: 0
+	[+] Minimum password age: None
+	[+] Reset Account Lockout Counter: 30 minutes
+	[+] Locked Account Duration: 30 minutes
+	[+] Account Lockout Threshold: None
+	[+] Forced Logoff Time: Not Set
+
+
+ ==============================
+|    Groups on 10.10.10.3     |
+ ==============================
+[+] Getting builtin groups:
+[+] Getting builtin group memberships:
+[+] Getting local groups:
+[+] Getting local group memberships:
+[+] Getting domain groups:
+[+] Getting domain group memberships:
+
+group:[Account Operators] rid:[0x224]
+group:[Replicator] rid:[0x228]
+group:[Administrators] rid:[0x220]
+group:[Users] rid:[0x221]
+group:[Guests] rid:[0x222]
+group:[Power Users] rid:[0x223]
+
+
+ ===========================================
+|    Machine Enumeration on 10.10.10.3     |
+ ===========================================
+[+] Attempting to enumerate machines on 10.10.10.3
+
+[+] Attempting to enumerate Machine Accounts on 10.10.10.3
+
+[+] Checking for SMB Signing
+
+SMB signing disabled
+
+enum4linux complete on Sun Jan 19 10:00:30 2026

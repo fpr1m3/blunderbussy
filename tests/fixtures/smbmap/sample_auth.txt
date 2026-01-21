@@ -1,0 +1,21 @@
+[*] Detected 1 hosts serving SMB
+[*] Established 1 SMB connections(s) and 1 authenticated session(s)
+
+[+] IP: 192.168.1.100:445	Name: dc01.corp.local          	Status: Authenticated
+	Disk                                                  	Permissions	Comment
+	----                                                  	-----------	-------
+ADMIN$          Disk      READ, WRITE    Remote Admin
+C$              Disk      READ, WRITE    Default share
+IPC$            IPC       READ           Remote IPC
+NETLOGON        Disk      READ           Logon server share
+SYSVOL          Disk      READ           Logon server share
+IT_Share        Disk      READ, WRITE    IT Department
+HR_Share        Disk      READ           Human Resources
+Finance         Disk      NO ACCESS      Finance Department
+print$          Disk      READ           Printer Drivers
+
+[+] 192.168.1.100 is running Windows Server 2019 Build 17763 (name:DC01)
+
+[!] 192.168.1.100	signing required
+
+[*] Closed 1 connections

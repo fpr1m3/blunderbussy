@@ -1,0 +1,2 @@
+Export list for nfs.example.com:
+/exports       192.168.1.0/24

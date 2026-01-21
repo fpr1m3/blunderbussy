@@ -1,0 +1,26 @@
+nmap -vv --reason -Pn -T4 -sV -sC --version-all -A --osscan-guess -oN "/artifacts/results/10.129.4.182/scans/_quick_tcp_nmap.txt" -oX "/artifacts/results/10.129.4.182/scans/xml/_quick_tcp_nmap.xml" conversor.htb
+
+nmap -vv --reason -Pn -T4 -sV -sC --version-all -A --osscan-guess -p- -oN "/artifacts/results/10.129.4.182/scans/_full_tcp_nmap.txt" -oX "/artifacts/results/10.129.4.182/scans/xml/_full_tcp_nmap.xml" conversor.htb
+
+nmap -vv --reason -Pn -T4 -sU -A --top-ports 100 -oN "/artifacts/results/10.129.4.182/scans/_top_100_udp_nmap.txt" -oX "/artifacts/results/10.129.4.182/scans/xml/_top_100_udp_nmap.xml" conversor.htb
+
+nmap -vv --reason -Pn -T4 -sV -p 22 --script="banner,ssh2-enum-algos,ssh-hostkey,ssh-auth-methods" -oN "/artifacts/results/10.129.4.182/scans/tcp_22_ssh_nmap.txt" -oX "/artifacts/results/10.129.4.182/scans/xml/tcp_22_ssh_nmap.xml" conversor.htb
+
+feroxbuster -u http://conversor.htb:80/ -t 10 -w /root/.local/share/AutoRecon/wordlists/dirbuster.txt -x "txt,html,php,asp,aspx,jsp" -v -k -n -q -e -r -o "/artifacts/results/10.129.4.182/scans/tcp_80_http_feroxbuster_dirbuster.txt"
+
+curl -sSikf http://conversor.htb:80/.well-known/security.txt
+
+curl -sSikf http://conversor.htb:80/robots.txt
+
+curl -sSik http://conversor.htb:80/
+
+nikto -ask=no -Tuning=x4567890ac -nointeractive -host http://conversor.htb:80 2>&1 | tee "/artifacts/results/10.129.4.182/scans/tcp_80_http_nikto.txt"
+
+nmap -vv --reason -Pn -T4 -sV -p 80 --script="banner,(http* or ssl*) and not (brute or broadcast or dos or external or http-slowloris* or fuzzer)" -oN "/artifacts/results/10.129.4.182/scans/tcp_80_http_nmap.txt" -oX "/artifacts/results/10.129.4.182/scans/xml/tcp_80_http_nmap.xml" conversor.htb
+
+ffuf -u http://conversor.htb:80/ -t 10 -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-110000.txt -H "Host: FUZZ.conversor.htb" -mc all -fs 329 -r -noninteractive -s | tee "/artifacts/results/10.129.4.182/scans/tcp_80_http_conversor.htb_vhosts_subdomains-top1million-110000.txt"
+
+whatweb --color=never --no-errors -a 3 -v http://conversor.htb:80 2>&1
+
+
+Finished scanning target conversor.htb

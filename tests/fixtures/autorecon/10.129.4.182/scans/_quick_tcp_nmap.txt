@@ -1,0 +1,29 @@
+# Nmap 7.98 scan initiated Mon Jan 19 20:45:14 2026 as: /usr/lib/nmap/nmap -vv --reason -Pn -T4 -sV -sC --version-all -A --osscan-guess -oN /artifacts/results/10.129.4.182/scans/_quick_tcp_nmap.txt -oX /artifacts/results/10.129.4.182/scans/xml/_quick_tcp_nmap.xml conversor.htb
+Nmap scan report for conversor.htb (10.129.4.182)
+Host is up, received user-set (0.076s latency).
+Scanned at 2026-01-19 20:45:14 UTC for 82s
+All 1000 scanned ports on conversor.htb (10.129.4.182) are in ignored states.
+Not shown: 790 filtered tcp ports (no-response), 210 closed tcp ports (reset)
+Device type: phone|broadband router|storage-misc|WAP|general purpose|security-misc
+Running: Google Android 5.X, Linksys embedded, Linux 2.4.X|2.6.X|3.X, HID embedded, TP-LINK embedded
+OS CPE: cpe:/o:google:android:5.0.1 cpe:/h:linksys:wrv200 cpe:/h:linksys:nas200 cpe:/o:linux:linux_kernel:2.4.36 cpe:/o:linux:linux_kernel:2.6.22 cpe:/o:linux:linux_kernel:3.16 cpe:/h:tp-link:tl-wa801nd
+Too many fingerprints match this host to give specific OS details
+TCP/IP fingerprint:
+SCAN(V=7.98%E=4%D=1/19%OT=%CT=1%CU=40587%PV=Y%DS=2%DC=T%G=N%TM=696E982C%P=x86_64-pc-linux-gnu)
+SEQ()
+T5(R=N)
+T6(R=N)
+T7(R=N)
+U1(R=Y%DF=N%T=40%IPL=164%UN=0%RIPL=G%RID=G%RIPCK=G%RUCK=G%RUD=G)
+IE(R=Y%DFI=N%T=40%CD=S)
+
+Network Distance: 2 hops
+
+TRACEROUTE (using port 50000/tcp)
+HOP RTT      ADDRESS
+1   72.10 ms 10.10.14.1
+2   72.16 ms conversor.htb (10.129.4.182)
+
+Read data files from: /usr/share/nmap
+OS and Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Mon Jan 19 20:46:36 2026 -- 1 IP address (1 host up) scanned in 81.98 seconds
