@@ -1024,9 +1024,9 @@ async def start_lhost_http_server():
 
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 9999)
+    site = web.TCPSite(runner, '0.0.0.0', 9998)
     await site.start()
-    logger.info("LHOST HTTP server started on port 9999")
+    logger.info("LHOST HTTP server started on port 9998")
 
 
 async def main():

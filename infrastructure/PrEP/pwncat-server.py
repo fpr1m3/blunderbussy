@@ -615,9 +615,9 @@ class PwncatClient:
         import urllib.request
         import json as json_module
 
-        # pwncat-mcp runs on gluetun's network at port 9999
-        # gluetun is reachable from Dame via split-tunnel routing
-        PWNCAT_MCP_URL = "http://gluetun:9999/lhost"
+        # pwncat-mcp runs on gluetun's network at port 9998
+        # (port 9999 conflicts with gluetun's health server)
+        PWNCAT_MCP_URL = "http://gluetun:9998/lhost"
 
         try:
             req = urllib.request.Request(PWNCAT_MCP_URL)
