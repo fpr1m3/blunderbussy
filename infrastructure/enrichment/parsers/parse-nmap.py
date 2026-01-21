@@ -38,6 +38,96 @@ except ImportError:
         import xml.etree.ElementTree as ET
 
 
+def parse_ssh_scripts(scripts: List[Dict]) -> Dict[str, Any]:
+    """
+    Parse SSH-specific nmap script outputs into structured data.
+
+    Handles:
+    - ssh-auth-methods: Authentication methods supported
+    - ssh-hostkey: Host key fingerprints
+    - ssh2-enum-algos: Supported algorithms
+    - banner: SSH version banner
+    """
+    ssh_data = {
+        'auth_methods': [],
+        'host_keys': [],
+        'algorithms': {
+            'kex': [],
+            'host_key': [],
+            'encryption': [],
+            'mac': [],
+            'compression': []
+        },
+        'banner': None
+    }
+
+    for script in scripts:
+        script_id = script.get('id', '')
+        output = script.get('output', '')
+
+        if script_id == 'ssh-auth-methods':
+            # Parse: "Supported authentication methods: publickey password"
+            if 'Supported authentication methods' in output:
+                methods_line = output.split('Supported authentication methods:')[-1]
+                methods = [m.strip() for m in methods_line.replace('\n', ' ').split() if m.strip()]
+                ssh_data['auth_methods'] = methods
+
+        elif script_id == 'banner':
+            ssh_data['banner'] = output.strip()
+
+        elif script_id == 'ssh-hostkey':
+            # Parse host key fingerprints
+            # Format: "256 01:74:26:... (ECDSA)" or "256 SHA256:... (ED25519)"
+            import re
+            for line in output.split('\n'):
+                line = line.strip()
+                if not line:
+                    continue
+                # Match: bits fingerprint (type)
+                match = re.match(r'(\d+)\s+([^\s]+)\s+\((\w+)\)', line)
+                if match:
+                    ssh_data['host_keys'].append({
+                        'bits': int(match.group(1)),
+                        'fingerprint': match.group(2),
+                        'type': match.group(3)
+                    })
+                # Also match base64 key format
+                match2 = re.match(r'(\w+[-\w]*)\s+(\S+)$', line)
+                if match2 and not match:
+                    ssh_data['host_keys'].append({
+                        'type': match2.group(1),
+                        'key': match2.group(2)[:40] + '...' if len(match2.group(2)) > 40 else match2.group(2)
+                    })
+
+        elif script_id == 'ssh2-enum-algos':
+            # Parse algorithm categories
+            import re
+            current_category = None
+            for line in output.split('\n'):
+                line = line.strip()
+                if not line:
+                    continue
+
+                # Check for category headers
+                if 'kex_algorithms' in line:
+                    current_category = 'kex'
+                elif 'server_host_key_algorithms' in line:
+                    current_category = 'host_key'
+                elif 'encryption_algorithms' in line:
+                    current_category = 'encryption'
+                elif 'mac_algorithms' in line:
+                    current_category = 'mac'
+                elif 'compression_algorithms' in line:
+                    current_category = 'compression'
+                elif current_category and not line.startswith('|'):
+                    # This is an algorithm name
+                    algo = line.strip()
+                    if algo and not algo.startswith('(') and current_category in ssh_data['algorithms']:
+                        ssh_data['algorithms'][current_category].append(algo)
+
+    return ssh_data
+
+
 def transform_service(service: 'NmapService') -> Dict[str, Any]:
     """Transform libnmap service to our CAS format."""
     port_data = {
@@ -86,6 +176,10 @@ def transform_service(service: 'NmapService') -> Dict[str, Any]:
             if 'elements' in script:
                 script_data['elements'] = script['elements']
             port_data['scripts'].append(script_data)
+
+        # Parse SSH-specific scripts into structured data
+        if port_data['service'] == 'ssh':
+            port_data['ssh'] = parse_ssh_scripts(port_data['scripts'])
 
     return port_data
 
@@ -315,6 +409,10 @@ def parse_port_xml(port_elem) -> Dict[str, Any]:
             'output': script_elem.get('output')
         }
         port_data['scripts'].append(script_data)
+
+    # Parse SSH-specific scripts into structured data
+    if port_data['service'] == 'ssh' and port_data['scripts']:
+        port_data['ssh'] = parse_ssh_scripts(port_data['scripts'])
 
     return port_data
 

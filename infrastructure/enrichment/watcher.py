@@ -17,7 +17,7 @@ import subprocess
 import hashlib
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, field
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileModifiedEvent
@@ -35,6 +35,7 @@ logger = logging.getLogger('enrichment-watcher')
 
 # Paths
 RAW_DIR = Path('/artifacts/raw')
+RESULTS_DIR = Path('/artifacts/results')  # AutoRecon output directory
 PROCESSED_DIR = Path('/artifacts/processed')
 LOGS_DIR = Path('/artifacts/logs')
 PARSERS_DIR = Path('/app/parsers')
@@ -76,6 +77,59 @@ PARSER_MAP = {
         'patterns': ['whatweb*.json', '*_whatweb.json', '*.whatweb.json', 'whatweb*.txt', '*_whatweb.txt'],
         'parser': 'parse-whatweb.py',
         'output_type': 'technologies'
+    }
+}
+
+# AutoRecon file patterns -> parser mapping
+# Maps AutoRecon output file patterns to existing parsers
+AUTORECON_PARSER_MAP = {
+    'nmap': {
+        # Use only full TCP scan to avoid duplicate hosts from quick/udp scans
+        # The full scan is most comprehensive
+        'patterns': ['*_full_tcp_nmap.xml'],
+        'parser': 'parse-nmap.py',
+        'output_type': 'hosts'
+    },
+    'nmap_ssh': {
+        # SSH-specific nmap scan with script outputs
+        'patterns': ['tcp_*_ssh_nmap.xml'],
+        'parser': 'parse-nmap.py',
+        'output_type': 'ssh_info'
+    },
+    'feroxbuster': {
+        # AutoRecon naming: tcp_80_http_feroxbuster_dirbuster.txt
+        'patterns': ['*feroxbuster*.txt'],
+        'parser': 'parse-feroxbuster.py',
+        'output_type': 'directories'
+    },
+    'nikto': {
+        # AutoRecon naming: tcp_80_http_nikto.txt
+        # Single pattern to avoid duplicate matches
+        'patterns': ['*_nikto.txt'],
+        'parser': 'parse-nikto.py',
+        'output_type': 'web_vulnerabilities'
+    },
+    'whatweb': {
+        # AutoRecon naming: tcp_80_http_whatweb.txt
+        'patterns': ['*_whatweb.txt'],
+        'parser': 'parse-whatweb.py',
+        'output_type': 'technologies'
+    },
+    'enum4linux': {
+        'patterns': ['*enum4linux*.txt'],
+        'parser': 'parse-enum4linux.py',
+        'output_type': 'smb_enum'
+    },
+    'smbmap': {
+        'patterns': ['*smbmap*.txt'],
+        'parser': 'parse-smbmap.py',
+        'output_type': 'smb_shares'
+    },
+    'manual_commands': {
+        # AutoRecon _manual_commands.txt with attack recommendations
+        'patterns': ['_manual_commands.txt'],
+        'parser': 'parse-manual-commands.py',
+        'output_type': 'recommendations'
     }
 }
 
@@ -369,6 +423,305 @@ class EnrichmentPipeline:
             logger.warning(f"Manifest update warning: {result.stderr}")
 
 
+class AutoReconProcessor:
+    """Handles batch processing of AutoRecon scan results."""
+
+    def __init__(self, pipeline: EnrichmentPipeline):
+        self.pipeline = pipeline
+        self.processed_targets: set = set()
+        self._load_processed_targets()
+
+    def _load_processed_targets(self):
+        """Load previously processed AutoRecon targets."""
+        targets_file = LOGS_DIR / 'autorecon_processed.json'
+        if targets_file.exists():
+            try:
+                with open(targets_file) as f:
+                    self.processed_targets = set(json.load(f))
+                logger.info(f"Loaded {len(self.processed_targets)} processed AutoRecon targets")
+            except Exception as e:
+                logger.warning(f"Failed to load processed targets: {e}")
+
+    def _save_processed_target(self, target: str):
+        """Save a processed AutoRecon target."""
+        self.processed_targets.add(target)
+        targets_file = LOGS_DIR / 'autorecon_processed.json'
+        try:
+            with open(targets_file, 'w') as f:
+                json.dump(list(self.processed_targets), f)
+        except Exception as e:
+            logger.warning(f"Failed to save processed target: {e}")
+
+    def is_scan_complete(self, target_dir: Path) -> bool:
+        """Check if AutoRecon scan is complete for a target."""
+        scans_dir = target_dir / 'scans'
+        commands_log = scans_dir / '_commands.log'
+
+        if not commands_log.exists():
+            return False
+
+        try:
+            with open(commands_log, 'r') as f:
+                content = f.read()
+                # AutoRecon writes these messages when done
+                return 'Finished scanning' in content or 'AutoRecon was interrupted' in content
+        except Exception:
+            return False
+
+    def find_ready_targets(self) -> list:
+        """Find AutoRecon targets that are complete and ready for processing."""
+        ready = []
+
+        if not RESULTS_DIR.exists():
+            return ready
+
+        for target_dir in RESULTS_DIR.iterdir():
+            if not target_dir.is_dir():
+                continue
+
+            target = target_dir.name
+            if target in self.processed_targets:
+                continue
+
+            if self.is_scan_complete(target_dir):
+                ready.append(target_dir)
+
+        return ready
+
+    def _detect_scan_type(self, file_path: Path) -> Optional[str]:
+        """Detect scan type from AutoRecon output filename."""
+        import fnmatch
+        filename = file_path.name.lower()
+
+        for scan_type, config in AUTORECON_PARSER_MAP.items():
+            for pattern in config['patterns']:
+                if fnmatch.fnmatch(filename, pattern.lower()):
+                    return scan_type
+
+        return None
+
+    def _collect_scan_files(self, target_dir: Path) -> Dict[str, List[Path]]:
+        """Collect all scan files grouped by type."""
+        scans_dir = target_dir / 'scans'
+        files_by_type: Dict[str, List[Path]] = {}
+
+        if not scans_dir.exists():
+            return files_by_type
+
+        for file_path in scans_dir.rglob('*'):
+            if not file_path.is_file():
+                continue
+
+            # Skip log files and empty files
+            if file_path.suffix in ['.log'] or file_path.stat().st_size == 0:
+                continue
+
+            scan_type = self._detect_scan_type(file_path)
+            if scan_type:
+                if scan_type not in files_by_type:
+                    files_by_type[scan_type] = []
+                files_by_type[scan_type].append(file_path)
+
+        return files_by_type
+
+    def process_target(self, target_dir: Path) -> bool:
+        """Process all scan files for an AutoRecon target."""
+        target = target_dir.name
+        logger.info(f"Processing AutoRecon results for target: {target}")
+
+        # Collect scan files by type
+        files_by_type = self._collect_scan_files(target_dir)
+
+        if not files_by_type:
+            logger.warning(f"No scan files found for {target}")
+            return False
+
+        logger.info(f"Found scan types: {list(files_by_type.keys())}")
+
+        # Merge all parsed and enriched data
+        merged_data = {
+            'type': 'autorecon',
+            'target': target,
+            'scan_types': list(files_by_type.keys()),
+            'hosts': [],
+            'vulnerabilities': [],
+            'web_services': [],
+            'directories': [],
+            'technologies': [],
+            'smb_shares': [],
+            'smb_enum': [],
+            'recommendations': [],
+            'ssh_info': [],
+            'raw_files': []
+        }
+
+        # Process each scan type
+        for scan_type, files in files_by_type.items():
+            config = AUTORECON_PARSER_MAP.get(scan_type)
+            if not config:
+                continue
+
+            parser_script = PARSERS_DIR / config['parser']
+            if not parser_script.exists():
+                logger.warning(f"Parser not found: {parser_script}")
+                continue
+
+            for file_path in files:
+                try:
+                    # Run parser
+                    result = subprocess.run(
+                        ['python3', str(parser_script), str(file_path)],
+                        capture_output=True,
+                        text=True,
+                        timeout=120
+                    )
+
+                    if result.returncode != 0:
+                        logger.warning(f"Parser failed for {file_path}: {result.stderr}")
+                        continue
+
+                    parsed = json.loads(result.stdout)
+                    output_type = config['output_type']
+
+                    # Merge results
+                    if output_type == 'hosts' and 'hosts' in parsed:
+                        merged_data['hosts'].extend(parsed['hosts'])
+                    elif output_type == 'vulnerabilities' and 'vulnerabilities' in parsed:
+                        merged_data['vulnerabilities'].extend(parsed['vulnerabilities'])
+                    elif output_type == 'directories' and 'findings' in parsed:
+                        merged_data['directories'].extend(parsed['findings'])
+                    elif output_type == 'technologies' and 'technologies' in parsed:
+                        merged_data['technologies'].extend(parsed['technologies'])
+                    elif output_type == 'web_vulnerabilities' and 'findings' in parsed:
+                        # Inject target info into each finding for CAS formatter
+                        target_ip = parsed.get('target', target)
+                        for finding in parsed['findings']:
+                            finding['target'] = target_ip
+                        merged_data['vulnerabilities'].extend(parsed['findings'])
+                    elif output_type == 'smb_shares' and 'shares' in parsed:
+                        merged_data['smb_shares'].extend(parsed['shares'])
+                    elif output_type == 'smb_enum':
+                        merged_data['smb_enum'].append(parsed)
+                    elif output_type == 'recommendations' and 'recommendations' in parsed:
+                        merged_data['recommendations'].extend(parsed['recommendations'])
+                    elif output_type == 'ssh_info' and 'hosts' in parsed:
+                        # Extract SSH info from nmap hosts
+                        for host in parsed['hosts']:
+                            for port in host.get('ports', []):
+                                if port.get('ssh'):
+                                    merged_data['ssh_info'].append({
+                                        'host': host.get('ip'),
+                                        'port': port.get('port'),
+                                        **port['ssh']
+                                    })
+
+                    merged_data['raw_files'].append(str(file_path))
+                    logger.info(f"Parsed {scan_type}: {file_path.name}")
+
+                except subprocess.TimeoutExpired:
+                    logger.error(f"Parser timeout for {file_path}")
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Invalid JSON from parser for {file_path}: {e}")
+                except Exception as e:
+                    logger.error(f"Error processing {file_path}: {e}")
+
+        # Run enrichers on merged data
+        enriched_data = self._run_enrichers(merged_data)
+
+        # Format as CAS
+        session_id = f"{target}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        cas_input = {
+            'target': target,
+            'session_id': session_id,
+            'scan_type': 'autorecon',
+            'data': enriched_data,
+            'source_file': str(target_dir / 'scans'),
+            'timestamp': datetime.utcnow().isoformat()
+        }
+
+        # Write CAS
+        cas_path = Path(f'/artifacts/{target}/context.yaml')
+        cas_path.parent.mkdir(parents=True, exist_ok=True)
+
+        formatter_script = Path('/app/format-cas.py')
+        try:
+            result = subprocess.run(
+                ['python3', str(formatter_script), str(cas_path)],
+                input=json.dumps(cas_input),
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+
+            if result.returncode != 0:
+                logger.error(f"CAS formatter failed: {result.stderr}")
+                return False
+
+            logger.info(f"CAS document written to: {cas_path}")
+
+        except Exception as e:
+            logger.error(f"Failed to format CAS: {e}")
+            return False
+
+        # Mark as processed
+        self._save_processed_target(target)
+        logger.info(f"Successfully processed AutoRecon results for {target}")
+
+        return True
+
+    def _run_enrichers(self, data: Dict) -> Dict:
+        """Run applicable enrichers on merged data."""
+        enriched = data.copy()
+
+        # Map output types to enricher input types
+        type_mapping = {
+            'hosts': 'hosts',
+            'web_services': 'web_services',
+            'vulnerabilities': 'vulnerabilities'
+        }
+
+        for enricher in ENRICHERS:
+            # Check which data types this enricher handles
+            for data_key, input_type in type_mapping.items():
+                if enricher['input_type'] != input_type:
+                    continue
+
+                if not enriched.get(data_key):
+                    continue
+
+                script_path = ENRICHERS_DIR / enricher['script']
+                if not script_path.exists():
+                    continue
+
+                try:
+                    # Prepare input for enricher
+                    enricher_input = {data_key: enriched[data_key]}
+
+                    result = subprocess.run(
+                        ['python3', str(script_path)],
+                        input=json.dumps(enricher_input),
+                        capture_output=True,
+                        text=True,
+                        timeout=120
+                    )
+
+                    if result.returncode == 0:
+                        enricher_output = json.loads(result.stdout)
+                        if data_key in enricher_output:
+                            enriched[data_key] = enricher_output[data_key]
+                        # Merge any additional fields
+                        for key, value in enricher_output.items():
+                            if key not in enriched:
+                                enriched[key] = value
+                    else:
+                        logger.warning(f"Enricher {enricher['script']} failed: {result.stderr}")
+
+                except Exception as e:
+                    logger.warning(f"Enricher {enricher['script']} error: {e}")
+
+        return enriched
+
+
 class ScanFileHandler(FileSystemEventHandler):
     """Handles file system events for scan files."""
 
@@ -443,7 +796,7 @@ class ScanFileHandler(FileSystemEventHandler):
 
 def ensure_directories():
     """Ensure all required directories exist."""
-    for directory in [RAW_DIR, PROCESSED_DIR, LOGS_DIR]:
+    for directory in [RAW_DIR, RESULTS_DIR, PROCESSED_DIR, LOGS_DIR]:
         directory.mkdir(parents=True, exist_ok=True)
     logger.info("Directories verified")
 
@@ -457,6 +810,15 @@ def process_existing_files(pipeline: EnrichmentPipeline):
             pipeline.process_file(file_path)
 
 
+def process_autorecon_targets(autorecon_processor: AutoReconProcessor):
+    """Process any complete AutoRecon targets."""
+    ready_targets = autorecon_processor.find_ready_targets()
+
+    for target_dir in ready_targets:
+        logger.info(f"Found complete AutoRecon scan: {target_dir.name}")
+        autorecon_processor.process_target(target_dir)
+
+
 def main():
     """Main entry point for the enrichment watcher."""
     logger.info("=" * 60)
@@ -466,21 +828,37 @@ def main():
     # Setup
     ensure_directories()
     pipeline = EnrichmentPipeline()
+    autorecon_processor = AutoReconProcessor(pipeline)
 
     # Process existing files first
     process_existing_files(pipeline)
 
-    # Start watching for new files
+    # Process any existing AutoRecon results
+    process_autorecon_targets(autorecon_processor)
+
+    # Start watching for new files in RAW_DIR (legacy pipeline)
     event_handler = ScanFileHandler(pipeline)
     observer = Observer()
     observer.schedule(event_handler, str(RAW_DIR), recursive=True)
     observer.start()
 
     logger.info(f"Watching for new scans in: {RAW_DIR}")
+    logger.info(f"Monitoring AutoRecon results in: {RESULTS_DIR}")
+
+    # Polling interval for AutoRecon completion checks (seconds)
+    AUTORECON_POLL_INTERVAL = 30
+    last_autorecon_check = time.time()
 
     try:
         while True:
             time.sleep(1)
+
+            # Periodically check for completed AutoRecon scans
+            now = time.time()
+            if now - last_autorecon_check >= AUTORECON_POLL_INTERVAL:
+                process_autorecon_targets(autorecon_processor)
+                last_autorecon_check = now
+
     except KeyboardInterrupt:
         logger.info("Shutting down...")
         observer.stop()

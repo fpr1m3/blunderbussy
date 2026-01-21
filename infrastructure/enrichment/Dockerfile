@@ -34,9 +34,9 @@ COPY update-manifest.py .
 # Create artifact directories (will be overridden by volume mounts)
 RUN mkdir -p /artifacts/raw /artifacts/processed /artifacts/logs
 
-# Health check - verify watcher is running
+# Health check - verify watcher is running (uses /proc directly, no procps needed)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD pgrep -f "watcher.py" || exit 1
+    CMD grep -q watcher.py /proc/1/cmdline || exit 1
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1

@@ -220,13 +220,36 @@ class CASFormatter:
         }
 
     def _generate_attack_guidance(self, data: Dict) -> Dict:
-        """Generate attack guidance from enriched data."""
+        """Generate attack guidance from enriched data and manual commands."""
         guidance = {
             'priority_targets': [],
             'quick_wins': [],
             'recommended_next': [],
+            'recommended_commands': [],
             'tools_to_run': set()
         }
+
+        # From manual commands (AutoRecon _manual_commands.txt)
+        # These are the primary source for attack recommendations
+        if 'recommendations' in data and data['recommendations']:
+            for rec in data['recommendations'][:15]:
+                cmd_entry = {
+                    'service': rec.get('service', ''),
+                    'port': rec.get('port', 0),
+                    'tool': rec.get('tool', ''),
+                    'category': rec.get('category', ''),
+                    'command': rec.get('command', ''),
+                    'priority': rec.get('priority', 5)
+                }
+                guidance['recommended_commands'].append(cmd_entry)
+
+                # Add high-priority commands to quick_wins
+                if rec.get('priority', 5) <= 2:
+                    tool = rec.get('tool', 'command')
+                    service = rec.get('service', 'service')
+                    guidance['quick_wins'].append(
+                        f"{tool} {rec.get('category', '')} on {service}:{rec.get('port', '')}"
+                    )
 
         # From host enrichment
         if 'attack_plan' in data:
@@ -266,6 +289,9 @@ class CASFormatter:
 
         # Generate recommended next steps
         guidance['recommended_next'] = self._generate_next_steps(data)
+
+        # Sort recommended_commands by priority
+        guidance['recommended_commands'].sort(key=lambda x: x.get('priority', 5))
 
         return guidance
 
@@ -400,6 +426,8 @@ class CASFormatter:
             'nikto_findings': [],
             'smb_shares': [],
             'smb_enum': {},
+            'ssh_info': [],
+            'technologies': [],
             'autorecon_meta': {},
             'enrichment_metadata': {},
             'raw_artifacts': [],
@@ -443,16 +471,21 @@ class CASFormatter:
             for subdomain in data['subdomains'][:self.max_items_per_section]:
                 cas['subdomains'].append(self._format_subdomain_summary(subdomain))
 
-        # Process directories (gobuster findings)
-        if 'findings' in data and data.get('type') == 'gobuster':
-            for finding in data['findings'][:self.max_items_per_section]:
-                cas['directories'].append({
-                    'path': finding.get('path', ''),
-                    'status': finding.get('status', 0),
-                    'size': finding.get('size', 0),
-                    'redirect': finding.get('redirect')
-                })
-            cas['summary']['directories_found'] = len(data['findings'])
+        # Process directories (gobuster/feroxbuster findings)
+        # Handle both direct findings (gobuster) and merged directories (autorecon)
+        directories_data = data.get('directories', [])
+        if not directories_data and 'findings' in data and data.get('type') in ('gobuster', 'feroxbuster'):
+            directories_data = data['findings']
+
+        for finding in directories_data[:self.max_items_per_section]:
+            cas['directories'].append({
+                'path': finding.get('path', ''),
+                'status': finding.get('status', 0),
+                'size': finding.get('size', 0),
+                'redirect': finding.get('redirect'),
+                'interesting': finding.get('path', '') in data.get('stats', {}).get('interesting', [])
+            })
+        cas['summary']['directories_found'] = len(directories_data)
 
         # Process nikto findings
         if 'findings' in data and data.get('type') == 'nikto':
@@ -474,6 +507,26 @@ class CASFormatter:
             cas['smb_enum'] = self._format_smb_enum_summary(data['smb_enum'])
             # Update summary with user count
             cas['summary']['smb_users_found'] = len(cas['smb_enum'].get('users', []))
+
+        # Process SSH info (from nmap SSH scripts)
+        if 'ssh_info' in data and data['ssh_info']:
+            for ssh in data['ssh_info'][:self.max_items_per_section]:
+                cas['ssh_info'].append({
+                    'host': ssh.get('host', ''),
+                    'port': ssh.get('port', 22),
+                    'auth_methods': ssh.get('auth_methods', []),
+                    'host_keys': ssh.get('host_keys', [])[:3],  # Limit keys
+                    'banner': ssh.get('banner', '')
+                })
+
+        # Process technologies (from whatweb)
+        if 'technologies' in data and data['technologies']:
+            for tech in data['technologies'][:self.max_items_per_section]:
+                cas['technologies'].append({
+                    'name': tech.get('name', ''),
+                    'version': tech.get('version'),
+                    'category': tech.get('category', '')
+                })
 
         # Process AutoRecon metadata
         if data.get('type') == 'autorecon':
@@ -541,7 +594,7 @@ class CASFormatter:
         existing.setdefault('target', {})['scan_types'] = list(existing_types | new_types)
 
         # Merge lists (deduplicate by key fields)
-        for field in ['hosts', 'vulnerabilities', 'low_priority_vulns', 'web_services', 'subdomains', 'directories', 'nikto_findings', 'smb_shares']:
+        for field in ['hosts', 'vulnerabilities', 'low_priority_vulns', 'web_services', 'subdomains', 'directories', 'nikto_findings', 'smb_shares', 'ssh_info', 'technologies']:
             existing_items = existing.get(field, [])
             new_items = new.get(field, [])
 
@@ -557,6 +610,10 @@ class CASFormatter:
             elif field == 'nikto_findings':
                 key_func = lambda x: f"{x.get('path', '')}_{x.get('osvdb', '')}"
             elif field == 'smb_shares':
+                key_func = lambda x: x.get('name', '')
+            elif field == 'ssh_info':
+                key_func = lambda x: f"{x.get('host', '')}:{x.get('port', 22)}"
+            elif field == 'technologies':
                 key_func = lambda x: x.get('name', '')
             else:
                 key_func = lambda x: x.get('host', '')
