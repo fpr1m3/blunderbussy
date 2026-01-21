@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     netcat-openbsd iputils-ping traceroute wget \
     socat rlwrap git jq ftp telnet \
     dnsutils proxychains4 \
+    html2text lynx \
     && rm -rf /var/lib/apt/lists/*
 
 # =============================================================================

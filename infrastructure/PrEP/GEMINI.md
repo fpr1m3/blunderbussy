@@ -165,6 +165,47 @@ wget http://10.129.5.135/largefile.zip
 nc 10.129.5.135 80
 ```
 
+### MANDATORY: Web Content Filtering
+
+**CRITICAL:** When fetching web pages with curl/wget, raw HTML contains embedded JavaScript/CSS that pollutes API context and causes "invalid argument" errors. You MUST filter output to extract only text content.
+
+| Use Case | Filter Method | Example |
+|----------|---------------|---------|
+| Extract page text | `html2text` or `lynx -dump` | `curl http://target/ \| html2text` |
+| Check headers only | `curl -I` | `curl -I http://target/` |
+| Limit output size | `head -n` | `curl http://target/ \| head -n 100` |
+| Strip script/style | `sed` filter | `curl http://target/ \| sed '/<script/,/<\/script>/d; /<style/,/<\/style>/d'` |
+
+**Examples of CORRECT usage:**
+```bash
+# Extract readable text from web page
+curl --connect-timeout 5 --max-time 30 http://10.129.5.135/ | html2text
+
+# Check headers without downloading body
+curl -I --connect-timeout 5 --max-time 30 http://10.129.5.135/
+
+# Limit output to first 200 lines
+curl --connect-timeout 5 --max-time 30 http://10.129.5.135/ | head -n 200
+
+# Combined: text extraction with size limit
+curl --connect-timeout 5 --max-time 30 http://10.129.5.135/ | html2text | head -n 300
+```
+
+**NEVER do this:**
+```bash
+# BAD - raw HTML with minified jQuery/JS will cause API errors
+curl --connect-timeout 5 --max-time 30 http://10.129.5.135/
+
+# BAD - full HTML page pollutes context
+wget --timeout=30 -O - http://10.129.5.135/
+```
+
+**When to use each filter:**
+- **html2text**: Best for analyzing page content (links, text, structure)
+- **curl -I**: Fast header checks (status codes, server info, redirects)
+- **head -n**: When you need HTML structure but want to limit size
+- **sed filter**: When you need HTML tags but not scripts/styles
+
 ### Pre-Flight Checklist
 Before executing any technique:
 
