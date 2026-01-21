@@ -20,12 +20,13 @@ Agent Opulence strictly separates **deterministic scanning** from **strategic de
 ┌─────────────────────────────────────────────────────────────┐
 │  ENRICHMENT PIPELINE (Parsers, Enrichers, CAS Formatter)    │
 │  Watcher detects files → Parse to JSON → Enrich with CVEs   │
-│  Format to YAML → Output: /artifacts/{target}/context.yaml  │
+│  Format to YAML → Initialize PTT                            │
+│  Output: /artifacts/{target}/context.yaml + ptt.yaml        │
 └──────────────────────┬──────────────────────────────────────┘
                        ↓
 ┌─────────────────────────────────────────────────────────────┐
 │  PHASE 2: AI-DRIVEN EXPLOITATION (Strategic)                │
-│  Dame (AI Agent) reads CAS → Plans → Executes → Escalates   │
+│  Dame (AI Agent) loads PTT → Executes → Adapts → Escalates  │
 │  Tools: msfconsole, searchsploit, pwncat-cs, manual exploits│
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -155,6 +156,7 @@ blunderbussy/
 │   ├── enrichment/           # Enrichment pipeline
 │   │   ├── watcher.py        # File system watcher
 │   │   ├── format-cas.py     # CAS YAML formatter
+│   │   ├── init-ptt.py       # PTT initializer (CAS → PTT)
 │   │   ├── parsers/          # 24+ tool parsers
 │   │   └── enrichers/        # CVE lookup, service analysis
 │   ├── dame/                  # Kali + gemini-cli container
@@ -164,7 +166,7 @@ blunderbussy/
 │   │   ├── gemini-extension.json
 │   │   ├── GEMINI.md         # Dame's system prompt
 │   │   ├── pwncat-server.py  # MCP server
-│   │   ├── ptt.py            # Pentesting Task Tree
+│   │   ├── ptt.py            # Pentesting Task Tree module
 │   │   └── commands/         # /attack command
 │   ├── hexstrike/            # 150+ security tools
 │   ├── gluetun/              # VPN configuration
@@ -216,7 +218,9 @@ Enrichers add context:
     ↓
 CAS Formatter outputs YAML
     ↓
-Result: /artifacts/{target}/context.yaml
+PTT Initializer transforms CAS → PTT (deterministic)
+    ↓
+Result: /artifacts/{target}/context.yaml + ptt.yaml
 ```
 
 ---
