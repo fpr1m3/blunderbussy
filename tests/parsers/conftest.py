@@ -81,3 +81,27 @@ def wpscan_fixtures():
 def dirsearch_fixtures():
     """Return dirsearch fixtures directory."""
     return FIXTURES_DIR / "dirsearch"
+
+
+@pytest.fixture
+def rpcdump_fixtures():
+    """Return rpcdump fixtures directory."""
+    return FIXTURES_DIR / "rpcdump"
+
+
+@pytest.fixture
+def redis_cli_fixtures():
+    """Return redis-cli fixtures directory."""
+    return FIXTURES_DIR / "redis-cli"
+
+
+@pytest.fixture
+def dirb_fixtures():
+    """Return dirb fixtures directory."""
+    return FIXTURES_DIR / "dirb"
+
+
+@pytest.fixture
+def dig_fixtures():
+    """Return dig fixtures directory."""
+    return FIXTURES_DIR / "dig"

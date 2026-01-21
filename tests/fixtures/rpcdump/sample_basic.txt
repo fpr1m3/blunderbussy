@@ -1,0 +1,53 @@
+Impacket v0.10.0 - Copyright 2022 SecureAuth Corporation
+
+[*] Retrieving endpoint list from 10.10.10.100
+
+Protocol: [MS-SAMR]: Security Account Manager (SAM) Remote Protocol
+Provider: samr.dll
+UUID    : 12345778-1234-ABCD-EF00-0123456789AB v1.0
+Bindings:
+          ncacn_np:\\10.10.10.100[\pipe\samr]
+          ncacn_ip_tcp:10.10.10.100[49664]
+
+Protocol: [MS-SCMR]: Service Control Manager Remote Protocol
+Provider: services.exe
+UUID    : 367ABB81-9844-35F1-AD32-98F038001003 v2.0
+Bindings:
+          ncacn_ip_tcp:10.10.10.100[49666]
+          ncacn_np:\\10.10.10.100[\pipe\svcctl]
+
+Protocol: [MS-DRSR]: Directory Replication Service (DRS) Remote Protocol
+Provider: ntdsai.dll
+UUID    : E3514235-4B06-11D1-AB04-00C04FC2DCD2 v4.0
+Bindings:
+          ncacn_ip_tcp:10.10.10.100[49667]
+          ncacn_np:\\10.10.10.100[\pipe\lsass]
+
+Protocol: [MS-RPRN]: Print System Remote Protocol
+Provider: spoolsv.exe
+UUID    : 12345678-1234-ABCD-EF00-0123456789AB v1.0
+Bindings:
+          ncacn_np:\\10.10.10.100[\pipe\spoolss]
+          ncacn_ip_tcp:10.10.10.100[49668]
+
+Protocol: [MS-WKST]: Workstation Service Remote Protocol
+Provider: wkssvc.dll
+UUID    : 6BFFD098-A112-3610-9833-46C3F87E345A v1.0
+Bindings:
+          ncacn_np:\\10.10.10.100[\pipe\wkssvc]
+          ncacn_ip_tcp:10.10.10.100[49669]
+
+Protocol: [MS-TSCH]: Task Scheduler Service Remoting Protocol
+Provider: schedsvc.dll
+UUID    : 86D35949-83C9-4044-B424-DB363231FD0C v1.0
+Bindings:
+          ncacn_ip_tcp:10.10.10.100[49670]
+
+Protocol: Generic RPC Service
+Provider: rpcss.dll
+UUID    : 12345678-ABCD-EF00-0123-456789ABCDEF v1.0
+Bindings:
+          ncalrpc:[LRPC-1234abcd]
+          ncacn_ip_tcp:10.10.10.100[49671]
+
+[*] Received 7 endpoints.
