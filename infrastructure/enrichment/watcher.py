@@ -396,6 +396,28 @@ class EnrichmentPipeline:
         if result.returncode != 0:
             raise RuntimeError(f"CAS formatter failed: {result.stderr}")
 
+        # Initialize PTT from CAS
+        ptt_init_script = Path('/app/init-ptt.py')
+        if ptt_init_script.exists():
+            logger.info(f"Initializing PTT for {job.target}")
+            ptt_result = subprocess.run(
+                ['python3', str(ptt_init_script), str(cas_path)],
+                capture_output=True,
+                text=True
+            )
+
+            if ptt_result.returncode == 0:
+                logger.info(f"PTT initialized successfully for {job.target}")
+                # Log the summary output from init-ptt.py
+                if ptt_result.stdout:
+                    for line in ptt_result.stdout.strip().split('\n'):
+                        logger.info(f"  {line}")
+            else:
+                logger.warning(f"PTT initialization failed for {job.target}: {ptt_result.stderr}")
+                # Don't fail the pipeline - PTT is optional
+        else:
+            logger.debug("init-ptt.py not found, skipping PTT initialization")
+
         return cas_path
 
     def _run_manifest_update(self, job: ProcessingJob):
@@ -658,6 +680,28 @@ class AutoReconProcessor:
                 return False
 
             logger.info(f"CAS document written to: {cas_path}")
+
+            # Initialize PTT from CAS
+            ptt_init_script = Path('/app/init-ptt.py')
+            if ptt_init_script.exists():
+                logger.info(f"Initializing PTT for {target}")
+                ptt_result = subprocess.run(
+                    ['python3', str(ptt_init_script), str(cas_path)],
+                    capture_output=True,
+                    text=True
+                )
+
+                if ptt_result.returncode == 0:
+                    logger.info(f"PTT initialized successfully for {target}")
+                    # Log the summary output from init-ptt.py
+                    if ptt_result.stdout:
+                        for line in ptt_result.stdout.strip().split('\n'):
+                            logger.info(f"  {line}")
+                else:
+                    logger.warning(f"PTT initialization failed for {target}: {ptt_result.stderr}")
+                    # Don't fail the pipeline - PTT is optional
+            else:
+                logger.debug("init-ptt.py not found, skipping PTT initialization")
 
         except Exception as e:
             logger.error(f"Failed to format CAS: {e}")

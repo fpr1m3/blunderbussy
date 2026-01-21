@@ -21,15 +21,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Copy requirements first for caching
-COPY requirements.txt .
+COPY enrichment/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY watcher.py .
-COPY parsers/ ./parsers/
-COPY enrichers/ ./enrichers/
-COPY format-cas.py .
-COPY update-manifest.py .
+COPY enrichment/watcher.py .
+COPY enrichment/parsers/ ./parsers/
+COPY enrichment/enrichers/ ./enrichers/
+COPY enrichment/format-cas.py .
+COPY PrEP/ptt.py .
+COPY enrichment/init-ptt.py .
+COPY enrichment/update-manifest.py .
 
 # Create artifact directories (will be overridden by volume mounts)
 RUN mkdir -p /artifacts/raw /artifacts/processed /artifacts/logs

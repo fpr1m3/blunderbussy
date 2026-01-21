@@ -35,8 +35,8 @@ services:
   # Watches for raw scans and processes through enrichment pipeline
   enrichment:
     build:
-      context: ./infrastructure/enrichment
-      dockerfile: Dockerfile
+      context: ./infrastructure
+      dockerfile: enrichment/Dockerfile
     container_name: enrichment
     volumes:
       # Shared artifacts volume
