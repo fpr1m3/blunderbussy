@@ -848,6 +848,71 @@ TOOLS: List[Dict[str, Any]] = [
 ]
 
 
+# Output size thresholds (bytes)
+OUTPUT_THRESHOLD_STREAM = 50 * 1024   # >50KB: save to file
+OUTPUT_THRESHOLD_TRUNCATE = 10 * 1024  # 10-50KB: head/tail truncation
+ARTIFACTS_DIR = Path("/artifacts")
+
+
+def process_tool_output(output_json: str, tool_name: str) -> str:
+    """Process tool output with size-aware truncation/streaming.
+
+    Thresholds:
+    - >50KB: Save to /artifacts/tool-output-{uuid}.txt, return path + 2KB preview
+    - 10-50KB: Head/tail truncation (100 head + 50 tail lines)
+    - <10KB: Pass through unchanged
+
+    Args:
+        output_json: Serialized JSON tool output
+        tool_name: Name of the tool (for logging/metadata)
+
+    Returns:
+        Processed output string (may be truncated or reference a file)
+    """
+    size = len(output_json)
+
+    # Small output: pass through unchanged
+    if size <= OUTPUT_THRESHOLD_TRUNCATE:
+        return output_json
+
+    # Large output (>50KB): save to file, return reference + preview
+    if size > OUTPUT_THRESHOLD_STREAM:
+        ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+        output_file = ARTIFACTS_DIR / f"tool-output-{uuid.uuid4().hex[:8]}.txt"
+        output_file.write_text(output_json)
+
+        preview = output_json[:2048]
+        size_kb = size // 1024
+
+        result = {
+            "_output_streamed": True,
+            "file_path": str(output_file),
+            "size_kb": size_kb,
+            "tool": tool_name,
+            "message": f"Output too large ({size_kb}KB). Full output saved to {output_file}",
+            "preview": preview + f"\n\n... [{size_kb}KB total, see {output_file}]"
+        }
+        logger.info(f"Large output from {tool_name} ({size_kb}KB) saved to {output_file}")
+        return json.dumps(result, indent=2)
+
+    # Medium output (10-50KB): head/tail truncation
+    lines = output_json.splitlines()
+    if len(lines) <= 150:
+        return output_json  # Not enough lines to truncate meaningfully
+
+    head_lines = lines[:100]
+    tail_lines = lines[-50:]
+    omitted = len(lines) - 150
+
+    truncated = '\n'.join(
+        head_lines +
+        [f"\n... [{omitted} lines omitted ({size // 1024}KB total)] ...\n"] +
+        tail_lines
+    )
+    logger.info(f"Truncated output from {tool_name}: {len(lines)} lines -> 150 lines")
+    return truncated
+
+
 async def handle_tool_call(name: str, arguments: Dict[str, Any]) -> Any:
     """Handle MCP tool calls.
 
@@ -966,9 +1031,12 @@ async def handle_request(request: Dict[str, Any]) -> Dict[str, Any]:
             tool_name = params.get('name', '')
             arguments = params.get('arguments', {})
             tool_result = await handle_tool_call(tool_name, arguments)
+            # Serialize and process output (truncation/streaming for large results)
+            raw_output = json.dumps(tool_result, indent=2)
+            processed_output = process_tool_output(raw_output, tool_name)
             result = {
                 "content": [
-                    {"type": "text", "text": json.dumps(tool_result, indent=2)}
+                    {"type": "text", "text": processed_output}
                 ]
             }
 
