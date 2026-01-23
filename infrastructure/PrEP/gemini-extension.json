@@ -1,7 +1,24 @@
 {
   "name": "opulence",
-  "version": "1.0.0",
-  "description": "Dame's offensive security extension - skill retrieval and engagement tools",
+  "version": "1.1.0",
+  "description": "Dame's offensive security extension - skill retrieval, engagement tools, and session state management",
+  "hooks": {
+    "SessionStart": {
+      "command": "python3",
+      "args": ["/ext/opulence/hooks/session_start.py"],
+      "description": "Load session state and inject memory block into context"
+    },
+    "PreToolUse": {
+      "command": "python3",
+      "args": ["/ext/opulence/hooks/pre_tool_use.py"],
+      "description": "Check query cache for deduplication"
+    },
+    "PostToolUse": {
+      "command": "python3",
+      "args": ["/ext/opulence/hooks/post_tool_use.py"],
+      "description": "Extract credentials from shell command output"
+    }
+  },
   "mcpServers": {
     "grimoire": {
       "command": "uvx",
@@ -16,7 +33,7 @@
     },
     "pwncat": {
       "command": "python3",
-      "args": ["/ext/opulence/pwncat-server.py"],
+      "args": ["/ext/opulence/servers/pwncat-server.py"],
       "env": {
         "PYTHONUNBUFFERED": "1"
       }

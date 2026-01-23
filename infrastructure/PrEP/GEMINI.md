@@ -73,6 +73,89 @@ Always work on the highest-priority pending technique:
 - Prefer techniques in `quick_win` vectors
 - Skip techniques already marked `failed`
 
+## Session State (Auto-Managed)
+
+Session state complements PTT by tracking **runtime information** during exploitation. It's automatically managed via hooks—you don't need to explicitly update it.
+
+### What Gets Tracked
+
+| Component | Auto-Captured | Location |
+|-----------|---------------|----------|
+| Credentials | Extracted from hydra/shell output | `session/credentials.yaml` |
+| Shells | Registered when obtained | `session/state.yaml` |
+| Hypotheses | Track attack path theories | `session/hypotheses.yaml` |
+| Query Cache | Deduplicate repeated queries | `session/query_cache.yaml` |
+| Attack Log | Append-only action audit | `session/attack_log.jsonl` |
+
+### Memory Block Injection
+
+At session start, a context block (~500 tokens) is injected with:
+- Current access level and captured flags
+- Active shell sessions
+- Top 3 hypotheses (prioritized)
+- Available credentials (secrets masked)
+- Recent queries (to avoid repetition)
+
+Example injected context:
+```markdown
+## Current Session State (Auto-Updated)
+
+**Target:** 10.129.5.135 | **Access:** user
+**Flags:** user captured
+
+**Active Shells:**
+- reverse_shell as www-data (user)
+
+**Active Hypotheses:**
+1. [80%] Kernel CVE-2024-1086 → root
+2. [50%] SUID binary /opt/backup
+
+**Credentials Available:**
+- admin:*** (verified, for ssh, mysql)
+- backup:*** (unverified, for untested)
+
+**Recent Queries (avoid repetition):**
+- "linux kernel privesc" (15 min ago)
+```
+
+### Automatic Behaviors
+
+**Credential Extraction (PostToolUse hook):**
+- After `pwncat__command`, `Shell`, `bash` tools
+- Patterns: hydra output, `/etc/shadow`, MySQL grants, .env files
+- Auto-added to session state
+
+**Query Deduplication (PreToolUse hook):**
+- Before `qdrant-find`, `google_web_search`, `web_fetch`
+- If query executed recently (60min DB, 30min web), suggests cached result
+- Prevents redundant queries
+
+**Session Memory Indexing (PostToolUse hook):**
+- Indexes shell commands and outcomes to Qdrant for semantic search
+- Enables queries like "I've seen this error before, what worked?"
+- Collection per target: `dame_session_{hash}`
+- Event types: technique_attempt, error_resolution, discovery, access_gained
+
+**Session Persistence:**
+- State survives session restarts
+- Memory block regenerated on each session start
+- All state in `/artifacts/{target}/session/`
+
+### Directory Structure
+
+```
+/artifacts/{target}/
+├── context.yaml    # CAS (input, read-only)
+├── ptt.yaml        # PTT (what to do)
+└── session/        # Session State (how it's going)
+    ├── state.yaml          # Core state
+    ├── credentials.yaml    # Credential store
+    ├── hypotheses.yaml     # Hypothesis tracking
+    ├── attack_log.jsonl    # Action audit
+    ├── query_cache.yaml    # Query dedup cache
+    └── memory_block.md     # Pre-formatted context
+```
+
 ## Phase 3: Research Loop
 
 Before executing any technique, research it:
@@ -205,6 +288,75 @@ wget --timeout=30 -O - http://10.129.5.135/
 - **curl -I**: Fast header checks (status codes, server info, redirects)
 - **head -n**: When you need HTML structure but want to limit size
 - **sed filter**: When you need HTML tags but not scripts/styles
+
+### MANDATORY: Large Output Management
+
+**CRITICAL:** Commands that produce large outputs will blow out the context window, causing session failures. You MUST limit, filter, or redirect large outputs to files.
+
+**High-risk commands (ALWAYS limit or redirect):**
+| Command | Risk | Mitigation |
+|---------|------|------------|
+| `git log` | Full history dumps | `git log --oneline -n 20` or redirect to file |
+| `git diff` | Large diffs | `git diff --stat` or redirect to file |
+| `find /` | Thousands of paths | Add `-maxdepth`, use `head`, or redirect |
+| `cat <large_file>` | Multi-MB files | Use `head -n 100` or `grep` for specific content |
+| `strings <binary>` | Massive output | Pipe to `grep` or redirect to file |
+| `hexdump` | Huge hex dumps | Limit with `-n` bytes or redirect |
+| `ls -laR` | Recursive listings | Limit depth or redirect to file |
+
+**Output limiting strategies:**
+
+| Strategy | When to Use | Example |
+|----------|-------------|---------|
+| Line limit | Preview content | `command \| head -n 50` |
+| Grep filter | Find specific content | `command \| grep -i "password\|secret"` |
+| Redirect to file | Need full output for analysis | `command > /tmp/output.txt && head -n 50 /tmp/output.txt` |
+| Summary flags | Get overview first | `git log --oneline`, `git diff --stat` |
+
+**Examples of CORRECT usage:**
+```bash
+# Git history - limited and summarized
+git log --oneline -n 20
+git log --oneline --since="1 week ago"
+
+# Git diff - summary first, then specific files
+git diff --stat
+git diff -- path/to/specific/file.py
+
+# Large file inspection - targeted search
+grep -n "password\|credential\|key" /etc/shadow 2>/dev/null
+head -n 100 /var/log/auth.log
+
+# Binary analysis - redirect then search
+strings /usr/bin/target > /tmp/strings.txt && grep -i "http\|password" /tmp/strings.txt
+
+# Recursive search - limit output
+find /home -name "*.conf" -maxdepth 3 2>/dev/null | head -n 30
+```
+
+**NEVER do this:**
+```bash
+# BAD - dumps entire git history (can be thousands of commits)
+git log
+git log -p
+
+# BAD - full recursive diff (can be megabytes)
+git diff HEAD~100
+
+# BAD - entire filesystem listing
+find /
+ls -laR /
+
+# BAD - full file contents without knowing size
+cat /var/log/syslog
+strings /usr/bin/large_binary
+```
+
+**When you need full output:**
+1. Redirect to file: `command > /tmp/output.txt`
+2. Check size: `wc -l /tmp/output.txt`
+3. If small (<200 lines): `cat /tmp/output.txt`
+4. If large: `head -n 50 /tmp/output.txt` then `grep` for specifics
 
 ### Pre-Flight Checklist
 Before executing any technique:
@@ -489,6 +641,7 @@ For error resolution and exploit research:
 ## Reference Documents
 
 - **PTT Schema:** `schemas/PTT_SCHEMA.md` - Task tree structure
+- **Session Schema:** `schemas/SESSION_SCHEMA.md` - Session state structure
 - **Error Handling:** `ERROR_HANDLING.md` - Full decision tree
 - **CAS Schema:** `schemas/CAS_SCHEMA.md` - Input format
 
