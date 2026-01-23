@@ -178,6 +178,37 @@ skip_reread: true
 | `confirmed` | Hypothesis proved correct |
 | `rejected` | Hypothesis disproved |
 | `superseded` | Replaced by better hypothesis |
+| `blocked` | Blocked by confirmed findings |
+
+## Hypothesis Confidence Updates (Phase 5)
+
+### Confidence Deltas
+
+| Event | Delta | Description |
+|-------|-------|-------------|
+| Evidence confirms | +0.15 | Evidence supports hypothesis |
+| Evidence contradicts | -0.20 | Evidence disproves hypothesis |
+| Technique success | +0.10 | Related technique succeeded |
+| Technique failure | -0.05 | Related technique failed |
+| Stale decay | -0.02 | No progress in 30 minutes |
+| Blocker discovered | → 0.1 | Set to blocked threshold |
+
+### Confidence Levels
+
+| Label | Threshold | Action |
+|-------|-----------|--------|
+| HIGH | ≥ 0.7 | Prioritize for execution |
+| MED | ≥ 0.4 | Consider for exploration |
+| LOW | ≥ 0.2 | May need more evidence |
+| VERY LOW | < 0.2 | Consider abandoning |
+
+### Automatic Status Changes
+
+| Condition | New Status |
+|-----------|------------|
+| Confidence ≥ 0.9 | `confirmed` |
+| Confidence < 0.2 AND age > 2h | `rejected` |
+| Blocker detected | `blocked` |
 
 ### ShellType
 
@@ -203,8 +234,8 @@ The `memory_block.md` file contains a pre-formatted context injection block (~50
 - reverse_shell as www-data (user)
 
 **Active Hypotheses:**
-1. [80%] Kernel CVE-2024-1086 → root
-2. [50%] SUID binary /opt/backup
+1. [HIGH 0.8] Kernel CVE-2024-1086 → root
+2. [MED 0.5] SUID binary /opt/backup
 
 **Credentials Available:**
 - admin:*** (verified, for ssh, mysql)

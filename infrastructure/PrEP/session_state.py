@@ -60,6 +60,29 @@ from pydantic import BaseModel, Field, field_validator
 
 
 # =============================================================================
+# Hypothesis Confidence Constants (Phase 5)
+# =============================================================================
+
+class ConfidenceDelta:
+    """Confidence adjustment values for hypothesis ranking."""
+    EVIDENCE_CONFIRMS = 0.15      # Evidence supports hypothesis
+    EVIDENCE_CONTRADICTS = -0.20  # Evidence contradicts hypothesis
+    TECHNIQUE_SUCCESS = 0.10      # Related technique succeeded
+    TECHNIQUE_FAIL = -0.05        # Related technique failed
+    STALE_DECAY = -0.02           # No progress decay (per interval)
+    BLOCKED_THRESHOLD = 0.1       # Set confidence when blocked
+
+
+class ConfidenceLevel:
+    """Threshold values for confidence display labels."""
+    HIGH = 0.7      # >= 0.7 = HIGH
+    MEDIUM = 0.4    # >= 0.4 = MEDIUM
+    LOW = 0.2       # >= 0.2 = LOW
+    ARCHIVE = 0.2   # < 0.2 after 2 hours = archive
+    PROMOTE = 0.9   # >= 0.9 = promote to confirmed
+
+
+# =============================================================================
 # Enums
 # =============================================================================
 
@@ -75,6 +98,7 @@ class HypothesisStatus(str, Enum):
     CONFIRMED = "confirmed"
     REJECTED = "rejected"
     SUPERSEDED = "superseded"
+    BLOCKED = "blocked"  # Blocked by confirmed findings
 
 
 class CredentialType(str, Enum):
@@ -489,6 +513,208 @@ class SessionStateManager:
         active.sort(key=lambda h: (h.priority, -h.confidence))
         return active[:limit]
 
+    def get_hypothesis_by_id(self, hyp_id: str) -> Optional[Hypothesis]:
+        """Get a hypothesis by ID."""
+        if not self.hypotheses:
+            return None
+        for hyp in self.hypotheses.hypotheses:
+            if hyp.id == hyp_id:
+                return hyp
+        return None
+
+    def get_hypotheses_by_technique(self, technique_id: str) -> List[Hypothesis]:
+        """Get all hypotheses linked to a technique."""
+        if not self.hypotheses:
+            return []
+        return [
+            h for h in self.hypotheses.hypotheses
+            if technique_id in h.related_technique_ids
+        ]
+
+    def update_hypothesis_for_technique_outcome(
+        self,
+        technique_id: str,
+        success: bool,
+        evidence: Optional[str] = None
+    ) -> List[str]:
+        """
+        Update all hypotheses linked to a technique based on outcome.
+
+        Args:
+            technique_id: The technique that completed
+            success: Whether the technique succeeded
+            evidence: Optional evidence string to record
+
+        Returns:
+            List of updated hypothesis IDs
+        """
+        if not self.hypotheses:
+            return []
+
+        updated_ids = []
+        delta = ConfidenceDelta.TECHNIQUE_SUCCESS if success else ConfidenceDelta.TECHNIQUE_FAIL
+
+        for hyp in self.hypotheses.hypotheses:
+            if technique_id in hyp.related_technique_ids and hyp.status == HypothesisStatus.ACTIVE:
+                hyp.confidence = max(0.0, min(1.0, hyp.confidence + delta))
+                hyp.updated_at = datetime.utcnow().isoformat()
+
+                if evidence:
+                    if success:
+                        hyp.evidence_for.append(evidence)
+                    else:
+                        hyp.evidence_against.append(evidence)
+
+                # Auto-promote or auto-archive based on new confidence
+                if hyp.confidence >= ConfidenceLevel.PROMOTE:
+                    hyp.status = HypothesisStatus.CONFIRMED
+                elif hyp.confidence < ConfidenceLevel.ARCHIVE:
+                    # Check if old enough to archive
+                    created = datetime.fromisoformat(hyp.created_at)
+                    if datetime.utcnow() - created > timedelta(hours=2):
+                        hyp.status = HypothesisStatus.REJECTED
+
+                updated_ids.append(hyp.id)
+
+        return updated_ids
+
+    def update_hypothesis_confidence(
+        self,
+        hyp_id: str,
+        delta: float,
+        reason: str,
+        is_contradiction: bool = False
+    ) -> bool:
+        """
+        Update hypothesis confidence with tracking.
+
+        Args:
+            hyp_id: Hypothesis ID
+            delta: Confidence change (can be negative)
+            reason: Reason for the update
+            is_contradiction: If True, record as evidence_against
+
+        Returns:
+            True if hypothesis was found and updated
+        """
+        hyp = self.get_hypothesis_by_id(hyp_id)
+        if not hyp or hyp.status != HypothesisStatus.ACTIVE:
+            return False
+
+        hyp.confidence = max(0.0, min(1.0, hyp.confidence + delta))
+        hyp.updated_at = datetime.utcnow().isoformat()
+
+        if is_contradiction:
+            hyp.evidence_against.append(reason)
+        else:
+            hyp.evidence_for.append(reason)
+
+        # Auto-promote or auto-archive
+        if hyp.confidence >= ConfidenceLevel.PROMOTE:
+            hyp.status = HypothesisStatus.CONFIRMED
+        elif hyp.confidence < ConfidenceLevel.ARCHIVE:
+            created = datetime.fromisoformat(hyp.created_at)
+            if datetime.utcnow() - created > timedelta(hours=2):
+                hyp.status = HypothesisStatus.REJECTED
+
+        return True
+
+    def block_hypothesis(self, hyp_id: str, reason: str) -> bool:
+        """
+        Mark a hypothesis as blocked by a confirmed finding.
+
+        Sets confidence to BLOCKED_THRESHOLD and status to BLOCKED.
+        """
+        hyp = self.get_hypothesis_by_id(hyp_id)
+        if not hyp:
+            return False
+
+        hyp.confidence = ConfidenceDelta.BLOCKED_THRESHOLD
+        hyp.status = HypothesisStatus.BLOCKED
+        hyp.evidence_against.append(f"Blocked: {reason}")
+        hyp.updated_at = datetime.utcnow().isoformat()
+        return True
+
+    def decay_stale_hypotheses(self, stale_minutes: int = 30) -> List[str]:
+        """
+        Apply decay to hypotheses with no recent updates.
+
+        Args:
+            stale_minutes: Minutes of inactivity before decay applies
+
+        Returns:
+            List of hypothesis IDs that were decayed
+        """
+        if not self.hypotheses:
+            return []
+
+        decayed_ids = []
+        cutoff = datetime.utcnow() - timedelta(minutes=stale_minutes)
+
+        for hyp in self.hypotheses.hypotheses:
+            if hyp.status != HypothesisStatus.ACTIVE:
+                continue
+
+            updated = datetime.fromisoformat(hyp.updated_at)
+            if updated < cutoff:
+                hyp.confidence = max(0.0, hyp.confidence + ConfidenceDelta.STALE_DECAY)
+                hyp.updated_at = datetime.utcnow().isoformat()
+                decayed_ids.append(hyp.id)
+
+                # Archive if too low
+                if hyp.confidence < ConfidenceLevel.ARCHIVE:
+                    created = datetime.fromisoformat(hyp.created_at)
+                    if datetime.utcnow() - created > timedelta(hours=2):
+                        hyp.status = HypothesisStatus.REJECTED
+
+        return decayed_ids
+
+    def prune_hypotheses(self) -> Dict[str, List[str]]:
+        """
+        Prune hypotheses based on confidence thresholds.
+
+        Returns:
+            Dict with 'archived' and 'promoted' hypothesis ID lists
+        """
+        if not self.hypotheses:
+            return {"archived": [], "promoted": []}
+
+        archived = []
+        promoted = []
+
+        for hyp in self.hypotheses.hypotheses:
+            if hyp.status != HypothesisStatus.ACTIVE:
+                continue
+
+            # Promote high-confidence hypotheses
+            if hyp.confidence >= ConfidenceLevel.PROMOTE:
+                hyp.status = HypothesisStatus.CONFIRMED
+                hyp.updated_at = datetime.utcnow().isoformat()
+                promoted.append(hyp.id)
+                continue
+
+            # Archive low-confidence hypotheses older than 2 hours
+            if hyp.confidence < ConfidenceLevel.ARCHIVE:
+                created = datetime.fromisoformat(hyp.created_at)
+                if datetime.utcnow() - created > timedelta(hours=2):
+                    hyp.status = HypothesisStatus.REJECTED
+                    hyp.updated_at = datetime.utcnow().isoformat()
+                    archived.append(hyp.id)
+
+        return {"archived": archived, "promoted": promoted}
+
+    @staticmethod
+    def confidence_label(confidence: float) -> str:
+        """Get display label for confidence value."""
+        if confidence >= ConfidenceLevel.HIGH:
+            return "HIGH"
+        elif confidence >= ConfidenceLevel.MEDIUM:
+            return "MED"
+        elif confidence >= ConfidenceLevel.LOW:
+            return "LOW"
+        else:
+            return "VERY LOW"
+
     # =========================================================================
     # Shell Management
     # =========================================================================
@@ -675,10 +901,11 @@ class SessionStateManager:
         if hypotheses:
             lines.append("**Active Hypotheses:**")
             for i, hyp in enumerate(hypotheses, 1):
-                pct = int(hyp.confidence * 100)
+                label = self.confidence_label(hyp.confidence)
+                conf = f"{hyp.confidence:.1f}"
                 # Truncate description to ~50 chars
                 desc = hyp.description[:50] + "..." if len(hyp.description) > 50 else hyp.description
-                lines.append(f"{i}. [{pct}%] {desc}")
+                lines.append(f"{i}. [{label} {conf}] {desc}")
             lines.append("")
 
         # Credentials summary (100 tokens)

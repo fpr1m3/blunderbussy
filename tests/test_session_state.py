@@ -32,6 +32,8 @@ from session_state import (
     AnalyzedFile,
     extract_credentials_from_output,
     CREDENTIAL_PATTERNS,
+    ConfidenceDelta,
+    ConfidenceLevel,
 )
 
 
@@ -373,7 +375,7 @@ class TestMemoryBlock:
         assert "## Current Session State" in block
         assert "user captured" in block.lower()
         assert "admin" in block
-        assert "80%" in block
+        assert "[HIGH 0.8]" in block  # Updated format: [LABEL confidence]
         assert "www-data" in block
         assert "test query" in block
 
@@ -486,6 +488,322 @@ class TestPydanticModels:
         # Manually set old timestamp
         entry.timestamp = (datetime.utcnow() - timedelta(hours=2)).isoformat()
         assert entry.is_expired()
+
+
+# =============================================================================
+# Phase 5: Hypothesis Ranking Tests
+# =============================================================================
+
+class TestConfidenceConstants:
+    """Tests for confidence constants."""
+
+    def test_confidence_deltas(self):
+        """Test confidence delta values."""
+        assert ConfidenceDelta.EVIDENCE_CONFIRMS == 0.15
+        assert ConfidenceDelta.EVIDENCE_CONTRADICTS == -0.20
+        assert ConfidenceDelta.TECHNIQUE_SUCCESS == 0.10
+        assert ConfidenceDelta.TECHNIQUE_FAIL == -0.05
+        assert ConfidenceDelta.STALE_DECAY == -0.02
+        assert ConfidenceDelta.BLOCKED_THRESHOLD == 0.1
+
+    def test_confidence_levels(self):
+        """Test confidence level thresholds."""
+        assert ConfidenceLevel.HIGH == 0.7
+        assert ConfidenceLevel.MEDIUM == 0.4
+        assert ConfidenceLevel.LOW == 0.2
+        assert ConfidenceLevel.ARCHIVE == 0.2
+        assert ConfidenceLevel.PROMOTE == 0.9
+
+
+class TestHypothesisRanking:
+    """Tests for hypothesis ranking and confidence updates."""
+
+    def test_get_hypothesis_by_id(self, manager):
+        """Test getting hypothesis by ID."""
+        hyp_id = manager.add_hypothesis(
+            description="Test hypothesis",
+            confidence=0.5,
+            priority=2
+        )
+
+        hyp = manager.get_hypothesis_by_id(hyp_id)
+        assert hyp is not None
+        assert hyp.description == "Test hypothesis"
+
+    def test_get_hypothesis_by_id_not_found(self, manager):
+        """Test getting non-existent hypothesis."""
+        hyp = manager.get_hypothesis_by_id("nonexistent")
+        assert hyp is None
+
+    def test_get_hypotheses_by_technique(self, manager):
+        """Test finding hypotheses linked to a technique."""
+        hyp_id = manager.add_hypothesis(
+            description="SQLi to RCE",
+            confidence=0.6,
+            priority=2
+        )
+        hyp = manager.get_hypothesis_by_id(hyp_id)
+        hyp.related_technique_ids = ["sqli_union", "file_write"]
+
+        results = manager.get_hypotheses_by_technique("sqli_union")
+        assert len(results) == 1
+        assert results[0].id == hyp_id
+
+    def test_update_hypothesis_for_technique_success(self, manager):
+        """Test updating hypothesis confidence on technique success."""
+        hyp_id = manager.add_hypothesis(
+            description="Kernel exploit",
+            confidence=0.5,
+            priority=1
+        )
+        hyp = manager.get_hypothesis_by_id(hyp_id)
+        hyp.related_technique_ids = ["kernel_exploit"]
+
+        updated = manager.update_hypothesis_for_technique_outcome(
+            technique_id="kernel_exploit",
+            success=True,
+            evidence="Exploit completed successfully"
+        )
+
+        assert hyp_id in updated
+        updated_hyp = manager.get_hypothesis_by_id(hyp_id)
+        assert updated_hyp.confidence == 0.5 + ConfidenceDelta.TECHNIQUE_SUCCESS
+        assert "Exploit completed successfully" in updated_hyp.evidence_for
+
+    def test_update_hypothesis_for_technique_failure(self, manager):
+        """Test updating hypothesis confidence on technique failure."""
+        hyp_id = manager.add_hypothesis(
+            description="SSH brute force",
+            confidence=0.6,
+            priority=2
+        )
+        hyp = manager.get_hypothesis_by_id(hyp_id)
+        hyp.related_technique_ids = ["ssh_brute"]
+
+        updated = manager.update_hypothesis_for_technique_outcome(
+            technique_id="ssh_brute",
+            success=False,
+            evidence="Authentication failed"
+        )
+
+        assert hyp_id in updated
+        updated_hyp = manager.get_hypothesis_by_id(hyp_id)
+        assert updated_hyp.confidence == 0.6 + ConfidenceDelta.TECHNIQUE_FAIL
+        assert "Authentication failed" in updated_hyp.evidence_against
+
+    def test_update_hypothesis_confidence(self, manager):
+        """Test direct hypothesis confidence update."""
+        hyp_id = manager.add_hypothesis(
+            description="Test hypothesis",
+            confidence=0.5,
+            priority=2
+        )
+
+        result = manager.update_hypothesis_confidence(
+            hyp_id=hyp_id,
+            delta=0.15,
+            reason="Evidence found",
+            is_contradiction=False
+        )
+
+        assert result is True
+        hyp = manager.get_hypothesis_by_id(hyp_id)
+        assert hyp.confidence == 0.65
+        assert "Evidence found" in hyp.evidence_for
+
+    def test_update_hypothesis_confidence_contradiction(self, manager):
+        """Test hypothesis confidence update with contradiction."""
+        hyp_id = manager.add_hypothesis(
+            description="Test hypothesis",
+            confidence=0.5,
+            priority=2
+        )
+
+        result = manager.update_hypothesis_confidence(
+            hyp_id=hyp_id,
+            delta=-0.20,
+            reason="Disproved by scan",
+            is_contradiction=True
+        )
+
+        assert result is True
+        hyp = manager.get_hypothesis_by_id(hyp_id)
+        assert hyp.confidence == 0.3
+        assert "Disproved by scan" in hyp.evidence_against
+
+    def test_block_hypothesis(self, manager):
+        """Test blocking a hypothesis."""
+        hyp_id = manager.add_hypothesis(
+            description="Blocked hypothesis",
+            confidence=0.7,
+            priority=1
+        )
+
+        result = manager.block_hypothesis(hyp_id, "Firewall detected")
+
+        assert result is True
+        hyp = manager.get_hypothesis_by_id(hyp_id)
+        assert hyp.status == HypothesisStatus.BLOCKED
+        assert hyp.confidence == ConfidenceDelta.BLOCKED_THRESHOLD
+        assert "Blocked: Firewall detected" in hyp.evidence_against
+
+    def test_confidence_label(self, manager):
+        """Test confidence label generation."""
+        assert SessionStateManager.confidence_label(0.9) == "HIGH"
+        assert SessionStateManager.confidence_label(0.7) == "HIGH"
+        assert SessionStateManager.confidence_label(0.5) == "MED"
+        assert SessionStateManager.confidence_label(0.4) == "MED"
+        assert SessionStateManager.confidence_label(0.3) == "LOW"
+        assert SessionStateManager.confidence_label(0.2) == "LOW"
+        assert SessionStateManager.confidence_label(0.1) == "VERY LOW"
+
+    def test_confidence_bounds(self, manager):
+        """Test that confidence stays within 0-1 bounds."""
+        hyp_id = manager.add_hypothesis(
+            description="Bound test",
+            confidence=0.95,
+            priority=2
+        )
+
+        # Try to exceed 1.0
+        manager.update_hypothesis_confidence(hyp_id, 0.20, "Big boost")
+        hyp = manager.get_hypothesis_by_id(hyp_id)
+        assert hyp.confidence == 1.0
+
+        # Reset status and confidence to test lower bound
+        hyp.status = HypothesisStatus.ACTIVE
+        hyp.confidence = 0.05
+        manager.update_hypothesis_confidence(hyp_id, -0.20, "Big drop", is_contradiction=True)
+        hyp = manager.get_hypothesis_by_id(hyp_id)
+        assert hyp.confidence == 0.0
+
+    def test_auto_promote_on_high_confidence(self, manager):
+        """Test that hypotheses are promoted when confidence reaches threshold."""
+        hyp_id = manager.add_hypothesis(
+            description="High confidence test",
+            confidence=0.85,
+            priority=1
+        )
+        hyp = manager.get_hypothesis_by_id(hyp_id)
+        hyp.related_technique_ids = ["test_tech"]
+
+        # This should push confidence to 0.95 and trigger promotion
+        manager.update_hypothesis_for_technique_outcome(
+            technique_id="test_tech",
+            success=True
+        )
+
+        hyp = manager.get_hypothesis_by_id(hyp_id)
+        assert hyp.confidence >= ConfidenceLevel.PROMOTE
+        assert hyp.status == HypothesisStatus.CONFIRMED
+
+
+class TestHypothesisDecay:
+    """Tests for hypothesis staleness decay."""
+
+    def test_decay_stale_hypotheses(self, manager):
+        """Test decaying stale hypotheses."""
+        hyp_id = manager.add_hypothesis(
+            description="Stale test",
+            confidence=0.5,
+            priority=2
+        )
+
+        # Manually set old updated_at
+        hyp = manager.get_hypothesis_by_id(hyp_id)
+        hyp.updated_at = (datetime.utcnow() - timedelta(hours=1)).isoformat()
+
+        decayed = manager.decay_stale_hypotheses(stale_minutes=30)
+
+        assert hyp_id in decayed
+        hyp = manager.get_hypothesis_by_id(hyp_id)
+        assert hyp.confidence < 0.5  # Should have decayed
+
+    def test_no_decay_for_recent_hypotheses(self, manager):
+        """Test that recent hypotheses don't decay."""
+        hyp_id = manager.add_hypothesis(
+            description="Recent test",
+            confidence=0.5,
+            priority=2
+        )
+
+        decayed = manager.decay_stale_hypotheses(stale_minutes=30)
+
+        assert hyp_id not in decayed
+        hyp = manager.get_hypothesis_by_id(hyp_id)
+        assert hyp.confidence == 0.5
+
+
+class TestHypothesisPruning:
+    """Tests for hypothesis pruning."""
+
+    def test_prune_promotes_high_confidence(self, manager):
+        """Test that pruning promotes high confidence hypotheses."""
+        hyp_id = manager.add_hypothesis(
+            description="High confidence",
+            confidence=0.95,
+            priority=1
+        )
+
+        result = manager.prune_hypotheses()
+
+        assert hyp_id in result["promoted"]
+        hyp = manager.get_hypothesis_by_id(hyp_id)
+        assert hyp.status == HypothesisStatus.CONFIRMED
+
+    def test_prune_archives_low_confidence_old(self, manager):
+        """Test that pruning archives low confidence old hypotheses."""
+        hyp_id = manager.add_hypothesis(
+            description="Low confidence old",
+            confidence=0.1,
+            priority=3
+        )
+
+        # Make it old enough to archive
+        hyp = manager.get_hypothesis_by_id(hyp_id)
+        hyp.created_at = (datetime.utcnow() - timedelta(hours=3)).isoformat()
+
+        result = manager.prune_hypotheses()
+
+        assert hyp_id in result["archived"]
+        hyp = manager.get_hypothesis_by_id(hyp_id)
+        assert hyp.status == HypothesisStatus.REJECTED
+
+    def test_prune_keeps_low_confidence_new(self, manager):
+        """Test that pruning keeps low confidence but new hypotheses."""
+        hyp_id = manager.add_hypothesis(
+            description="Low confidence new",
+            confidence=0.15,
+            priority=3
+        )
+
+        result = manager.prune_hypotheses()
+
+        assert hyp_id not in result["archived"]
+        hyp = manager.get_hypothesis_by_id(hyp_id)
+        assert hyp.status == HypothesisStatus.ACTIVE
+
+
+class TestMemoryBlockWithLabels:
+    """Tests for memory block generation with confidence labels."""
+
+    def test_memory_block_includes_labels(self, manager):
+        """Test that memory block shows confidence labels."""
+        manager.add_hypothesis(
+            description="High priority kernel exploit",
+            confidence=0.8,
+            priority=1
+        )
+        manager.add_hypothesis(
+            description="Medium SQLi path",
+            confidence=0.5,
+            priority=2
+        )
+
+        block = manager.generate_memory_block()
+
+        assert "[HIGH 0.8]" in block
+        assert "[MED 0.5]" in block
 
 
 if __name__ == "__main__":

@@ -136,6 +136,15 @@ Example injected context:
 - Collection per target: `dame_session_{hash}`
 - Event types: technique_attempt, error_resolution, discovery, access_gained
 
+**Hypothesis Confidence Updates (PostToolUse hook):**
+- Automatically updates hypothesis confidence based on technique outcomes
+- Success patterns (shell obtained, flag captured, auth success) → +0.10 confidence
+- Failure patterns (exploit failed, auth denied, timeout) → -0.05 confidence
+- Blocking patterns (firewall detected, IDS blocked) → set to 0.1 (blocked status)
+- High confidence (≥0.9) → auto-promote to CONFIRMED
+- Low confidence (<0.2 after 2h) → auto-archive to REJECTED
+- Confidence labels in memory block: HIGH (≥0.7), MED (≥0.4), LOW (≥0.2)
+
 **Session Persistence:**
 - State survives session restarts
 - Memory block regenerated on each session start

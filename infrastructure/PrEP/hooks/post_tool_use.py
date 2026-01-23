@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-PostToolUse Hook - Credential Extraction, Query Caching & Session Memory
-=========================================================================
+PostToolUse Hook - Credential Extraction, Query Caching, Session Memory & Hypothesis Ranking
+=============================================================================================
 Gemini CLI hook that:
 1. Extracts credentials from shell command output
 2. Caches query results for deduplication
 3. Indexes events to Qdrant session memory for semantic search
+4. Updates hypothesis confidence based on technique outcomes (Phase 5)
 
 Triggered after: pwncat__command, Shell, bash, qdrant-find, google_web_search, web_fetch
-Action: Extract credentials, cache queries, index to session memory
+Action: Extract credentials, cache queries, index to session memory, update hypothesis confidence
 
 Usage by Gemini CLI:
     python3 /ext/opulence/hooks/post_tool_use.py
@@ -29,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from session_state import (
     SessionStateManager,
     extract_credentials_from_output,
+    ConfidenceDelta,
 )
 
 # Import session memory (optional - may not have dependencies)
@@ -332,6 +334,194 @@ def handle_session_memory_indexing(
     return {"action": "continue"}
 
 
+# =============================================================================
+# Hypothesis Confidence Updates (Phase 5)
+# =============================================================================
+
+# Patterns that indicate technique success (warrant confidence boost)
+SUCCESS_PATTERNS = [
+    (r"exploit completed", "exploit_success"),
+    (r"shell opened|session \d+ opened", "shell_obtained"),
+    (r"authenticated|logged in|login success", "auth_success"),
+    (r"flag\{|HTB\{", "flag_captured"),
+    (r"root@|#\s*$", "root_shell"),
+    (r"meterpreter\s*>", "meterpreter_session"),
+    (r"www-data@|user@", "user_shell"),
+]
+
+# Patterns that indicate technique failure (warrant confidence reduction)
+FAILURE_PATTERNS = [
+    (r"exploit failed|exploit aborted", "exploit_failed"),
+    (r"authentication failed|invalid password|access denied", "auth_failed"),
+    (r"permission denied", "permission_denied"),
+    (r"connection refused|connection closed", "connection_failed"),
+    (r"timeout|timed out", "timeout"),
+    (r"not vulnerable|not exploitable", "not_vulnerable"),
+    (r"payload failed|payload error", "payload_failed"),
+]
+
+# Patterns that indicate blocking (warrant setting to blocked threshold)
+BLOCKING_PATTERNS = [
+    (r"blocked by firewall|filtered|waf detected", "firewall_blocked"),
+    (r"rate limited|too many requests", "rate_limited"),
+    (r"ids detected|ips blocked", "ids_blocked"),
+]
+
+
+def detect_hypothesis_outcome(output: str) -> tuple[str, str, float]:
+    """
+    Detect outcome from shell output for hypothesis updates.
+
+    Returns:
+        (outcome_type, evidence, confidence_delta)
+        outcome_type: 'success', 'failure', 'blocked', or 'none'
+        evidence: Description of what was detected
+        confidence_delta: Suggested confidence change
+    """
+    output_lower = output.lower()
+
+    # Check for success patterns first
+    for pattern, outcome_name in SUCCESS_PATTERNS:
+        if re.search(pattern, output_lower):
+            return "success", f"Detected: {outcome_name}", ConfidenceDelta.TECHNIQUE_SUCCESS
+
+    # Check for blocking patterns (more specific than general failure)
+    for pattern, outcome_name in BLOCKING_PATTERNS:
+        if re.search(pattern, output_lower):
+            return "blocked", f"Blocked by: {outcome_name}", ConfidenceDelta.BLOCKED_THRESHOLD
+
+    # Check for failure patterns
+    for pattern, outcome_name in FAILURE_PATTERNS:
+        if re.search(pattern, output_lower):
+            return "failure", f"Failed: {outcome_name}", ConfidenceDelta.TECHNIQUE_FAIL
+
+    return "none", "", 0.0
+
+
+def handle_hypothesis_updates(
+    tool_name: str,
+    tool_input: dict,
+    tool_output: str,
+    target: str
+) -> dict:
+    """
+    Update hypothesis confidence based on shell command outcomes.
+
+    Automatically adjusts confidence for hypotheses linked to techniques
+    based on success/failure patterns in the output.
+    """
+    # Only process shell tools
+    if tool_name not in CREDENTIAL_TOOLS:
+        return {"action": "continue"}
+
+    # Extract command from input
+    command = tool_input.get("command", tool_input.get("cmd", ""))
+    if not command:
+        return {"action": "continue"}
+
+    # Skip trivial commands
+    trivial_patterns = [
+        r"^(ls|pwd|cd|echo|cat|head|tail|whoami|id|uname)\b",
+        r"^(env|export|alias|source|history)\b",
+    ]
+    for pattern in trivial_patterns:
+        if re.match(pattern, command.strip()):
+            return {"action": "continue"}
+
+    # Detect outcome
+    outcome_type, evidence, delta = detect_hypothesis_outcome(tool_output)
+
+    if outcome_type == "none":
+        return {"action": "continue"}
+
+    try:
+        base_path = os.environ.get("ARTIFACTS_PATH", "/artifacts")
+        mgr = SessionStateManager.from_target(target, base_path=base_path)
+
+        # Get all active hypotheses
+        active_hyps = mgr.get_active_hypotheses(limit=10)
+
+        if not active_hyps:
+            return {"action": "continue"}
+
+        updated_count = 0
+        updated_hyps = []
+
+        # Update hypotheses that match command patterns
+        # This is a heuristic - we look for command patterns that relate to hypothesis descriptions
+        for hyp in active_hyps:
+            should_update = False
+            hyp_desc_lower = hyp.description.lower()
+
+            # Check if command relates to hypothesis (simple keyword matching)
+            command_lower = command.lower()
+
+            # Common technique-to-hypothesis keyword mappings
+            mappings = [
+                (r"\bsqlmap\b|\bsql.*injection\b|\bunion.*select\b", ["sql", "injection", "sqli", "database"]),
+                (r"\bhydra\b|\bmedusa\b|\bncrack\b|\bbrute", ["brute", "password", "login", "auth", "crack"]),
+                (r"\bmetasploit\b|\bmsfconsole\b|\bexploit/", ["exploit", "cve-", "vulnerability", "remote"]),
+                (r"\bkernel\b|\bprivesc\b|\blinpeas\b|\bsuid\b", ["kernel", "privilege", "escalation", "root", "suid"]),
+                (r"\bssh\b", ["ssh", "remote", "shell"]),
+                (r"\bweb.*shell\b|\bphp.*reverse\b|\bupload", ["webshell", "upload", "rce", "php"]),
+                (r"\blfi\b|\brfi\b|\binclude\b", ["lfi", "rfi", "include", "traversal"]),
+                (r"\bsmb\b|\bsamba\b|\beternalblue\b", ["smb", "samba", "windows", "share"]),
+            ]
+
+            for cmd_pattern, hyp_keywords in mappings:
+                if re.search(cmd_pattern, command_lower):
+                    if any(kw in hyp_desc_lower for kw in hyp_keywords):
+                        should_update = True
+                        break
+
+            if should_update:
+                if outcome_type == "blocked":
+                    # Set to blocked threshold
+                    mgr.block_hypothesis(hyp.id, evidence)
+                else:
+                    # Apply delta
+                    is_contradiction = outcome_type == "failure"
+                    mgr.update_hypothesis_confidence(
+                        hyp.id,
+                        delta=delta,
+                        reason=f"{evidence} (from: {command[:50]}...)" if len(command) > 50 else f"{evidence} (from: {command})",
+                        is_contradiction=is_contradiction
+                    )
+
+                updated_count += 1
+                updated_hyps.append({
+                    "id": hyp.id,
+                    "outcome": outcome_type,
+                    "delta": delta if outcome_type != "blocked" else "blocked"
+                })
+
+        if updated_count > 0:
+            # Log the update
+            mgr.log_action("hypothesis_confidence_updated", {
+                "tool": tool_name,
+                "command": command[:100],
+                "outcome_type": outcome_type,
+                "updated_hypotheses": updated_hyps
+            })
+
+            mgr.save_all()
+
+            return {
+                "action": "continue",
+                "annotations": [{
+                    "type": "hypothesis_updated",
+                    "message": f"Updated {updated_count} hypothesis confidence ({outcome_type})",
+                    "hypotheses": updated_hyps
+                }]
+            }
+
+    except Exception as e:
+        # Don't fail the hook if hypothesis update fails
+        pass
+
+    return {"action": "continue"}
+
+
 def main():
     """Process PostToolUse event."""
     try:
@@ -375,6 +565,12 @@ def main():
         mem_result = handle_session_memory_indexing(tool_name, tool_input, tool_output, target)
         if "annotations" in mem_result:
             annotations.extend(mem_result["annotations"])
+
+    # Handle hypothesis confidence updates for shell tools (Phase 5)
+    if tool_name in CREDENTIAL_TOOLS:
+        hyp_result = handle_hypothesis_updates(tool_name, tool_input, tool_output, target)
+        if "annotations" in hyp_result:
+            annotations.extend(hyp_result["annotations"])
 
     # Build final response
     if annotations:
