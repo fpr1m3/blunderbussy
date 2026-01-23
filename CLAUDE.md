@@ -19,6 +19,23 @@ Use `podman` and `podman-compose` (not docker):
 - `podman-compose ps` - List running containers
 - `podman exec -it <container> <command>` - Execute in container
 
+**IMPORTANT: Fully qualified image names required**
+
+Podman does not have unqualified-search registries configured. Always use full image paths:
+
+```yaml
+# WRONG - will fail
+image: postgres:15
+image: redis:alpine
+
+# CORRECT - always prefix with registry
+image: docker.io/library/postgres:15
+image: docker.io/library/redis:alpine
+image: docker.io/faradaysec/faraday:latest
+```
+
+Official images use `docker.io/library/`, third-party use `docker.io/<org>/`.
+
 ## Dame container builds
 
 The Dame Dockerfile supports platform-specific tool groups via build arg:

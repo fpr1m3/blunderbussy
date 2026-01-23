@@ -1,3 +1,6 @@
+include:
+  - infrastructure/faraday/docker-compose.faraday.yml
+
 services:
   gluetun:
     image: docker.io/qmcgaw/gluetun:v3.41.0
@@ -45,12 +48,16 @@ services:
       - artifacts:/artifacts
       # CVE cache persistence
       - enrichment-cache:/artifacts/cache
+      # Gemini CLI auth persistence (OAuth tokens)
+      - enrichment-gemini:/root/.gemini
     environment:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=INFO
       - MANIFEST_PATH=/artifacts/manifest.yaml
       # Optional: NVD API key for faster CVE lookups
       - NVD_API_KEY=${NVD_API_KEY:-}
+      # Force file-based token storage for Gemini CLI (no keychain in container)
+      - GEMINI_FORCE_FILE_STORAGE=true
     healthcheck:
       test: ["CMD-SHELL", "grep -q watcher.py /proc/1/cmdline"]
       interval: 30s
@@ -78,8 +85,8 @@ services:
   # Backend for MetaMCP - provides Metasploit tools via MCP protocol
   msf-mcp:
     build:
-      context: ./infrastructure/msf
-      dockerfile: Dockerfile
+      context: ./infrastructure/PrEP/servers
+      dockerfile: Dockerfile.msf
     container_name: msf-mcp
     environment:
       - PYTHONUNBUFFERED=1
@@ -92,8 +99,8 @@ services:
   # Backend for MetaMCP - provides Sliver C2 tools via MCP protocol
   sliver-mcp:
     build:
-      context: ./infrastructure/sliver
-      dockerfile: Dockerfile
+      context: ./infrastructure/PrEP/servers
+      dockerfile: Dockerfile.sliver
     container_name: sliver-mcp
     environment:
       - PYTHONUNBUFFERED=1
@@ -106,8 +113,8 @@ services:
   # Uses VPN network for reverse shell connections from HTB targets
   pwncat-mcp:
     build:
-      context: ./infrastructure/pwncat
-      dockerfile: Dockerfile
+      context: ./infrastructure/PrEP/servers
+      dockerfile: Dockerfile.pwncat
     container_name: pwncat-mcp
     network_mode: "service:gluetun"  # Needs VPN for reverse shells
     volumes:
@@ -198,8 +205,11 @@ services:
     container_name: dame
     hostname: dame
     # Split tunnel: HTB subnets via gluetun VPN, everything else direct
+    # NET_ADMIN: for split tunnel routing
+    # NET_RAW: for nmap raw socket operations
     cap_add:
       - NET_ADMIN
+      - NET_RAW
     volumes:
       # Host auth (read-only) - for initial setup reference
       - ~/.gemini:/root/.gemini-host:ro
@@ -262,6 +272,8 @@ volumes:
       device: ${ARTIFACTS_PATH:-./artifacts}
   # CVE enrichment cache
   enrichment-cache:
+  # Enrichment container gemini-cli config (persists OAuth tokens)
+  enrichment-gemini:
   # Qdrant vector DB storage
   qdrant-data:
   # Dame gemini-cli config (persists OAuth tokens)

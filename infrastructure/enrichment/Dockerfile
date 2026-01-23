@@ -12,10 +12,21 @@ LABEL maintainer="Agent Opulence"
 LABEL description="Enrichment pipeline for scan data processing"
 
 # Install system dependencies
+# - curl/jq: general utilities
+# - nodejs/npm: for gemini-cli (attack guidance generation)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     jq \
+    nodejs \
+    npm \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Gemini CLI for attack guidance generation
+# OAuth tokens persisted via volume mount to /root/.gemini
+RUN npm install -g @google/gemini-cli
+
+# Volume mount point for Gemini auth persistence
+VOLUME /root/.gemini
 
 # Create app directory structure
 WORKDIR /app

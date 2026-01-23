@@ -1,0 +1,68 @@
+version: "3.8"
+
+services:
+  faraday-postgres:
+    image: docker.io/library/postgres:15
+    container_name: faraday-postgres
+    environment:
+      POSTGRES_USER: faraday
+      POSTGRES_PASSWORD: ${FARADAY_DB_PASSWORD:-changeme}
+      POSTGRES_DB: faraday
+    volumes:
+      - faraday-db:/var/lib/postgresql/data
+    networks:
+      - faraday-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U faraday"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  faraday-redis:
+    image: docker.io/library/redis:7-alpine
+    container_name: faraday-redis
+    networks:
+      - faraday-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  faraday-server:
+    image: docker.io/faradaysec/faraday:latest
+    container_name: faraday-server
+    depends_on:
+      faraday-postgres:
+        condition: service_healthy
+      faraday-redis:
+        condition: service_healthy
+    environment:
+      PGSQL_USER: faraday
+      PGSQL_PASSWD: ${FARADAY_DB_PASSWORD:-changeme}
+      PGSQL_HOST: faraday-postgres
+      PGSQL_DBNAME: faraday
+      REDIS_SERVER: faraday-redis
+    ports:
+      - "5985:5985"
+    volumes:
+      - faraday-data:/home/faraday/.faraday
+      - ${ARTIFACTS_PATH:-./artifacts}:/artifacts:ro
+    networks:
+      - faraday-net
+      - default
+    command: ["faraday-server"]
+    restart: unless-stopped
+
+volumes:
+  faraday-db:
+  faraday-data:
+
+networks:
+  faraday-net:
+    internal: true
+  default:
+    external: true
+    name: opulence_network
