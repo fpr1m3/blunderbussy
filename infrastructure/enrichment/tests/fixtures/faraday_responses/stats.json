@@ -1,0 +1,13 @@
+{
+  "hosts_count": 4,
+  "services_count": 10,
+  "vulns_count": 10,
+  "vulns_by_severity": {
+    "critical": 4,
+    "high": 2,
+    "medium": 2,
+    "low": 1,
+    "info": 1
+  },
+  "last_activity": "2026-01-23T15:30:00Z"
+}

@@ -161,3 +161,88 @@ class TestCASMerge:
         assert merged["summary"]["critical_findings"] == 2
         assert merged["summary"]["low_priority_vulns_count"] == 2
         assert merged["summary"]["vulnerabilities_found"] == 4
+
+
+# Import new functions for Faraday detection tests
+detect_data_source = format_cas.detect_data_source
+process_faraday_data = format_cas.process_faraday_data
+
+
+class TestFaradayDataSourceDetection:
+    """Tests for Faraday data source detection."""
+
+    def test_detect_faraday_from_source_field(self):
+        """Data with source starting with 'faraday:' should be detected as Faraday."""
+        data = {"source": "faraday:workspace_123", "hosts": []}
+        assert detect_data_source(data) == "faraday"
+
+    def test_detect_faraday_from_scan_type(self):
+        """Data with scan_type 'faraday' should be detected as Faraday."""
+        data = {"scan_type": "faraday", "hosts": []}
+        assert detect_data_source(data) == "faraday"
+
+    def test_detect_legacy_without_faraday_markers(self):
+        """Data without Faraday markers should be detected as legacy."""
+        data = {"scan_type": "nmap", "hosts": []}
+        assert detect_data_source(data) == "legacy"
+
+    def test_detect_legacy_empty_data(self):
+        """Empty data should be detected as legacy."""
+        data = {}
+        assert detect_data_source(data) == "legacy"
+
+    def test_detect_legacy_with_non_faraday_source(self):
+        """Data with different source should be legacy."""
+        data = {"source": "autorecon", "hosts": []}
+        assert detect_data_source(data) == "legacy"
+
+
+class TestFaradayProcessorRouting:
+    """Tests for routing to appropriate processor based on data source."""
+
+    def test_format_cas_routes_faraday_data(self, formatter):
+        """format_cas should route Faraday data to process_faraday_data."""
+        faraday_data = {
+            "source": "faraday:test_workspace",
+            "target": "192.168.1.0/24",
+            "session_id": "sess_123"
+        }
+        cas = formatter.format_cas(faraday_data)
+
+        assert cas["cas_version"] == "1.2"
+        assert cas["source"] == "faraday"
+        assert cas["target"]["identifier"] == "192.168.1.0/24"
+        assert cas["target"]["session_id"] == "sess_123"
+
+    def test_format_cas_routes_legacy_data(self, formatter, mixed_severity_vulns):
+        """format_cas should route legacy data to _process_legacy_data."""
+        cas = formatter.format_cas(mixed_severity_vulns)
+
+        assert cas["cas_version"] == "1.1"
+        assert "source" not in cas or cas.get("source") != "faraday"
+
+    def test_faraday_processor_stub_returns_empty_structure(self):
+        """process_faraday_data should return valid empty CAS structure."""
+        faraday_data = {
+            "source": "faraday:workspace",
+            "target": "test-target",
+            "session_id": "test-session"
+        }
+        cas = process_faraday_data(faraday_data)
+
+        # Verify structure
+        assert "cas_version" in cas
+        assert "generated_at" in cas
+        assert "target" in cas
+        assert "summary" in cas
+        assert "hosts" in cas
+        assert "vulnerabilities" in cas
+
+        # Verify empty arrays
+        assert cas["hosts"] == []
+        assert cas["vulnerabilities"] == []
+        assert cas["web_services"] == []
+
+        # Verify summary counts are zero
+        assert cas["summary"]["hosts_discovered"] == 0
+        assert cas["summary"]["vulnerabilities_found"] == 0

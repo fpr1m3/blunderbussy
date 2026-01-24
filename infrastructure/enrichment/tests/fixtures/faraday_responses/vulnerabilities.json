@@ -1,0 +1,122 @@
+[
+  {
+    "id": 1001,
+    "name": "SQL Injection in Login Form",
+    "severity": "critical",
+    "desc": "A SQL injection vulnerability was found in the login form's username parameter. An attacker can bypass authentication or extract sensitive data from the database.",
+    "resolution": "Use parameterized queries or prepared statements. Implement input validation.",
+    "refs": ["CVE-2023-12345", "https://owasp.org/www-community/attacks/SQL_Injection", "CWE-89"],
+    "confirmed": true,
+    "tool": "nuclei",
+    "host_id": 1,
+    "service_id": 102
+  },
+  {
+    "id": 1002,
+    "name": "Remote Code Execution via Deserialization",
+    "severity": "critical",
+    "desc": "Insecure deserialization of untrusted data allows remote code execution.",
+    "resolution": "Implement strict type checking during deserialization. Use allowlisting for permitted classes.",
+    "refs": ["CVE-2024-5678", "CVE-2024-5679", "CVE-2024-5680", "https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html"],
+    "confirmed": true,
+    "tool": "metasploit",
+    "host_id": 1,
+    "service_id": 102
+  },
+  {
+    "id": 1003,
+    "name": "SMB Signing Not Required",
+    "severity": "high",
+    "desc": "SMB signing is not required on this host, making it vulnerable to man-in-the-middle attacks.",
+    "resolution": "Enable mandatory SMB signing via Group Policy.",
+    "refs": ["https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/microsoft-network-client-digitally-sign-communications-always"],
+    "confirmed": false,
+    "tool": "nmap",
+    "host_id": 2,
+    "service_id": 202
+  },
+  {
+    "id": 1004,
+    "name": "MS17-010 EternalBlue",
+    "severity": "critical",
+    "desc": "This system is vulnerable to the MS17-010 vulnerability (EternalBlue) which allows remote code execution.",
+    "resolution": "Apply Microsoft security update MS17-010.",
+    "refs": ["CVE-2017-0144", "https://docs.microsoft.com/en-us/security-updates/securitybulletins/2017/ms17-010"],
+    "confirmed": true,
+    "tool": "nessus",
+    "host_id": 3,
+    "service_id": 202
+  },
+  {
+    "id": 1005,
+    "name": "Default Telnet Credentials",
+    "severity": "high",
+    "desc": "The telnet service accepts default credentials (admin/admin).",
+    "resolution": "Disable telnet and use SSH. If telnet is required, change default credentials.",
+    "refs": [],
+    "confirmed": true,
+    "tool": "hydra",
+    "host_id": 3,
+    "service_id": 301
+  },
+  {
+    "id": 1006,
+    "name": "vsftpd Backdoor",
+    "severity": "critical",
+    "desc": "The installed version of vsftpd (2.3.4) contains a backdoor that can be triggered by sending a :) in the username.",
+    "resolution": "Upgrade vsftpd to a patched version.",
+    "refs": ["CVE-2011-2523", "https://www.rapid7.com/db/modules/exploit/unix/ftp/vsftpd_234_backdoor"],
+    "confirmed": true,
+    "tool": "exploit-db",
+    "host_id": 3,
+    "service_id": 302
+  },
+  {
+    "id": 1007,
+    "name": "Weak SSL/TLS Cipher Suites",
+    "severity": "medium",
+    "desc": "The server supports weak cipher suites that could be exploited.",
+    "resolution": "Disable weak cipher suites and enable only TLS 1.2+ with strong ciphers.",
+    "refs": ["https://wiki.mozilla.org/Security/Server_Side_TLS"],
+    "confirmed": false,
+    "tool": "nmap",
+    "host_id": 1,
+    "service_id": 103
+  },
+  {
+    "id": 1008,
+    "name": "Missing HTTP Security Headers",
+    "severity": "low",
+    "desc": "Several recommended HTTP security headers are missing.",
+    "resolution": "Add X-Frame-Options, X-Content-Type-Options, and Content-Security-Policy headers.",
+    "refs": ["https://owasp.org/www-project-secure-headers/"],
+    "confirmed": true,
+    "tool": "nikto",
+    "host_id": 1,
+    "service_id": 102
+  },
+  {
+    "id": 1009,
+    "name": "Information Disclosure via Server Banner",
+    "severity": "info",
+    "desc": "The server discloses version information in HTTP headers.",
+    "resolution": "Configure server to hide version information.",
+    "refs": [],
+    "confirmed": true,
+    "tool": "nmap",
+    "host_id": 1,
+    "service_id": 102
+  },
+  {
+    "id": 1010,
+    "name": "Vulnerability Without Service",
+    "severity": "medium",
+    "desc": "A host-level vulnerability detected without specific service association.",
+    "resolution": "Review and remediate.",
+    "refs": ["CVE-2020-9999"],
+    "confirmed": false,
+    "tool": "nessus",
+    "host_id": 2,
+    "service_id": null
+  }
+]

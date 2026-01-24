@@ -1,0 +1,105 @@
+[
+  {
+    "id": 1,
+    "ip": "192.168.1.10",
+    "hostnames": ["web.local", "web-server.internal"],
+    "os": "Ubuntu 20.04 LTS",
+    "mac": "00:11:22:33:44:55",
+    "services": [
+      {
+        "id": 101,
+        "name": "ssh",
+        "port": 22,
+        "protocol": "tcp",
+        "version": "OpenSSH 8.2p1",
+        "status": "open"
+      },
+      {
+        "id": 102,
+        "name": "http",
+        "port": 80,
+        "protocol": "tcp",
+        "version": "nginx 1.18.0",
+        "status": "open"
+      },
+      {
+        "id": 103,
+        "name": "https",
+        "port": 443,
+        "protocol": "tcp",
+        "version": "nginx 1.18.0",
+        "status": "open"
+      }
+    ],
+    "vulnerability_count": 5
+  },
+  {
+    "id": 2,
+    "ip": "192.168.1.20",
+    "hostnames": ["db.local"],
+    "os": "Windows Server 2019",
+    "mac": "00:AA:BB:CC:DD:EE",
+    "services": [
+      {
+        "id": 201,
+        "name": "mssql",
+        "port": 1433,
+        "protocol": "tcp",
+        "version": "Microsoft SQL Server 2019",
+        "status": "open"
+      },
+      {
+        "id": 202,
+        "name": "smb",
+        "port": 445,
+        "protocol": "tcp",
+        "version": "",
+        "status": "open"
+      },
+      {
+        "id": 203,
+        "name": "rdp",
+        "port": 3389,
+        "protocol": "tcp",
+        "version": "",
+        "status": "open"
+      }
+    ],
+    "vulnerability_count": 8
+  },
+  {
+    "id": 3,
+    "ip": "192.168.1.30",
+    "hostnames": ["legacy.local"],
+    "os": "Windows Server 2008 R2",
+    "mac": "00:FF:EE:DD:CC:BB",
+    "services": [
+      {
+        "id": 301,
+        "name": "telnet",
+        "port": 23,
+        "protocol": "tcp",
+        "version": "",
+        "status": "open"
+      },
+      {
+        "id": 302,
+        "name": "ftp",
+        "port": 21,
+        "protocol": "tcp",
+        "version": "vsftpd 2.3.4",
+        "status": "open"
+      }
+    ],
+    "vulnerability_count": 12
+  },
+  {
+    "id": 4,
+    "ip": "192.168.1.40",
+    "hostnames": [],
+    "os": null,
+    "mac": null,
+    "services": [],
+    "vulnerability_count": 0
+  }
+]

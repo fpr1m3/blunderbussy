@@ -1,0 +1,102 @@
+[
+  {
+    "id": 101,
+    "name": "ssh",
+    "port": 22,
+    "protocol": "tcp",
+    "version": "OpenSSH 8.2p1 Ubuntu 4ubuntu0.5",
+    "status": "open",
+    "host_id": 1,
+    "summary": "SSH remote access"
+  },
+  {
+    "id": 102,
+    "name": "http",
+    "port": 80,
+    "protocol": "tcp",
+    "version": "nginx 1.18.0",
+    "status": "open",
+    "host_id": 1,
+    "summary": "HTTP web server"
+  },
+  {
+    "id": 103,
+    "name": "https",
+    "port": 443,
+    "protocol": "tcp",
+    "version": "nginx 1.18.0",
+    "status": "open",
+    "host_id": 1,
+    "summary": "HTTPS web server"
+  },
+  {
+    "id": 104,
+    "name": "http-proxy",
+    "port": 8080,
+    "protocol": "tcp",
+    "version": "Squid 4.10",
+    "status": "open",
+    "host_id": 1,
+    "summary": "HTTP proxy service"
+  },
+  {
+    "id": 201,
+    "name": "mssql",
+    "port": 1433,
+    "protocol": "tcp",
+    "version": "Microsoft SQL Server 2019",
+    "status": "open",
+    "host_id": 2,
+    "summary": "Microsoft SQL Server database"
+  },
+  {
+    "id": 202,
+    "name": "smb",
+    "port": 445,
+    "protocol": "tcp",
+    "version": "",
+    "status": "open",
+    "host_id": 2,
+    "summary": "SMB file sharing"
+  },
+  {
+    "id": 203,
+    "name": "rdp",
+    "port": 3389,
+    "protocol": "tcp",
+    "version": "",
+    "status": "open",
+    "host_id": 2,
+    "summary": "Remote Desktop Protocol"
+  },
+  {
+    "id": 301,
+    "name": "telnet",
+    "port": 23,
+    "protocol": "tcp",
+    "version": "",
+    "status": "open",
+    "host_id": 3,
+    "summary": "Telnet remote access"
+  },
+  {
+    "id": 302,
+    "name": "ftp",
+    "port": 21,
+    "protocol": "tcp",
+    "version": "vsftpd 2.3.4",
+    "status": "open",
+    "host_id": 3,
+    "summary": "FTP file transfer"
+  },
+  {
+    "id": 303,
+    "name": "mysql",
+    "port": 3306,
+    "protocol": "tcp",
+    "version": "MySQL 5.7.31",
+    "status": "open",
+    "host_id": 3,
+    "summary": "MySQL database"
+  }
+]
