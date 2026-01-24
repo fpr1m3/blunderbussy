@@ -306,17 +306,19 @@ class FaradayClient:
         data = response.json()
         rows = data.get('rows', data) if isinstance(data, dict) else data
 
-        return [
-            {
+        hosts = []
+        for row in rows:
+            # Faraday API nests host data inside 'value' key
+            h = row.get('value', row) if isinstance(row, dict) else row
+            hosts.append({
                 'id': h.get('id') or h.get('_id'),
                 'ip': h.get('ip'),
                 'hostnames': h.get('hostnames', []),
                 'os': h.get('os'),
                 'services': h.get('services', []),
                 'vuln_count': h.get('vulnerability_count', h.get('vuln_count', 0))
-            }
-            for h in rows
-        ]
+            })
+        return hosts
 
     # ─────────────────────────────────────────────────────────────────
     # Vulnerability Queries (blunderbussy-cdm)
@@ -373,8 +375,11 @@ class FaradayClient:
         else:
             rows = data
 
-        return [
-            {
+        vulns = []
+        for row in rows:
+            # Faraday API may nest vuln data inside 'value' key
+            v = row.get('value', row) if isinstance(row, dict) else row
+            vulns.append({
                 'id': v.get('id') or v.get('_id'),
                 'name': v.get('name'),
                 'severity': v.get('severity'),
@@ -385,9 +390,8 @@ class FaradayClient:
                 'host_id': v.get('host_id') or v.get('parent'),
                 'service_id': v.get('service_id'),
                 'confirmed': v.get('confirmed', False)
-            }
-            for v in rows
-        ]
+            })
+        return vulns
 
     # ─────────────────────────────────────────────────────────────────
     # Service Queries (blunderbussy-xzw)
@@ -437,8 +441,11 @@ class FaradayClient:
         else:
             rows = data
 
-        return [
-            {
+        services = []
+        for row in rows:
+            # Faraday API may nest service data inside 'value' key
+            s = row.get('value', row) if isinstance(row, dict) else row
+            services.append({
                 'id': s.get('id') or s.get('_id'),
                 'name': s.get('name'),
                 'port': s.get('port'),
@@ -446,9 +453,8 @@ class FaradayClient:
                 'version': s.get('version'),
                 'host_id': s.get('host_id') or s.get('parent'),
                 'status': s.get('status', 'open')
-            }
-            for s in rows
-        ]
+            })
+        return services
 
     # ─────────────────────────────────────────────────────────────────
     # Workspace Management (blunderbussy-c3c, blunderbussy-ibv, blunderbussy-514)

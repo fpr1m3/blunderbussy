@@ -231,7 +231,7 @@ def assess_exploitability(vuln: Dict, cves: List[str]) -> str:
         score += 2
 
     # Severity influences exploitability
-    severity = vuln.get('severity', '').lower()
+    severity = (vuln.get('severity') or '').lower()
     if severity == 'critical':
         score += 3
     elif severity == 'high':
@@ -484,9 +484,14 @@ def process_faraday_hosts(hosts: List[Dict]) -> List[Dict]:
     cas_hosts = []
 
     for host in hosts:
+        # Skip hosts without valid IP addresses
+        host_ip = host.get('ip') or ''
+        if not host_ip.strip():
+            continue
+
         # Build base CAS host structure
         cas_host = {
-            'ip': host.get('ip') or '',
+            'ip': host_ip,
             'hostnames': host.get('hostnames') or [],
             'os': host.get('os') or None,
             'mac': host.get('mac') or None,
@@ -495,15 +500,18 @@ def process_faraday_hosts(hosts: List[Dict]) -> List[Dict]:
         }
 
         # Map Faraday services to CAS ports format
-        for svc in host.get('services', []):
-            port_entry = {
-                'port': svc.get('port'),
-                'protocol': svc.get('protocol', 'tcp'),
-                'service': svc.get('name') or '',
-                'version': svc.get('version') or None,
-                'state': svc.get('status', 'open'),
-            }
-            cas_host['ports'].append(port_entry)
+        # Note: Faraday may return services as a count (int) or as a list
+        services = host.get('services', [])
+        if isinstance(services, list):
+            for svc in services:
+                port_entry = {
+                    'port': svc.get('port'),
+                    'protocol': svc.get('protocol', 'tcp'),
+                    'service': svc.get('name') or '',
+                    'version': svc.get('version') or None,
+                    'state': svc.get('status', 'open'),
+                }
+                cas_host['ports'].append(port_entry)
 
         # Calculate priority score based on host characteristics
         cas_host['priority_score'] = calculate_host_priority(cas_host)
@@ -589,6 +597,22 @@ def process_faraday_data(input_data: Dict) -> Dict:
 
     hosts_by_id = {h.get('id'): h for h in hosts_raw if h.get('id') is not None}
     services_by_id = {s.get('id'): s for s in services_raw if s.get('id') is not None}
+
+    # Inject services into hosts (Faraday returns them separately)
+    services_by_host = {}
+    for svc in services_raw:
+        host_id = svc.get('host_id') or svc.get('parent')
+        if host_id is not None:
+            if host_id not in services_by_host:
+                services_by_host[host_id] = []
+            services_by_host[host_id].append(svc)
+
+    for host in hosts_raw:
+        host_id = host.get('id')
+        if host_id in services_by_host:
+            # Only set if not already a list
+            if not isinstance(host.get('services'), list):
+                host['services'] = services_by_host[host_id]
 
     # Process each data type using the mapper functions
     cas_hosts = process_faraday_hosts(hosts_raw)
@@ -1335,7 +1359,11 @@ class CASFormatter:
 
             # Add new items that don't exist
             for item in new_items:
-                if key_func(item) not in existing_keys:
+                key = key_func(item)
+                # Skip empty keys for hosts (invalid entries)
+                if field == 'hosts' and not key.strip():
+                    continue
+                if key not in existing_keys:
                     existing_items.append(item)
 
             existing[field] = existing_items
