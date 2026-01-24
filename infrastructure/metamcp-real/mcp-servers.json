@@ -1,77 +1,88 @@
 {
-  "mcpServers": {
-    "opulence-msf": {
-      "type": "stdio",
-      "command": "python3",
-      "args": ["/opt/mcp-servers/msf/server.py"],
-      "env": {
-        "MSF_HOST": "host.docker.internal",
-        "MSF_PORT": "55553",
-        "MSF_TOKEN": "${MSF_TOKEN}"
-      },
-      "description": "Metasploit Framework MCP - exploit execution, module search, session management"
+    "mcpServers": {
+        "opulence-msf": {
+            "type": "stdio",
+            "command": "python3",
+            "args": ["/opt/mcp-servers/msf/server.py"],
+            "env": {
+                "MSF_HOST": "host.docker.internal",
+                "MSF_PORT": "55553",
+                "MSF_TOKEN": "${MSF_TOKEN}"
+            },
+            "description": "Metasploit Framework MCP - exploit execution, module search, session management"
+        },
+        "opulence-sliver": {
+            "type": "stdio",
+            "command": "python3",
+            "args": ["/opt/mcp-servers/sliver/server.py"],
+            "env": {
+                "SLIVER_HOST": "host.docker.internal",
+                "SLIVER_PORT": "31337"
+            },
+            "description": "Sliver C2 MCP - implant generation, listener management, beacon control"
+        },
+        "opulence-htb": {
+            "type": "stdio",
+            "command": "/opt/mcp-servers/htb/htb-mcp-server",
+            "args": [],
+            "env": {
+                "HTB_TOKEN": "${HTB_TOKEN}"
+            },
+            "description": "HackTheBox MCP - machine lifecycle, flag submission, challenge management"
+        },
+        "opulence-hexstrike": {
+            "type": "stdio",
+            "command": "python3",
+            "args": [
+                "/opt/mcp-servers/hexstrike-recon/hexstrike_mcp.py",
+                "--server",
+                "http://hexstrike-recon:8888"
+            ],
+            "env": {},
+            "description": "HexStrike-AI MCP - 150+ offensive security tools (nmap, nuclei, gobuster, etc.)"
+        }
     },
-    "opulence-sliver": {
-      "type": "stdio",
-      "command": "python3",
-      "args": ["/opt/mcp-servers/sliver/server.py"],
-      "env": {
-        "SLIVER_HOST": "host.docker.internal",
-        "SLIVER_PORT": "31337"
-      },
-      "description": "Sliver C2 MCP - implant generation, listener management, beacon control"
-    },
-    "opulence-htb": {
-      "type": "stdio",
-      "command": "/opt/mcp-servers/htb/htb-mcp-server",
-      "args": [],
-      "env": {
-        "HTB_TOKEN": "${HTB_TOKEN}"
-      },
-      "description": "HackTheBox MCP - machine lifecycle, flag submission, challenge management"
-    },
-    "opulence-hexstrike": {
-      "type": "stdio",
-      "command": "python3",
-      "args": ["/opt/mcp-servers/hexstrike/hexstrike_mcp.py", "--server", "http://hexstrike:8888"],
-      "env": {},
-      "description": "HexStrike-AI MCP - 150+ offensive security tools (nmap, nuclei, gobuster, etc.)"
+    "namespaces": {
+        "opulence-recon": {
+            "description": "Reconnaissance and enumeration tools",
+            "servers": ["opulence-hexstrike"],
+            "toolFilters": [
+                "nmap_*",
+                "masscan_*",
+                "rustscan_*",
+                "amass_*",
+                "subfinder_*",
+                "nuclei_*",
+                "httpx_*",
+                "enum4linux_*"
+            ]
+        },
+        "opulence-enum": {
+            "description": "Web enumeration and fuzzing",
+            "servers": ["opulence-hexstrike"],
+            "toolFilters": [
+                "gobuster_*",
+                "feroxbuster_*",
+                "ffuf_*",
+                "dirb_*",
+                "wpscan_*",
+                "nikto_*"
+            ]
+        },
+        "opulence-exploit": {
+            "description": "Exploitation frameworks",
+            "servers": ["opulence-msf", "opulence-hexstrike"],
+            "toolFilters": ["msf__*", "sqlmap_*", "hydra_*"]
+        },
+        "opulence-c2": {
+            "description": "Command and Control",
+            "servers": ["opulence-sliver"],
+            "toolFilters": ["sliver__*"]
+        },
+        "opulence-htb": {
+            "description": "HackTheBox platform control",
+            "servers": ["opulence-htb"],
+            "toolFilters": ["*"]
+        }
     }
-  },
-  "namespaces": {
-    "opulence-recon": {
-      "description": "Reconnaissance and enumeration tools",
-      "servers": ["opulence-hexstrike"],
-      "toolFilters": [
-        "nmap_*", "masscan_*", "rustscan_*",
-        "amass_*", "subfinder_*", "nuclei_*",
-        "httpx_*", "enum4linux_*"
-      ]
-    },
-    "opulence-enum": {
-      "description": "Web enumeration and fuzzing",
-      "servers": ["opulence-hexstrike"],
-      "toolFilters": [
-        "gobuster_*", "feroxbuster_*", "ffuf_*",
-        "dirb_*", "wpscan_*", "nikto_*"
-      ]
-    },
-    "opulence-exploit": {
-      "description": "Exploitation frameworks",
-      "servers": ["opulence-msf", "opulence-hexstrike"],
-      "toolFilters": [
-        "msf__*", "sqlmap_*", "hydra_*"
-      ]
-    },
-    "opulence-c2": {
-      "description": "Command and Control",
-      "servers": ["opulence-sliver"],
-      "toolFilters": ["sliver__*"]
-    },
-    "opulence-htb": {
-      "description": "HackTheBox platform control",
-      "servers": ["opulence-htb"],
-      "toolFilters": ["*"]
-    }
-  }
 }

@@ -46,7 +46,9 @@ class PwncatClient:
         self.sessions: Dict[str, Any] = {}  # session_id -> session metadata
         self._pwncat_sessions: Dict[str, Any] = {}  # session_id -> actual pwncat session
         self._listeners: Dict[int, Any] = {}  # port -> listener info
-        self._initialized = False
+        self._initialized = False  # True if pwncat successfully loaded
+        self._init_attempted = False  # True if initialization was attempted (even if failed)
+        self._init_error: Optional[str] = None  # Error message if initialization failed
 
     async def initialize(self) -> bool:
         """Initialize pwncat manager.
@@ -59,8 +61,15 @@ class PwncatClient:
         """
         global PWNCAT_AVAILABLE
 
+        # Already successfully initialized
         if self._initialized:
             return True
+
+        # Already attempted and failed - don't retry
+        if self._init_attempted:
+            return False
+
+        self._init_attempted = True
 
         try:
             # Attempt to import pwncat - this is a blocking operation
@@ -75,13 +84,15 @@ class PwncatClient:
             return True
 
         except ImportError as e:
-            logger.warning(f"pwncat-cs not installed: {e}")
+            self._init_error = f"pwncat-cs not installed: {e}"
+            logger.warning(self._init_error)
             logger.warning("Pwncat functionality will be unavailable")
             PWNCAT_AVAILABLE = False
             return False
 
         except Exception as e:
-            logger.error(f"Failed to initialize pwncat manager: {e}")
+            self._init_error = f"Failed to initialize pwncat manager: {e}"
+            logger.error(self._init_error)
             PWNCAT_AVAILABLE = False
             return False
 
@@ -155,7 +166,8 @@ class PwncatClient:
             RuntimeError: If client not initialized or manager unavailable
         """
         if not self._initialized:
-            raise RuntimeError("PwncatClient not initialized. Call initialize() first.")
+            error_msg = self._init_error or "PwncatClient not initialized. Call initialize() first."
+            raise RuntimeError(error_msg)
 
         if self.manager is None:
             raise RuntimeError("Pwncat manager not available")
@@ -246,7 +258,8 @@ class PwncatClient:
             Dict containing session info
         """
         if not self._initialized:
-            raise RuntimeError("PwncatClient not initialized. Call initialize() first.")
+            error_msg = self._init_error or "PwncatClient not initialized. Call initialize() first."
+            raise RuntimeError(error_msg)
 
         if self.manager is None:
             raise RuntimeError("Pwncat manager not available")
@@ -600,8 +613,8 @@ class PwncatClient:
     async def get_lhost(self, interface: str = "tun0") -> Dict[str, Any]:
         """Get the VPN IP address for reverse shell callbacks.
 
-        Queries pwncat-mcp container (which shares gluetun's network namespace)
-        via HTTP to get the actual VPN tunnel IP.
+        Since pwncat-mcp shares gluetun's network namespace, this returns
+        the VPN tunnel IP that HTB targets can reach for reverse shells.
 
         Args:
             interface: Network interface to query (default: tun0 for VPN)
@@ -612,32 +625,41 @@ class PwncatClient:
             - interface: The interface queried
             - error: Error message if IP couldn't be determined
         """
-        import urllib.request
-        import json as json_module
+        import socket
+        import fcntl
+        import struct
 
-        # pwncat-mcp runs on gluetun's network at port 9998
-        # (port 9999 conflicts with gluetun's health server)
-        PWNCAT_MCP_URL = "http://gluetun:9998/lhost"
+        def _get_interface_ip(ifname: str) -> Optional[str]:
+            """Get IP address of a network interface using ioctl."""
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                # SIOCGIFADDR = 0x8915
+                result = fcntl.ioctl(
+                    s.fileno(),
+                    0x8915,
+                    struct.pack('256s', ifname[:15].encode('utf-8'))
+                )
+                ip = socket.inet_ntoa(result[20:24])
+                s.close()
+                return ip
+            except OSError:
+                return None
 
         try:
-            req = urllib.request.Request(PWNCAT_MCP_URL)
-            with urllib.request.urlopen(req, timeout=5) as response:
-                data = json_module.loads(response.read().decode())
-                if "lhost" in data:
-                    logger.info(f"LHOST discovered via pwncat-mcp: {data['lhost']}")
-                    return data
-                else:
-                    return {
-                        "error": data.get("error", "Unknown error from pwncat-mcp"),
-                        "interface": interface
-                    }
-        except urllib.error.URLError as e:
-            logger.error(f"Failed to query pwncat-mcp for LHOST: {e}")
-            return {
-                "error": f"Cannot reach pwncat-mcp: {e}",
-                "interface": interface,
-                "hint": "Ensure pwncat-mcp container is running"
-            }
+            ip = await asyncio.to_thread(_get_interface_ip, interface)
+
+            if ip:
+                logger.info(f"LHOST discovered: {ip} on {interface}")
+                return {
+                    "lhost": ip,
+                    "interface": interface
+                }
+            else:
+                return {
+                    "error": f"Interface {interface} not found or has no IPv4 address",
+                    "interface": interface
+                }
+
         except Exception as e:
             logger.error(f"Failed to get LHOST: {e}")
             return {
@@ -663,13 +685,17 @@ def get_client() -> PwncatClient:
 
 
 async def ensure_client_initialized() -> PwncatClient:
-    """Get pwncat client and ensure it's initialized.
+    """Get pwncat client and ensure initialization was attempted.
+
+    Attempts initialization if not already done. Does not raise on
+    failure - individual tool methods will raise with appropriate
+    error messages if pwncat is unavailable.
 
     Returns:
-        Initialized PwncatClient instance
+        PwncatClient instance (may not be fully functional if init failed)
     """
     pwncat = get_client()
-    if not pwncat._initialized:
+    if not pwncat._init_attempted:
         await pwncat.initialize()
     return pwncat
 
@@ -848,71 +874,6 @@ TOOLS: List[Dict[str, Any]] = [
 ]
 
 
-# Output size thresholds (bytes)
-OUTPUT_THRESHOLD_STREAM = 50 * 1024   # >50KB: save to file
-OUTPUT_THRESHOLD_TRUNCATE = 10 * 1024  # 10-50KB: head/tail truncation
-ARTIFACTS_DIR = Path("/artifacts")
-
-
-def process_tool_output(output_json: str, tool_name: str) -> str:
-    """Process tool output with size-aware truncation/streaming.
-
-    Thresholds:
-    - >50KB: Save to /artifacts/tool-output-{uuid}.txt, return path + 2KB preview
-    - 10-50KB: Head/tail truncation (100 head + 50 tail lines)
-    - <10KB: Pass through unchanged
-
-    Args:
-        output_json: Serialized JSON tool output
-        tool_name: Name of the tool (for logging/metadata)
-
-    Returns:
-        Processed output string (may be truncated or reference a file)
-    """
-    size = len(output_json)
-
-    # Small output: pass through unchanged
-    if size <= OUTPUT_THRESHOLD_TRUNCATE:
-        return output_json
-
-    # Large output (>50KB): save to file, return reference + preview
-    if size > OUTPUT_THRESHOLD_STREAM:
-        ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
-        output_file = ARTIFACTS_DIR / f"tool-output-{uuid.uuid4().hex[:8]}.txt"
-        output_file.write_text(output_json)
-
-        preview = output_json[:2048]
-        size_kb = size // 1024
-
-        result = {
-            "_output_streamed": True,
-            "file_path": str(output_file),
-            "size_kb": size_kb,
-            "tool": tool_name,
-            "message": f"Output too large ({size_kb}KB). Full output saved to {output_file}",
-            "preview": preview + f"\n\n... [{size_kb}KB total, see {output_file}]"
-        }
-        logger.info(f"Large output from {tool_name} ({size_kb}KB) saved to {output_file}")
-        return json.dumps(result, indent=2)
-
-    # Medium output (10-50KB): head/tail truncation
-    lines = output_json.splitlines()
-    if len(lines) <= 150:
-        return output_json  # Not enough lines to truncate meaningfully
-
-    head_lines = lines[:100]
-    tail_lines = lines[-50:]
-    omitted = len(lines) - 150
-
-    truncated = '\n'.join(
-        head_lines +
-        [f"\n... [{omitted} lines omitted ({size // 1024}KB total)] ...\n"] +
-        tail_lines
-    )
-    logger.info(f"Truncated output from {tool_name}: {len(lines)} lines -> 150 lines")
-    return truncated
-
-
 async def handle_tool_call(name: str, arguments: Dict[str, Any]) -> Any:
     """Handle MCP tool calls.
 
@@ -1031,12 +992,9 @@ async def handle_request(request: Dict[str, Any]) -> Dict[str, Any]:
             tool_name = params.get('name', '')
             arguments = params.get('arguments', {})
             tool_result = await handle_tool_call(tool_name, arguments)
-            # Serialize and process output (truncation/streaming for large results)
-            raw_output = json.dumps(tool_result, indent=2)
-            processed_output = process_tool_output(raw_output, tool_name)
             result = {
                 "content": [
-                    {"type": "text", "text": processed_output}
+                    {"type": "text", "text": json.dumps(tool_result, indent=2)}
                 ]
             }
 
@@ -1061,9 +1019,42 @@ async def handle_request(request: Dict[str, Any]) -> Dict[str, Any]:
         }
 
 
+async def start_lhost_http_server():
+    """Start a simple HTTP server that returns the VPN LHOST.
+
+    This allows other containers (like Dame) to query the VPN IP
+    without needing to share the network namespace.
+    """
+    from aiohttp import web
+
+    async def handle_lhost(request):
+        pwncat = get_client()
+        result = await pwncat.get_lhost()
+        return web.json_response(result)
+
+    async def handle_health(request):
+        return web.json_response({"status": "ok"})
+
+    app = web.Application()
+    app.router.add_get('/lhost', handle_lhost)
+    app.router.add_get('/health', handle_health)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', 9998)
+    await site.start()
+    logger.info("LHOST HTTP server started on port 9998")
+
+
 async def main():
     """Main entry point - stdio JSON-RPC server."""
     logger.info("Pwncat MCP server starting...")
+
+    # Start HTTP server for LHOST queries (non-blocking)
+    try:
+        asyncio.create_task(start_lhost_http_server())
+    except Exception as e:
+        logger.warning(f"Failed to start LHOST HTTP server: {e}")
 
     reader = asyncio.StreamReader()
     protocol = asyncio.StreamReaderProtocol(reader)

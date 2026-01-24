@@ -1,284 +1,288 @@
 include:
-  - infrastructure/faraday/docker-compose.faraday.yml
+    - infrastructure/faraday/docker-compose.faraday.yml
 
 services:
-  gluetun:
-    image: docker.io/qmcgaw/gluetun:v3.41.0
-    container_name: gluetun
-    cap_add:
-      - NET_ADMIN
-    devices:
-      - /dev/net/tun:/dev/net/tun
-    volumes:
-      - ./infrastructure/gluetun:/gluetun
-      - ./infrastructure/gluetun/post-rules.txt:/iptables/post-rules.txt:ro
-    ports:
-      - "9998:9998"  # pwncat-mcp HTTP server (LHOST queries, health)
-    environment:
-      - VPN_SERVICE_PROVIDER=custom
-      - VPN_TYPE=openvpn
-      - OPENVPN_CUSTOM_CONFIG=/gluetun/htb.ovpn
-      # Allow DNS (1.1.1.1) outside VPN for health checks - acceptable for HTB
-      - FIREWALL_OUTBOUND_SUBNETS=172.19.0.0/16,172.17.0.0/16,1.1.1.1/32
-      # DNS settings
-      - DNS_SERVER=off
-      - DNS_KEEP_NAMESERVER=on
-      - PUBLICIP_ENABLED=no
-      - VERSION_INFORMATION=off
-      - UPDATER_PERIOD=0
-      # Health check config - use HTB VPN gateway (only responds to ICMP)
-      - HEALTH_TARGET_ADDRESSES=38.46.226.72:1337
-      - HEALTH_ICMP_TARGET_IPS=10.10.14.1
-      - HEALTH_RESTART_VPN=off
-      # Split tunnel: post-rules.txt configures forwarding for dame
-    sysctls:
-      - net.core.somaxconn=1024
-      - net.ipv4.ip_forward=1
-    restart: always
+    gluetun:
+        image: docker.io/qmcgaw/gluetun:v3.41.0
+        container_name: gluetun
+        cap_add:
+            - NET_ADMIN
+        devices:
+            - /dev/net/tun:/dev/net/tun
+        volumes:
+            - ./infrastructure/gluetun:/gluetun
+            - ./infrastructure/gluetun/post-rules.txt:/iptables/post-rules.txt:ro
+        ports:
+            - "9998:9998" # pwncat-mcp HTTP server (LHOST queries, health)
+        environment:
+            - VPN_SERVICE_PROVIDER=custom
+            - VPN_TYPE=openvpn
+            - OPENVPN_CUSTOM_CONFIG=/gluetun/htb.ovpn
+            # Allow DNS (1.1.1.1) outside VPN for health checks - acceptable for HTB
+            - FIREWALL_OUTBOUND_SUBNETS=172.19.0.0/16,172.17.0.0/16,1.1.1.1/32
+            # DNS settings
+            - DNS_SERVER=off
+            - DNS_KEEP_NAMESERVER=on
+            - PUBLICIP_ENABLED=no
+            - VERSION_INFORMATION=off
+            - UPDATER_PERIOD=0
+            # Health check config - use HTB VPN gateway (only responds to ICMP)
+            - HEALTH_TARGET_ADDRESSES=38.46.226.72:1337
+            - HEALTH_ICMP_TARGET_IPS=10.10.14.1
+            - HEALTH_RESTART_VPN=off
+            # Split tunnel: post-rules.txt configures forwarding for dame
+        sysctls:
+            - net.core.somaxconn=1024
+            - net.ipv4.ip_forward=1
+        restart: always
 
-  # Enrichment Pipeline - Stream B
-  # Watches for raw scans and processes through enrichment pipeline
-  enrichment:
-    build:
-      context: ./infrastructure
-      dockerfile: enrichment/Dockerfile
-    container_name: enrichment
-    volumes:
-      # Shared artifacts volume
-      - artifacts:/artifacts
-      # CVE cache persistence
-      - enrichment-cache:/artifacts/cache
-      # Gemini CLI auth persistence (OAuth tokens)
-      - enrichment-gemini:/root/.gemini
-    environment:
-      - PYTHONUNBUFFERED=1
-      - LOG_LEVEL=INFO
-      - MANIFEST_PATH=/artifacts/manifest.yaml
-      # Optional: NVD API key for faster CVE lookups
-      - NVD_API_KEY=${NVD_API_KEY:-}
-      # Force file-based token storage for Gemini CLI (no keychain in container)
-      - GEMINI_FORCE_FILE_STORAGE=true
-    healthcheck:
-      test: ["CMD-SHELL", "grep -q watcher.py /proc/1/cmdline"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    restart: unless-stopped
-    depends_on:
-      - gluetun
+    # Enrichment Pipeline - Stream B
+    # Watches for raw scans and processes through enrichment pipeline
+    enrichment:
+        build:
+            context: ./infrastructure
+            dockerfile: enrichment/Dockerfile
+        container_name: enrichment
+        volumes:
+            # Shared artifacts volume
+            - artifacts:/artifacts
+            # CVE cache persistence
+            - enrichment-cache:/artifacts/cache
+            # Gemini CLI auth persistence (OAuth tokens)
+            - enrichment-gemini:/root/.gemini
+        environment:
+            - PYTHONUNBUFFERED=1
+            - LOG_LEVEL=INFO
+            - MANIFEST_PATH=/artifacts/manifest.yaml
+            # Faraday connection
+            - FARADAY_URL=http://faraday-server:5985
+            - FARADAY_USER=${FARADAY_USER:-faraday}
+            - FARADAY_PASSWORD=${FARADAY_DB_PASSWORD:-changeme}
+            - FARADAY_WORKSPACE=${TARGET_NAME:-pentest}
+            # Optional: NVD API key for faster CVE lookups
+            - NVD_API_KEY=${NVD_API_KEY:-}
+            # Force file-based token storage for Gemini CLI (no keychain in container)
+            - GEMINI_FORCE_FILE_STORAGE=true
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 15s
+        restart: unless-stopped
+        depends_on:
+            - gluetun
+            - faraday-server
 
-  # ═══════════════════════════════════════════════════════════════════════════
-  # Stream E - Tool Containers & MCP Integration
-  # ═══════════════════════════════════════════════════════════════════════════
-  #
-  # Architecture:
-  #   metatool-ai/metamcp (aggregator) --> MSF MCP, Sliver MCP, HTB MCP, HexStrike
-  #
-  # MetaMCP runs separately via:
-  #   podman-compose -f infrastructure/metamcp-real/docker-compose.metamcp.yml up -d
-  #
-  # See: infrastructure/metamcp-real/README.md for setup instructions
-  # ═══════════════════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Stream E - Tool Containers & MCP Integration
+    # ═══════════════════════════════════════════════════════════════════════════
+    #
+    # Architecture:
+    #   metatool-ai/metamcp (aggregator) --> MSF MCP, Sliver MCP, HTB MCP, HexStrike
+    #
+    # MetaMCP runs separately via:
+    #   podman-compose -f infrastructure/metamcp-real/docker-compose.metamcp.yml up -d
+    #
+    # See: infrastructure/metamcp-real/README.md for setup instructions
+    # ═══════════════════════════════════════════════════════════════════════════
 
-  # MSF MCP Server (lightweight Python wrapper)
-  # Backend for MetaMCP - provides Metasploit tools via MCP protocol
-  msf-mcp:
-    build:
-      context: ./infrastructure/PrEP/servers
-      dockerfile: Dockerfile.msf
-    container_name: msf-mcp
-    environment:
-      - PYTHONUNBUFFERED=1
-      - MSF_HOST=${MSF_HOST:-msf}
-      - MSF_PORT=${MSF_PORT:-55553}
-      - MSF_TOKEN=${MSF_TOKEN:-msfrpc_token}
-    restart: unless-stopped
+    # MSF MCP Server (lightweight Python wrapper)
+    # Backend for MetaMCP - provides Metasploit tools via MCP protocol
+    msf-mcp:
+        build:
+            context: ./infrastructure/PrEP/servers
+            dockerfile: Dockerfile.msf
+        container_name: msf-mcp
+        environment:
+            - PYTHONUNBUFFERED=1
+            - MSF_HOST=${MSF_HOST:-msf}
+            - MSF_PORT=${MSF_PORT:-55553}
+            - MSF_TOKEN=${MSF_TOKEN:-msfrpc_token}
+        restart: unless-stopped
 
-  # Sliver MCP Server (lightweight Python wrapper)
-  # Backend for MetaMCP - provides Sliver C2 tools via MCP protocol
-  sliver-mcp:
-    build:
-      context: ./infrastructure/PrEP/servers
-      dockerfile: Dockerfile.sliver
-    container_name: sliver-mcp
-    environment:
-      - PYTHONUNBUFFERED=1
-      - SLIVER_HOST=${SLIVER_HOST:-sliver}
-      - SLIVER_PORT=${SLIVER_PORT:-31337}
-    restart: unless-stopped
+    # Sliver MCP Server (lightweight Python wrapper)
+    # Backend for MetaMCP - provides Sliver C2 tools via MCP protocol
+    sliver-mcp:
+        build:
+            context: ./infrastructure/PrEP/servers
+            dockerfile: Dockerfile.sliver
+        container_name: sliver-mcp
+        environment:
+            - PYTHONUNBUFFERED=1
+            - SLIVER_HOST=${SLIVER_HOST:-sliver}
+            - SLIVER_PORT=${SLIVER_PORT:-31337}
+        restart: unless-stopped
 
-  # Pwncat MCP Server (Python post-exploitation framework)
-  # Backend for MetaMCP - provides pwncat-cs tools via MCP protocol
-  # Uses VPN network for reverse shell connections from HTB targets
-  pwncat-mcp:
-    build:
-      context: ./infrastructure/PrEP/servers
-      dockerfile: Dockerfile.pwncat
-    container_name: pwncat-mcp
-    network_mode: "service:gluetun"  # Needs VPN for reverse shells
-    volumes:
-      - artifacts:/artifacts  # For file transfers
-    environment:
-      - PYTHONUNBUFFERED=1
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import sys; sys.exit(0)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    restart: unless-stopped
-    depends_on:
-      - gluetun
+    # Pwncat MCP Server (Python post-exploitation framework)
+    # Backend for MetaMCP - provides pwncat-cs tools via MCP protocol
+    # Uses VPN network for reverse shell connections from HTB targets
+    pwncat-mcp:
+        build:
+            context: ./infrastructure/PrEP/servers
+            dockerfile: Dockerfile.pwncat
+        container_name: pwncat-mcp
+        network_mode: "service:gluetun" # Needs VPN for reverse shells
+        volumes:
+            - artifacts:/artifacts # For file transfers
+        environment:
+            - PYTHONUNBUFFERED=1
+        healthcheck:
+            test: ["CMD", "python3", "-c", "import sys; sys.exit(0)"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 10s
+        restart: unless-stopped
+        depends_on:
+            - gluetun
 
-  # HexStrike-AI - Offensive Security Tools Container
-  # Provides 150+ security tools (nmap, nuclei, gobuster, etc.)
-  # Requires privileged mode for raw socket operations
-  hexstrike:
-    build:
-      context: ./infrastructure/hexstrike
-      dockerfile: Dockerfile
-    container_name: hexstrike
-    privileged: true
-    network_mode: "service:gluetun"
-    volumes:
-      - artifacts:/artifacts
-    environment:
-      - PYTHONUNBUFFERED=1
-      - HEXSTRIKE_HOST=0.0.0.0
-      - HEXSTRIKE_PORT=8888
-      # HTB target vhost resolution (set via .env or CLI)
-      # Example: HTB_TARGET=10.129.2.163 HTB_HOSTNAME="conversor.htb api.conversor.htb"
-      - HTB_TARGET=${HTB_TARGET:-}
-      - HTB_HOSTNAME=${HTB_HOSTNAME:-}
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    restart: unless-stopped
-    depends_on:
-      - gluetun
+    # HexStrike-AI - Offensive Security Tools Container
+    # Provides 150+ security tools (nmap, nuclei, gobuster, etc.)
+    # Requires privileged mode for raw socket operations
+    hexstrike-recon:
+        build:
+            context: ./infrastructure/hexstrike-recon
+            dockerfile: Dockerfile
+        container_name: hexstrike-recon
+        privileged: true
+        network_mode: "service:gluetun"
+        volumes:
+            - artifacts:/artifacts
+        environment:
+            - PYTHONUNBUFFERED=1
+            - HEXSTRIKE_HOST=0.0.0.0
+            - HEXSTRIKE_PORT=8888
+            # HTB target vhost resolution (set via .env or CLI)
+            # Example: HTB_TARGET=10.129.2.163 HTB_HOSTNAME="conversor.htb api.conversor.htb"
+            - HTB_TARGET=${HTB_TARGET:-}
+            - HTB_HOSTNAME=${HTB_HOSTNAME:-}
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 60s
+        restart: unless-stopped
+        depends_on:
+            - gluetun
 
-  # ═══════════════════════════════════════════════════════════════════════════
-  # Stream D - Skill Vector DB
-  # ═══════════════════════════════════════════════════════════════════════════
-  #
-  # Qdrant vector database for Dame's technique library
-  # Query via REST: http://localhost:6333
-  # Dashboard: http://localhost:6333/dashboard
-  #
-  # Index skills: python infrastructure/scripts/index_skills.py
-  # Query: curl http://localhost:6333/collections/skills/points/search -d '{"vector": [...], "limit": 5}'
-  # ═══════════════════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Stream D - Skill Vector DB
+    # ═══════════════════════════════════════════════════════════════════════════
+    #
+    # Qdrant vector database for Dame's technique library
+    # Query via REST: http://localhost:6333
+    # Dashboard: http://localhost:6333/dashboard
+    #
+    # Index skills: python infrastructure/scripts/index_skills.py
+    # Query: curl http://localhost:6333/collections/skills/points/search -d '{"vector": [...], "limit": 5}'
+    # ═══════════════════════════════════════════════════════════════════════════
 
-  qdrant:
-    image: docker.io/qdrant/qdrant:v1.16.3
-    container_name: qdrant
-    ports:
-      - "6333:6333"   # REST API
-      - "6334:6334"   # gRPC (optional)
-    volumes:
-      - qdrant-data:/qdrant/storage
-    environment:
-      - QDRANT__SERVICE__GRPC_PORT=6334
-    restart: unless-stopped
+    qdrant:
+        image: docker.io/qdrant/qdrant:v1.16.3
+        container_name: qdrant
+        ports:
+            - "6333:6333" # REST API
+            - "6334:6334" # gRPC (optional)
+        volumes:
+            - qdrant-data:/qdrant/storage
+        environment:
+            - QDRANT__SERVICE__GRPC_PORT=6334
+        restart: unless-stopped
 
-  # ═══════════════════════════════════════════════════════════════════════════
-  # Stream F - Dame (gemini-cli with tmux session management)
-  # ═══════════════════════════════════════════════════════════════════════════
-  #
-  # Attach: docker exec -it dame tmux attach -t dame
-  # Detach: Ctrl+A, D
-  #
-  # Split Tunnel Architecture:
-  #   - HTB subnets (10.10.0.0/16, 10.129.0.0/16) → routed via gluetun VPN
-  #   - Everything else (OAuth, web, APIs) → direct internet
-  #   - Routing is transparent - dame just runs commands normally
-  # ═══════════════════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Stream F - Dame (gemini-cli with tmux session management)
+    # ═══════════════════════════════════════════════════════════════════════════
+    #
+    # Attach: docker exec -it dame tmux attach -t dame
+    # Detach: Ctrl+A, D
+    #
+    # Split Tunnel Architecture:
+    #   - HTB subnets (10.10.0.0/16, 10.129.0.0/16) → routed via gluetun VPN
+    #   - Everything else (OAuth, web, APIs) → direct internet
+    #   - Routing is transparent - dame just runs commands normally
+    # ═══════════════════════════════════════════════════════════════════════════
 
-  dame:
-    build:
-      context: ./infrastructure/dame
-      dockerfile: Dockerfile
-    container_name: dame
-    hostname: dame
-    # Split tunnel: HTB subnets via gluetun VPN, everything else direct
-    # NET_ADMIN: for split tunnel routing
-    # NET_RAW: for nmap raw socket operations
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
-    volumes:
-      # Host auth (read-only) - for initial setup reference
-      - ~/.gemini:/root/.gemini-host:ro
-      # Persistent gemini config (stores OAuth tokens)
-      - dame-gemini:/root/.gemini
-      # Opulence extension
-      - ./infrastructure/PrEP:/ext/opulence:ro
-      # Artifacts for CAS access
-      - artifacts:/artifacts
-    environment:
-      - TERM=xterm-256color
-      # Force file-based token storage (no keychain in container)
-      - GEMINI_FORCE_FILE_STORAGE=true
-      # HTB subnets to route through VPN (comma-separated CIDR)
-      - HTB_SUBNETS=10.10.0.0/16,10.129.0.0/16
-    stdin_open: true
-    tty: true
-    restart: unless-stopped
-    depends_on:
-      - gluetun
-      - qdrant
+    dame:
+        image: localhost/dame:linux
+        container_name: dame
+        hostname: dame
+        # Split tunnel: HTB subnets via gluetun VPN, everything else direct
+        # NET_ADMIN: for split tunnel routing
+        # NET_RAW: for nmap raw socket operations
+        cap_add:
+            - NET_ADMIN
+            - NET_RAW
+        volumes:
+            # Host auth (read-only) - for initial setup reference
+            - ~/.gemini:/root/.gemini-host:ro
+            # Persistent gemini config (stores OAuth tokens)
+            - dame-gemini:/root/.gemini
+            # Opulence extension
+            - ./infrastructure/PrEP:/ext/opulence:ro
+            # Artifacts for CAS access
+            - artifacts:/artifacts
+        environment:
+            - TERM=xterm-256color
+            # Force file-based token storage (no keychain in container)
+            - GEMINI_FORCE_FILE_STORAGE=true
+            # HTB subnets to route through VPN (comma-separated CIDR)
+            - HTB_SUBNETS=10.10.0.0/16,10.129.0.0/16
+        stdin_open: true
+        tty: true
+        restart: unless-stopped
+        depends_on:
+            - gluetun
+            - qdrant
 
-  # ═══════════════════════════════════════════════════════════════════════════
-  # Backend Services (Optional - for live testing)
-  # ═══════════════════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Backend Services (Optional - for live testing)
+    # ═══════════════════════════════════════════════════════════════════════════
 
-  # Metasploit Framework (optional - for real exploitation)
-  # Uncomment when ready for live testing
-  # msf:
-  #   image: docker.io/metasploitframework/metasploit-framework:latest
-  #   container_name: msf
-  #   network_mode: "service:gluetun"
-  #   volumes:
-  #     - msf-data:/root/.msf4
-  #     - artifacts:/artifacts
-  #   environment:
-  #     - MSF_RPC_HOST=0.0.0.0
-  #     - MSF_RPC_PORT=55553
-  #   command: ["msfrpcd", "-P", "${MSF_TOKEN:-msfrpc_token}", "-S", "-a", "0.0.0.0"]
-  #   restart: unless-stopped
+    # Metasploit Framework (optional - for real exploitation)
+    # Uncomment when ready for live testing
+    # msf:
+    #   image: docker.io/metasploitframework/metasploit-framework:latest
+    #   container_name: msf
+    #   network_mode: "service:gluetun"
+    #   volumes:
+    #     - msf-data:/root/.msf4
+    #     - artifacts:/artifacts
+    #   environment:
+    #     - MSF_RPC_HOST=0.0.0.0
+    #     - MSF_RPC_PORT=55553
+    #   command: ["msfrpcd", "-P", "${MSF_TOKEN:-msfrpc_token}", "-S", "-a", "0.0.0.0"]
+    #   restart: unless-stopped
 
-  # Sliver C2 (optional - for real C2 operations)
-  # Uncomment when ready for live testing
-  # sliver:
-  #   image: docker.io/bishopfox/sliver:latest
-  #   container_name: sliver
-  #   network_mode: "service:gluetun"
-  #   volumes:
-  #     - sliver-data:/root/.sliver
-  #     - artifacts:/artifacts
-  #   restart: unless-stopped
+    # Sliver C2 (optional - for real C2 operations)
+    # Uncomment when ready for live testing
+    # sliver:
+    #   image: docker.io/bishopfox/sliver:latest
+    #   container_name: sliver
+    #   network_mode: "service:gluetun"
+    #   volumes:
+    #     - sliver-data:/root/.sliver
+    #     - artifacts:/artifacts
+    #   restart: unless-stopped
 
 volumes:
-  # Shared artifacts volume for scan data and CAS documents
-  artifacts:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${ARTIFACTS_PATH:-./artifacts}
-  # CVE enrichment cache
-  enrichment-cache:
-  # Enrichment container gemini-cli config (persists OAuth tokens)
-  enrichment-gemini:
-  # Qdrant vector DB storage
-  qdrant-data:
-  # Dame gemini-cli config (persists OAuth tokens)
-  dame-gemini:
+    # Shared artifacts volume for scan data and CAS documents
+    artifacts:
+        driver: local
+        driver_opts:
+            type: none
+            o: bind
+            device: ${ARTIFACTS_PATH:-./artifacts}
+    # CVE enrichment cache
+    enrichment-cache:
+    # Enrichment container gemini-cli config (persists OAuth tokens)
+    enrichment-gemini:
+    # Qdrant vector DB storage
+    qdrant-data:
+    # Dame gemini-cli config (persists OAuth tokens)
+    dame-gemini:
 
 networks:
-  default:
-    name: opulence_network
+    default:
+        name: opulence_network

@@ -55,7 +55,7 @@
 - **Repo**: https://github.com/noaslr/htb-mcp-server
 - **Note**: Fork needed to add `terminate_machine`, `reset_machine`
 
-### 5. HexStrike (`infrastructure/hexstrike/`)
+### 5. HexStrike (`infrastructure/hexstrike-recon/`)
 - **What**: 150+ offensive security tools via MCP
 - **Tools**: `nmap_scan`, `nuclei_scan`, `gobuster_scan`, `sqlmap_scan`, etc.
 - **Repo**: https://github.com/0x4m4/HexStrike-AI
@@ -79,7 +79,7 @@ METAMCP_AUTH_SECRET=$(openssl rand -hex 32)
 cd ~/Projects/blunderbussy
 
 # Start VPN, enrichment, MCP wrappers, and HexStrike
-podman-compose up -d gluetun enrichment msf-mcp sliver-mcp hexstrike
+podman-compose up -d gluetun enrichment msf-mcp sliver-mcp hexstrike-recon
 ```
 
 ### Step 2: Start MetaMCP
@@ -162,7 +162,7 @@ Examples:
 
 ```bash
 # Check if backends are running
-podman ps | grep -E "(msf|sliver|hexstrike)"
+podman ps | grep -E "(msf|sliver|hexstrike-recon)"
 
 # Test MSF MCP directly
 echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | \
@@ -173,11 +173,11 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | \
 
 ```bash
 # Check if tool is installed in container
-podman exec hexstrike which nmap
-podman exec hexstrike nmap --version
+podman exec hexstrike-recon which nmap
+podman exec hexstrike-recon nmap --version
 
 # Check Flask backend health
-podman exec hexstrike curl localhost:8888/health
+podman exec hexstrike-recon curl localhost:8888/health
 ```
 
 ### HTB MCP issues
@@ -214,7 +214,7 @@ infrastructure/
 │   ├── Dockerfile
 │   ├── server.py                    # Sliver MCP wrapper
 │   └── requirements.txt
-└── hexstrike/
+└── hexstrike-recon/
     └── Dockerfile                   # Kali + security tools + HexStrike
 ```
 

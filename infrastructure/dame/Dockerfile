@@ -9,7 +9,7 @@ ARG TARGET_PLATFORM=linux
 # Networking basics, shells, utilities needed regardless of target OS
 RUN apt-get update && apt-get install -y --no-install-recommends \
     netcat-openbsd iputils-ping traceroute wget \
-    socat rlwrap git jq ftp telnet \
+    socat rlwrap git jq ftp telnet sshpass \
     dnsutils proxychains4 \
     html2text lynx \
     && rm -rf /var/lib/apt/lists/*
@@ -18,12 +18,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # RECON & EXPLOITATION TOOLS (platform-agnostic)
 # =============================================================================
 # Recon is done upfront by AutoRecon - these are for exploitation phase
-# Password cracking (hydra, john) intentionally excluded - should escalate
+# Includes credential tools (hydra) for CAS-recommended attacks
 RUN apt-get update && apt-get install -y --no-install-recommends \
     nmap dnsrecon nbtscan onesixtyone snmp \
     gobuster feroxbuster ffuf whatweb sqlmap nikto \
     enum4linux smbmap smbclient impacket-scripts \
-    crackmapexec \
+    crackmapexec hydra \
     && rm -rf /var/lib/apt/lists/*
 
 # =============================================================================
@@ -67,6 +67,19 @@ ENV PATH="/root/.local/bin:$PATH"
 # pwncat-cs pins packaging<21 which requires distutils (removed in Python 3.13)
 # Use Python 3.11 explicitly for pwncat-cs until upstream fixes the dep
 RUN uv tool install pwncat-cs --python 3.11
+
+# Install git-dumper for exposed .git repository exploitation
+# Referenced by CAS attack guidance for web targets
+RUN uv tool install git-dumper
+
+# =============================================================================
+# MEMORY SYSTEM DEPENDENCIES
+# =============================================================================
+# Required for session_state.py and session_memory.py hooks
+# Using apt for Kali's externally managed Python environment
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-pydantic python3-requests \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install gemini-cli globally
 RUN npm install -g @google/gemini-cli

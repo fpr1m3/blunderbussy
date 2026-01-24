@@ -45,3 +45,4 @@ artifacts/raw/*
 *.pem
 *.key
 credentials.json
+archive/firecracker-migration/dame-firecracker/ubuntu-22.04.ext4

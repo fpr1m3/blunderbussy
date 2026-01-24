@@ -1,0 +1,142 @@
+#!/bin/bash
+# Agent Opulence - AutoRecon Launcher
+# Wrapper to run autorecon inside the hexstrike-recon container
+
+set -e
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log_info()  { echo -e "${BLUE}[*]${NC} $1"; }
+log_success() { echo -e "${GREEN}[+]${NC} $1"; }
+log_warning() { echo -e "${YELLOW}[!]${NC} $1"; }
+log_error() { echo -e "${RED}[-]${NC} $1"; }
+
+usage() {
+    echo "Usage: $0 <hostname> <target_ip> [options]"
+    echo ""
+    echo "Launch AutoRecon scan via hexstrike-recon container."
+    echo ""
+    echo "Arguments:"
+    echo "  hostname     Target hostname (e.g., box.htb)"
+    echo "  target_ip    Target IP address"
+    echo ""
+    echo "Options:"
+    echo "  --verbose    Enable verbose output"
+    echo "  --bg         Run in background (detached)"
+    echo "  --overwrite  Clear target from enrichment processed list (allows reprocessing)"
+    echo "  -h, --help   Show this help"
+    echo ""
+    echo "Examples:"
+    echo "  $0 lame.htb 10.10.10.3"
+    echo "  $0 conversor.htb 10.129.4.182 --verbose"
+    echo "  $0 sauna.htb 10.10.10.175 --bg"
+    echo ""
+    echo "Results: ./artifacts/results/<ip>/scans/"
+    exit 1
+}
+
+# Parse args
+HOSTNAME=""
+TARGET_IP=""
+VERBOSE=""
+BACKGROUND=false
+OVERWRITE=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            usage
+            ;;
+        --verbose)
+            VERBOSE="--verbose"
+            shift
+            ;;
+        --bg)
+            BACKGROUND=true
+            shift
+            ;;
+        --overwrite)
+            OVERWRITE=true
+            shift
+            ;;
+        -*)
+            log_error "Unknown option: $1"
+            usage
+            ;;
+        *)
+            if [ -z "$HOSTNAME" ]; then
+                HOSTNAME="$1"
+            elif [ -z "$TARGET_IP" ]; then
+                TARGET_IP="$1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Validate args
+if [ -z "$HOSTNAME" ] || [ -z "$TARGET_IP" ]; then
+    log_error "Both hostname and target IP are required"
+    usage
+fi
+
+# Validate IP format
+if ! echo "$TARGET_IP" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+    log_error "Invalid IP format: $TARGET_IP"
+    exit 1
+fi
+
+# Check hexstrike-recon container is running
+if ! podman ps --format '{{.Names}}' | grep -q '^hexstrike-recon$'; then
+    log_error "hexstrike-recon container is not running"
+    log_info "Start it with: podman-compose up -d hexstrike-recon"
+    exit 1
+fi
+
+log_info "Launching AutoRecon: $HOSTNAME -> $TARGET_IP"
+
+# Handle --overwrite: clear target from enrichment processed list
+if [ "$OVERWRITE" = true ]; then
+    log_info "Clearing $TARGET_IP from enrichment processed list..."
+    if podman ps --format '{{.Names}}' | grep -q '^enrichment$'; then
+        podman exec enrichment python3 -c "
+import json
+from pathlib import Path
+
+path = Path('/artifacts/logs/autorecon_processed.json')
+if not path.exists():
+    print('No processed list found')
+    exit(0)
+
+data = json.loads(path.read_text())
+targets = data if isinstance(data, list) else data.get('targets', [])
+
+if '$TARGET_IP' in targets:
+    targets.remove('$TARGET_IP')
+    path.write_text(json.dumps(targets, indent=2))
+    print('Removed $TARGET_IP from processed list')
+else:
+    print('$TARGET_IP not in processed list')
+" && log_success "Target cleared for reprocessing"
+    else
+        log_warning "enrichment container not running - skipping clear"
+    fi
+fi
+
+# Build exec command
+EXEC_CMD="run-autorecon.sh $HOSTNAME $TARGET_IP $VERBOSE"
+
+if [ "$BACKGROUND" = true ]; then
+    log_info "Running in background..."
+    podman exec -d hexstrike-recon $EXEC_CMD
+    log_success "AutoRecon started in background"
+    log_info "Monitor: podman exec hexstrike-recon tail -f /artifacts/logs/autorecon_${TARGET_IP}.log"
+else
+    # Run attached with TTY for live output
+    podman exec -it hexstrike-recon $EXEC_CMD
+fi

@@ -3,7 +3,7 @@
 # Agent Opulence - Automated Reconnaissance Pipeline
 # ═══════════════════════════════════════════════════════════════════════════════
 # Runs security scanning tools and outputs to /artifacts/raw/ for enrichment.
-# Designed to run inside the hexstrike container (network via gluetun VPN).
+# Designed to run inside the hexstrike-recon container (network via gluetun VPN).
 #
 # Usage: ./run-recon.sh <target_ip> [--quick] [--fresh]
 #

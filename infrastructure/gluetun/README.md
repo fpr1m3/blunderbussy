@@ -4,7 +4,7 @@ This directory contains the gluetun VPN configuration for routing traffic throug
 
 ## Overview
 
-Gluetun provides a containerized VPN client that other containers (like hexstrike) use via `network_mode: "service:gluetun"` to route their traffic through the HTB VPN tunnel.
+Gluetun provides a containerized VPN client that other containers (like hexstrike-recon) use via `network_mode: "service:gluetun"` to route their traffic through the HTB VPN tunnel.
 
 ## Configuration Decisions
 

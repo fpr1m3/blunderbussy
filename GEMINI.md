@@ -94,7 +94,7 @@ podman build --build-arg TARGET_PLATFORM=windows -t dame:windows ...
 
 ```bash
 # Run full recon against target
-./infrastructure/recon/run-recon.sh 10.10.10.3
+./infrastructure/hexstrike-recon/run-recon.sh 10.10.10.3
 
 # Outputs to /artifacts/raw/
 # Watcher triggers enrichment pipeline
@@ -195,7 +195,7 @@ gemini
 docker compose up -d gluetun enrichment
 
 # 2. Run automated recon
-./infrastructure/recon/run-recon.sh 10.10.10.3
+./infrastructure/hexstrike-recon/run-recon.sh 10.10.10.3
 
 # 3. Wait for CAS
 watch ls artifacts/10.10.10.3/

@@ -3,68 +3,68 @@
 # Run with: podman-compose -f docker-compose.metamcp.yml up -d
 
 services:
-  # PostgreSQL for MetaMCP
-  metamcp-postgres:
-    image: docker.io/postgres:16-alpine
-    container_name: metamcp-postgres
-    environment:
-      POSTGRES_USER: metamcp_user
-      POSTGRES_PASSWORD: ${METAMCP_DB_PASSWORD:-m3t4mcp_s3cr3t}
-      POSTGRES_DB: metamcp_db
-    volumes:
-      - metamcp-postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U metamcp_user -d metamcp_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
+    # PostgreSQL for MetaMCP
+    metamcp-postgres:
+        image: docker.io/postgres:16-alpine
+        container_name: metamcp-postgres
+        environment:
+            POSTGRES_USER: metamcp_user
+            POSTGRES_PASSWORD: ${METAMCP_DB_PASSWORD:-m3t4mcp_s3cr3t}
+            POSTGRES_DB: metamcp_db
+        volumes:
+            - metamcp-postgres-data:/var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U metamcp_user -d metamcp_db"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+        restart: unless-stopped
 
-  # MetaMCP Application
-  metamcp:
-    image: ghcr.io/metatool-ai/metamcp:latest
-    container_name: metamcp
-    depends_on:
-      metamcp-postgres:
-        condition: service_healthy
-    ports:
-      - "12008:12008"
-    environment:
-      NODE_ENV: production
-      # Database
-      POSTGRES_HOST: metamcp-postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: metamcp_user
-      POSTGRES_PASSWORD: ${METAMCP_DB_PASSWORD:-m3t4mcp_s3cr3t}
-      POSTGRES_DB: metamcp_db
-      DATABASE_URL: postgresql://metamcp_user:${METAMCP_DB_PASSWORD:-m3t4mcp_s3cr3t}@metamcp-postgres:5432/metamcp_db
-      # Application
-      APP_URL: http://localhost:12008
-      NEXT_PUBLIC_APP_URL: http://localhost:12008
-      BETTER_AUTH_SECRET: ${METAMCP_AUTH_SECRET:-change_this_secret_in_production}
-      # Docker networking - allows reaching host services
-      TRANSFORM_LOCALHOST_TO_DOCKER_INTERNAL: "true"
-    volumes:
-      # Mount our MCP server scripts
-      - ../msf:/opt/mcp-servers/msf:ro
-      - ../sliver:/opt/mcp-servers/sliver:ro
-      - ../htb-mcp:/opt/mcp-servers/htb:ro
-      - ../hexstrike:/opt/mcp-servers/hexstrike:ro
-      - ./mcp-servers.json:/app/seed-servers.json:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:12008/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    restart: unless-stopped
+    # MetaMCP Application
+    metamcp:
+        image: ghcr.io/metatool-ai/metamcp:latest
+        container_name: metamcp
+        depends_on:
+            metamcp-postgres:
+                condition: service_healthy
+        ports:
+            - "12008:12008"
+        environment:
+            NODE_ENV: production
+            # Database
+            POSTGRES_HOST: metamcp-postgres
+            POSTGRES_PORT: 5432
+            POSTGRES_USER: metamcp_user
+            POSTGRES_PASSWORD: ${METAMCP_DB_PASSWORD:-m3t4mcp_s3cr3t}
+            POSTGRES_DB: metamcp_db
+            DATABASE_URL: postgresql://metamcp_user:${METAMCP_DB_PASSWORD:-m3t4mcp_s3cr3t}@metamcp-postgres:5432/metamcp_db
+            # Application
+            APP_URL: http://localhost:12008
+            NEXT_PUBLIC_APP_URL: http://localhost:12008
+            BETTER_AUTH_SECRET: ${METAMCP_AUTH_SECRET:-change_this_secret_in_production}
+            # Docker networking - allows reaching host services
+            TRANSFORM_LOCALHOST_TO_DOCKER_INTERNAL: "true"
+        volumes:
+            # Mount our MCP server scripts
+            - ../msf:/opt/mcp-servers/msf:ro
+            - ../sliver:/opt/mcp-servers/sliver:ro
+            - ../htb-mcp:/opt/mcp-servers/htb:ro
+            - ../hexstrike-recon:/opt/mcp-servers/hexstrike-recon:ro
+            - ./mcp-servers.json:/app/seed-servers.json:ro
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:12008/api/health"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 30s
+        restart: unless-stopped
 
 volumes:
-  metamcp-postgres-data:
+    metamcp-postgres-data:
 
 networks:
-  default:
-    name: opulence_network
-    external: true
+    default:
+        name: opulence_network
+        external: true

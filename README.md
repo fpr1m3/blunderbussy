@@ -68,7 +68,7 @@ Agent Opulence strictly separates **deterministic scanning** from **strategic de
 |-----------|-----------|---------|
 | `gluetun` | VPN gateway | Mandatory VPN with killswitch, network isolation |
 | `enrichment` | Python 3.11 | Watches raw scans, parses, enriches, outputs CAS |
-| `hexstrike` | 150+ tools | Automated recon (nmap, nuclei, feroxbuster, etc.) |
+| `hexstrike-recon` | 150+ tools | Automated recon (nmap, nuclei, feroxbuster, etc.) |
 | `dame` | Kali + gemini-cli | AI exploitation agent with full offensive toolkit |
 | `qdrant` | Vector DB | Technique library for exploitation knowledge |
 | `pwncat-mcp` | Python | Post-exploitation framework MCP server |
@@ -119,11 +119,11 @@ podman exec gluetun wget -qO- ifconfig.me
 ### 2. Run Reconnaissance
 
 ```bash
-# Start hexstrike (recon container)
-HTB_TARGET=10.10.10.3 podman-compose up -d hexstrike
+# Start hexstrike-recon (recon container)
+HTB_TARGET=10.10.10.3 podman-compose up -d hexstrike-recon
 
 # Run AutoRecon
-podman exec hexstrike /opt/run-autorecon.sh 10.10.10.3
+podman exec hexstrike-recon /opt/run-autorecon.sh 10.10.10.3
 
 # Watch for CAS generation
 watch ls artifacts/10.10.10.3/
@@ -168,7 +168,7 @@ blunderbussy/
 │   │   ├── pwncat-server.py  # MCP server
 │   │   ├── ptt.py            # Pentesting Task Tree module
 │   │   └── commands/         # /attack command
-│   ├── hexstrike/            # 150+ security tools
+│   ├── hexstrike-recon/      # 150+ security tools
 │   ├── gluetun/              # VPN configuration
 │   ├── pwncat/               # Pwncat MCP server
 │   ├── msf/                  # Metasploit MCP server
