@@ -73,18 +73,20 @@ class TestVulnerabilitySeverityFiltering:
 
 
 class TestCASMerge:
-    """Tests for CAS document merging with severity-filtered vulnerabilities."""
+    """Tests for CAS document merging with severity-filtered vulnerabilities.
 
-    def test_merge_preserves_both_vulnerability_lists(self, formatter):
-        """Merging should combine vulnerabilities from both documents."""
+    Note: low_priority_vulns are externalized to last_resort.yaml, so they
+    are not merged - only the new data's low_priority_vulns are kept for
+    re-externalization by write_cas().
+    """
+
+    def test_merge_combines_vulnerabilities(self, formatter):
+        """Merging should combine high-priority vulnerabilities from both documents."""
         existing = {
             "generated_at": "2026-01-18T00:00:00",
             "target": {"scan_types": ["nmap"]},
             "vulnerabilities": [
                 {"id": "existing1", "host": "10.0.0.1", "matched_at": "/path1", "severity": "critical"}
-            ],
-            "low_priority_vulns": [
-                {"id": "existing2", "host": "10.0.0.1", "matched_at": "/path2", "severity": "info"}
             ],
             "hosts": [],
             "web_services": [],
@@ -119,16 +121,17 @@ class TestCASMerge:
 
         merged = formatter._merge_cas(existing, new)
 
+        # High-priority vulns are merged from both docs
         assert len(merged["vulnerabilities"]) == 2
-        assert len(merged["low_priority_vulns"]) == 2
+        # Low-priority vulns come only from new (externalized)
+        assert len(merged["low_priority_vulns"]) == 1
 
     def test_merge_updates_summary_counts(self, formatter):
-        """Merged summary should reflect combined counts."""
+        """Merged summary should reflect combined high-priority and new low-priority counts."""
         existing = {
             "generated_at": "2026-01-18T00:00:00",
             "target": {"scan_types": ["nmap"]},
             "vulnerabilities": [{"id": "v1", "host": "h1", "matched_at": "/p1"}],
-            "low_priority_vulns": [{"id": "v2", "host": "h1", "matched_at": "/p2"}],
             "hosts": [],
             "web_services": [],
             "subdomains": [],
@@ -158,9 +161,12 @@ class TestCASMerge:
 
         merged = formatter._merge_cas(existing, new)
 
+        # 2 high-priority vulns merged
         assert merged["summary"]["critical_findings"] == 2
-        assert merged["summary"]["low_priority_vulns_count"] == 2
-        assert merged["summary"]["vulnerabilities_found"] == 4
+        # 1 low-priority from new data (externalized)
+        assert merged["summary"]["low_priority_vulns_count"] == 1
+        # Total = 2 high + 1 low = 3
+        assert merged["summary"]["vulnerabilities_found"] == 3
 
 
 # Import new functions for Faraday detection tests
@@ -210,7 +216,8 @@ class TestFaradayProcessorRouting:
         cas = formatter.format_cas(faraday_data)
 
         assert cas["cas_version"] == "1.2"
-        assert cas["source"] == "faraday"
+        # Source is in target dict, not top-level
+        assert cas["target"]["source"] == "faraday:test_workspace"
         assert cas["target"]["identifier"] == "192.168.1.0/24"
         assert cas["target"]["session_id"] == "sess_123"
 

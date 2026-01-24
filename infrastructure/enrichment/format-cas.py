@@ -501,15 +501,20 @@ def process_faraday_hosts(hosts: List[Dict]) -> List[Dict]:
 
         # Map Faraday services to CAS ports format
         # Note: Faraday may return services as a count (int) or as a list
+        # Filter: Only include open ports - closed ports waste tokens
         services = host.get('services', [])
         if isinstance(services, list):
             for svc in services:
+                state = svc.get('status', 'open')
+                # Skip closed ports - they provide no attack surface
+                if state == 'closed':
+                    continue
                 port_entry = {
                     'port': svc.get('port'),
                     'protocol': svc.get('protocol', 'tcp'),
                     'service': svc.get('name') or '',
                     'version': svc.get('version') or None,
-                    'state': svc.get('status', 'open'),
+                    'state': state,
                 }
                 cas_host['ports'].append(port_entry)
 
@@ -1295,7 +1300,11 @@ class CASFormatter:
         return cas
 
     def write_cas(self, cas_data: Dict, output_path: Path):
-        """Write CAS document to YAML file."""
+        """Write CAS document to YAML file.
+
+        Externalizes low_priority_vulns to last_resort.yaml in the same
+        directory to reduce token usage in the main CAS document.
+        """
         # Custom YAML representer for cleaner output
         def str_representer(dumper, data):
             if '\n' in data:
@@ -1316,12 +1325,36 @@ class CASFormatter:
             except Exception:
                 pass
 
+        # Externalize low_priority_vulns to separate file
+        low_priority_vulns = cas_data.pop('low_priority_vulns', [])
+        if low_priority_vulns:
+            last_resort_path = output_path.parent / 'last_resort.yaml'
+            last_resort_data = {
+                'description': 'Low priority findings (medium/low/info severity). Check these only after exhausting higher-priority attack vectors.',
+                'parent_cas': output_path.name,
+                'count': len(low_priority_vulns),
+                'vulns': low_priority_vulns
+            }
+            with open(last_resort_path, 'w') as f:
+                yaml.dump(last_resort_data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+            # Add reference in main CAS
+            cas_data['low_priority_vulns_ref'] = {
+                'file': 'last_resort.yaml',
+                'count': len(low_priority_vulns),
+                'note': 'Low priority findings externalized to reduce token usage'
+            }
+
         # Write YAML
         with open(output_path, 'w') as f:
             yaml.dump(cas_data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
     def _merge_cas(self, existing: Dict, new: Dict) -> Dict:
-        """Merge new CAS data into existing document."""
+        """Merge new CAS data into existing document.
+
+        Handles externalized low_priority_vulns by loading from last_resort.yaml
+        if it exists, merging, then returning the merged list for re-externalization.
+        """
         # Update timestamp
         existing['generated_at'] = new['generated_at']
 
@@ -1331,14 +1364,15 @@ class CASFormatter:
         existing.setdefault('target', {})['scan_types'] = list(existing_types | new_types)
 
         # Merge lists (deduplicate by key fields)
-        for field in ['hosts', 'vulnerabilities', 'low_priority_vulns', 'web_services', 'subdomains', 'directories', 'nikto_findings', 'smb_shares', 'ssh_info', 'technologies']:
+        # Note: low_priority_vulns excluded - handled separately via externalized file
+        for field in ['hosts', 'vulnerabilities', 'web_services', 'subdomains', 'directories', 'nikto_findings', 'smb_shares', 'ssh_info', 'technologies']:
             existing_items = existing.get(field, [])
             new_items = new.get(field, [])
 
             # Create lookup for existing items
             if field == 'hosts':
                 key_func = lambda x: x.get('ip', '')
-            elif field in ('vulnerabilities', 'low_priority_vulns'):
+            elif field == 'vulnerabilities':
                 key_func = lambda x: f"{x.get('id', '')}_{x.get('host', '')}_{x.get('matched_at', '')}"
             elif field == 'web_services':
                 key_func = lambda x: x.get('url', '')
@@ -1402,8 +1436,9 @@ class CASFormatter:
             existing['autorecon_meta'] = new['autorecon_meta']
 
         # Update summary
+        # Note: low_priority_vulns count comes from the new data since it's externalized
         high_priority_count = len(existing.get('vulnerabilities', []))
-        low_priority_count = len(existing.get('low_priority_vulns', []))
+        low_priority_count = len(new.get('low_priority_vulns', []))
         existing['summary'] = {
             'hosts_discovered': len(existing.get('hosts', [])),
             'vulnerabilities_found': high_priority_count + low_priority_count,  # Total count
@@ -1416,6 +1451,9 @@ class CASFormatter:
             'low_priority_vulns_count': low_priority_count,  # Medium/low/info
             'exploitable_cves': new['summary'].get('exploitable_cves', 0)
         }
+
+        # Pass through low_priority_vulns for externalization in write_cas
+        existing['low_priority_vulns'] = new.get('low_priority_vulns', [])
 
         # Merge key findings (keep unique)
         existing_findings = existing.get('key_findings', [])
