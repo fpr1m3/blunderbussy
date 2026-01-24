@@ -80,7 +80,7 @@ services:
       - ${ARTIFACTS_PATH:-./artifacts}:/artifacts:ro
     networks:
       - faraday-net
-    command: ["faraday-worker", "--queue", "reports", "--loglevel", "INFO"]
+    command: ["faraday-worker", "--queue", "celery", "--loglevel", "INFO"]
     restart: unless-stopped
 
 volumes:
