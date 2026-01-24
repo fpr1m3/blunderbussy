@@ -158,7 +158,8 @@ class ManifestManager:
 
         return findings
 
-    def _update_target(self, manifest: Dict, target: str, enriched_data: Dict) -> Dict:
+    def _update_target(self, manifest: Dict, target: str, enriched_data: Dict,
+                       faraday_info: Optional[Dict] = None) -> Dict:
         """Update target entry in manifest."""
         targets = manifest.setdefault('targets', {})
 
@@ -186,6 +187,17 @@ class ManifestManager:
 
         if 'web_services' in enriched_data:
             target_entry['web_services_count'] = len(enriched_data['web_services'])
+
+        # Handle Faraday-sourced data
+        if faraday_info:
+            target_entry['faraday_workspace'] = faraday_info.get('workspace')
+            # Use Faraday stats if present (they may be more accurate than enriched_data)
+            if faraday_info.get('host_count') is not None:
+                target_entry['hosts_count'] = faraday_info['host_count']
+            if faraday_info.get('vuln_count') is not None:
+                target_entry['vulns_count'] = faraday_info['vuln_count']
+            if faraday_info.get('service_count') is not None:
+                target_entry['services_count'] = faraday_info['service_count']
 
         return targets[target]
 
@@ -217,7 +229,8 @@ class ManifestManager:
 
         return session
 
-    def _add_to_scan_history(self, manifest: Dict, target: str, scan_type: str, source_file: str):
+    def _add_to_scan_history(self, manifest: Dict, target: str, scan_type: str, source_file: str,
+                              faraday_info: Optional[Dict] = None):
         """Add entry to scan history."""
         history = manifest.setdefault('scan_history', [])
 
@@ -228,13 +241,18 @@ class ManifestManager:
             'source_file': source_file
         }
 
+        # Include Faraday workspace reference for faraday scan types
+        if faraday_info and faraday_info.get('workspace'):
+            entry['faraday_workspace'] = faraday_info['workspace']
+
         # Add to beginning (most recent first)
         history.insert(0, entry)
 
         # Keep only last 100 entries
         manifest['scan_history'] = history[:100]
 
-    def _update_statistics(self, manifest: Dict, enriched_data: Dict):
+    def _update_statistics(self, manifest: Dict, enriched_data: Dict,
+                           faraday_info: Optional[Dict] = None):
         """Update global statistics."""
         stats = manifest.setdefault('statistics', {
             'total_scans': 0,
@@ -261,6 +279,13 @@ class ManifestManager:
 
         if 'exploit_available' in enriched_data:
             stats['exploitable_cves'] = max(stats['exploitable_cves'], len(enriched_data['exploit_available']))
+
+        # Update from Faraday stats if present
+        if faraday_info:
+            if faraday_info.get('host_count') is not None:
+                stats['total_hosts'] = max(stats['total_hosts'], faraday_info['host_count'])
+            if faraday_info.get('vuln_count') is not None:
+                stats['total_vulnerabilities'] = max(stats['total_vulnerabilities'], faraday_info['vuln_count'])
 
     def _update_attack_progress(self, manifest: Dict, enriched_data: Dict):
         """Update attack progress based on findings."""
@@ -336,6 +361,16 @@ class ManifestManager:
         enriched_data = input_data.get('enriched_data', {})
         timestamp = input_data.get('timestamp', datetime.utcnow().isoformat())
 
+        # Extract Faraday-specific info if scan_type is 'faraday'
+        faraday_info = None
+        if scan_type == 'faraday':
+            faraday_info = {
+                'workspace': input_data.get('workspace'),
+                'host_count': input_data.get('faraday_host_count'),
+                'vuln_count': input_data.get('faraday_vuln_count'),
+                'service_count': input_data.get('faraday_service_count'),
+            }
+
         try:
             self._acquire_lock()
 
@@ -343,7 +378,7 @@ class ManifestManager:
             manifest = self._load_manifest()
 
             # Update target entry
-            target_entry = self._update_target(manifest, target, enriched_data)
+            target_entry = self._update_target(manifest, target, enriched_data, faraday_info)
             target_entry['cas_path'] = cas_path
 
             # Update scan types for target
@@ -356,14 +391,14 @@ class ManifestManager:
 
             # Add to scan history
             source_file = input_data.get('source_file', '')
-            self._add_to_scan_history(manifest, target, scan_type, source_file)
+            self._add_to_scan_history(manifest, target, scan_type, source_file, faraday_info)
 
             # Extract and merge key findings
             new_findings = self._extract_key_findings(enriched_data)
             self._merge_key_findings(manifest, new_findings)
 
             # Update statistics
-            self._update_statistics(manifest, enriched_data)
+            self._update_statistics(manifest, enriched_data, faraday_info)
 
             # Update attack progress
             self._update_attack_progress(manifest, enriched_data)
