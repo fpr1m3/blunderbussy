@@ -41,6 +41,30 @@ logging.basicConfig(
 logger = logging.getLogger('faraday-watcher')
 
 
+def sanitize_workspace_name(name: str) -> str:
+    """
+    Sanitize a name to be a valid Faraday workspace name.
+
+    Faraday workspace names must be alphanumeric with underscores only.
+    This replaces dots, colons, and other invalid characters with underscores.
+
+    Args:
+        name: Raw workspace/target name (e.g., "10.129.2.163")
+
+    Returns:
+        Sanitized workspace name (e.g., "ws_10_129_2_163")
+    """
+    import re
+    # Replace common invalid characters with underscores
+    sanitized = name.replace('.', '_').replace(':', '_').replace('-', '_')
+    # Remove any other non-alphanumeric characters except underscores
+    sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', sanitized)
+    # Ensure it doesn't start with a number (prefix with 'ws_' if it does)
+    if sanitized and sanitized[0].isdigit():
+        sanitized = f'ws_{sanitized}'
+    return sanitized
+
+
 @dataclass
 class WatcherConfig:
     """
@@ -318,14 +342,14 @@ class FaradayScanHandler(FileSystemEventHandler):
         if path_str.startswith(raw_prefix):
             relative = file_path.relative_to(self.config.raw_dir)
             if relative.parts:
-                return relative.parts[0]
+                return sanitize_workspace_name(relative.parts[0])
 
         # Check if in results directory
         results_prefix = str(self.config.results_dir)
         if path_str.startswith(results_prefix):
             relative = file_path.relative_to(self.config.results_dir)
             if relative.parts:
-                return relative.parts[0]
+                return sanitize_workspace_name(relative.parts[0])
 
         # Fallback to default workspace
         return self.config.faraday_workspace
@@ -617,7 +641,11 @@ class AutoReconProcessor:
         if self._storage_path.exists():
             try:
                 data = json.loads(self._storage_path.read_text())
-                self.processed_targets = set(data.get('targets', []))
+                # Handle both old format (list) and new format (dict with 'targets' key)
+                if isinstance(data, list):
+                    self.processed_targets = set(data)
+                else:
+                    self.processed_targets = set(data.get('targets', []))
                 logger.info(f'Loaded {len(self.processed_targets)} processed AutoRecon targets')
             except (json.JSONDecodeError, IOError) as e:
                 logger.warning(f'Failed to load processed targets: {e}')
@@ -702,10 +730,10 @@ class AutoReconProcessor:
             True if processing successful
         """
         target = target_dir.name
-        # Make IP addresses workspace-safe (dots to underscores)
-        workspace = target.replace('.', '_').replace(':', '_')
+        # Make IP addresses workspace-safe
+        workspace = sanitize_workspace_name(target)
 
-        logger.info(f'Processing AutoRecon target: {target}')
+        logger.info(f'Processing AutoRecon target: {target} -> workspace: {workspace}')
 
         try:
             # Create workspace

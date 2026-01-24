@@ -161,22 +161,19 @@ class FaradayClient:
 
             response.raise_for_status()
 
-            # Extract CSRF token from cookies (Flask-JWT-Extended pattern)
-            csrf_token = self.session.cookies.get('csrf_access_token')
-            if csrf_token:
-                self._csrf_token = csrf_token
-                self.session.headers['X-CSRF-Token'] = csrf_token
-                logger.debug("CSRF token extracted from cookies")
-            else:
-                # Fallback: check response JSON
-                try:
-                    data = response.json()
-                    if 'csrf_token' in data:
-                        self._csrf_token = data['csrf_token']
-                        self.session.headers['X-CSRF-Token'] = data['csrf_token']
-                        logger.debug("CSRF token extracted from response body")
-                except ValueError:
-                    pass
+            # Extract CSRF token from response JSON
+            # Faraday returns: {"meta": {...}, "response": {"csrf_token": "...", "user": {...}}}
+            try:
+                data = response.json()
+                csrf_token = data.get('response', {}).get('csrf_token')
+                if csrf_token:
+                    self._csrf_token = csrf_token
+                    self.session.headers['X-CSRF-Token'] = csrf_token
+                    logger.debug("CSRF token extracted from response body")
+                else:
+                    logger.warning("No CSRF token in authentication response")
+            except ValueError:
+                logger.warning("Could not parse authentication response JSON")
 
             self._authenticated = True
             logger.info(f"Authenticated with Faraday at {self.config.url}")
@@ -235,7 +232,7 @@ class FaradayClient:
         # Detect content type from extension
         content_type = CONTENT_TYPES.get(file_path.suffix.lower(), 'application/octet-stream')
 
-        url = f"{self.config.url}/_api/v3/ws/{workspace}/upload_report/"
+        url = f"{self.config.url}/_api/v3/ws/{workspace}/upload_report"
 
         with open(file_path, 'rb') as f:
             files = {
@@ -245,6 +242,9 @@ class FaradayClient:
                 'ignore_info': str(ignore_info).lower(),
                 'resolve_hostname': str(dns_resolution).lower()
             }
+            # Add CSRF token to form data if available (required for file uploads)
+            if self._csrf_token:
+                data['csrf_token'] = self._csrf_token
 
             response = self.session.post(
                 url,
@@ -297,7 +297,7 @@ class FaradayClient:
         """
         self._require_auth()
 
-        url = f"{self.config.url}/_api/v3/ws/{workspace}/hosts/"
+        url = f"{self.config.url}/_api/v3/ws/{workspace}/hosts"
         params = {'limit': limit, 'offset': offset}
 
         response = self.session.get(url, params=params, timeout=self.config.timeout)
@@ -355,7 +355,7 @@ class FaradayClient:
         """
         self._require_auth()
 
-        url = f"{self.config.url}/_api/v3/ws/{workspace}/vulns/"
+        url = f"{self.config.url}/_api/v3/ws/{workspace}/vulns"
         params: Dict[str, Any] = {'limit': limit, 'offset': offset}
 
         if severity:
@@ -367,7 +367,11 @@ class FaradayClient:
         response.raise_for_status()
 
         data = response.json()
-        rows = data.get('rows', data) if isinstance(data, dict) else data
+        # Handle both 'rows' (legacy) and 'vulnerabilities' (v3) response formats
+        if isinstance(data, dict):
+            rows = data.get('vulnerabilities', data.get('rows', []))
+        else:
+            rows = data
 
         return [
             {
@@ -417,7 +421,7 @@ class FaradayClient:
         """
         self._require_auth()
 
-        url = f"{self.config.url}/_api/v3/ws/{workspace}/services/"
+        url = f"{self.config.url}/_api/v3/ws/{workspace}/services"
         params: Dict[str, Any] = {'limit': limit, 'offset': offset}
 
         if host_id is not None:
@@ -427,7 +431,11 @@ class FaradayClient:
         response.raise_for_status()
 
         data = response.json()
-        rows = data.get('rows', data) if isinstance(data, dict) else data
+        # Handle both 'rows' (legacy) and 'services' (v3) response formats
+        if isinstance(data, dict):
+            rows = data.get('services', data.get('rows', []))
+        else:
+            rows = data
 
         return [
             {
@@ -458,10 +466,14 @@ class FaradayClient:
         """
         self._require_auth()
 
-        url = f"{self.config.url}/_api/v3/ws/{name}/"
+        url = f"{self.config.url}/_api/v3/ws/{name}"
         response = self.session.get(url, timeout=self.config.timeout)
 
         if response.status_code == 404:
+            return False
+        if response.status_code == 405:
+            # v3 API changed - try without trailing slash
+            logger.debug(f"Got 405, workspace {name} may exist but endpoint changed")
             return False
 
         response.raise_for_status()
@@ -487,7 +499,7 @@ class FaradayClient:
         """
         self._require_auth()
 
-        url = f"{self.config.url}/_api/v3/ws/"
+        url = f"{self.config.url}/_api/v3/ws"
         payload = {
             'name': name,
             'description': description
@@ -528,7 +540,7 @@ class FaradayClient:
         """
         self._require_auth()
 
-        url = f"{self.config.url}/_api/v3/ws/{workspace}/"
+        url = f"{self.config.url}/_api/v3/ws/{workspace}"
         response = self.session.get(url, timeout=self.config.timeout)
         response.raise_for_status()
 
