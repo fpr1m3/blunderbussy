@@ -136,24 +136,46 @@ def generate_attack_guidance(
     # Build context from facts
     facts_yaml = format_facts_for_prompt(hosts, vulns, web_services)
 
-    # Non-interactive gemini-cli call
+    # Read prompt template and substitute facts
+    prompt_path = Path('/app/prompts/attack_guidance.md')
+    try:
+        prompt_template = prompt_path.read_text()
+        full_prompt = prompt_template.replace('{{CAS_FACTS}}', facts_yaml)
+    except FileNotFoundError:
+        return generate_fallback_guidance(hosts, vulns, web_services)
+
+    # Non-interactive gemini-cli call via stdin
     try:
         result = subprocess.run(
-            ['gemini', '-p', '/app/prompts/attack_guidance.md', '--output-format', 'json'],
-            input=facts_yaml,
+            ['gemini', '--output-format', 'json'],
+            input=full_prompt,
             capture_output=True,
             text=True,
-            timeout=60
+            timeout=120
         )
 
         if result.returncode != 0:
             return generate_fallback_guidance(hosts, vulns, web_services)
 
-        guidance = json.loads(result.stdout)
+        # Parse JSON from response field
+        response_data = json.loads(result.stdout)
+        response_text = response_data.get('response', '')
+
+        # Extract JSON from response (may be wrapped in markdown code fences)
+        if '```json' in response_text:
+            json_start = response_text.find('```json') + 7
+            json_end = response_text.find('```', json_start)
+            response_text = response_text[json_start:json_end].strip()
+        elif '```' in response_text:
+            json_start = response_text.find('```') + 3
+            json_end = response_text.find('```', json_start)
+            response_text = response_text[json_start:json_end].strip()
+
+        guidance = json.loads(response_text)
         guidance['_source'] = 'gemini'
         return {'attack_guidance': guidance}
 
-    except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError, KeyError):
         return generate_fallback_guidance(hosts, vulns, web_services)
 
 
@@ -513,7 +535,8 @@ def process_faraday_services(
 
     for svc in services:
         # Only include web services
-        if svc.get('name', '').lower() not in WEB_SERVICE_NAMES:
+        svc_name = svc.get('name') or ''
+        if svc_name.lower() not in WEB_SERVICE_NAMES:
             continue
 
         host_id = svc.get('host_id')
@@ -522,7 +545,7 @@ def process_faraday_services(
         port = svc.get('port')
 
         # Determine protocol - HTTPS if service name indicates SSL or port is 443
-        is_ssl = svc.get('name', '').lower() in {'https', 'https-proxy'} or port == 443
+        is_ssl = svc_name.lower() in {'https', 'https-proxy'} or port == 443
         protocol = 'https' if is_ssl else 'http'
 
         web_svc = {
@@ -1222,8 +1245,14 @@ class CASFormatter:
         # Generate key findings
         cas['key_findings'] = self._build_key_findings(data)
 
-        # Generate attack guidance
-        cas['attack_guidance'] = self._generate_attack_guidance(data)
+        # Generate attack guidance - try Gemini first, fall back to heuristics
+        all_vulns = cas['vulnerabilities'] + cas['low_priority_vulns']
+        gemini_result = generate_attack_guidance(cas['hosts'], all_vulns, cas['web_services'])
+        if 'attack_guidance' in gemini_result:
+            cas['attack_guidance'] = gemini_result['attack_guidance']
+        else:
+            # Gemini unavailable, use heuristic guidance
+            cas['attack_guidance'] = self._generate_attack_guidance(data)
 
         # Include enrichment metadata
         if 'enrichment' in data:

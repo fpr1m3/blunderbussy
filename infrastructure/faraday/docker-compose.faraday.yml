@@ -45,15 +45,42 @@ services:
       PGSQL_HOST: faraday-postgres
       PGSQL_DBNAME: faraday
       REDIS_SERVER: faraday-redis
+      CELERY_BROKER_URL: redis://faraday-redis:6379/0
+      CELERY_RESULT_BACKEND: redis://faraday-redis:6379/1
     ports:
       - "5985:5985"
+    volumes:
+      - faraday-data:/home/faraday/.faraday
+      - ./infrastructure/faraday/config:/home/faraday/.faraday/config
+      - ${ARTIFACTS_PATH:-./artifacts}:/artifacts:ro
+    networks:
+      - faraday-net
+      - default
+    command: ["faraday-server", "--bind_address", "0.0.0.0"]
+    restart: unless-stopped
+
+  faraday-worker:
+    image: docker.io/faradaysec/faraday:latest
+    container_name: faraday-worker
+    depends_on:
+      faraday-postgres:
+        condition: service_healthy
+      faraday-redis:
+        condition: service_healthy
+    environment:
+      PGSQL_USER: faraday
+      PGSQL_PASSWD: ${FARADAY_DB_PASSWORD:-changeme}
+      PGSQL_HOST: faraday-postgres
+      PGSQL_DBNAME: faraday
+      REDIS_SERVER: faraday-redis
+      CELERY_BROKER_URL: redis://faraday-redis:6379/0
+      CELERY_RESULT_BACKEND: redis://faraday-redis:6379/1
     volumes:
       - faraday-data:/home/faraday/.faraday
       - ${ARTIFACTS_PATH:-./artifacts}:/artifacts:ro
     networks:
       - faraday-net
-      - default
-    command: ["faraday-server"]
+    command: ["faraday-worker", "--queue", "reports", "--loglevel", "INFO"]
     restart: unless-stopped
 
 volumes:
@@ -64,5 +91,4 @@ networks:
   faraday-net:
     internal: true
   default:
-    external: true
     name: opulence_network

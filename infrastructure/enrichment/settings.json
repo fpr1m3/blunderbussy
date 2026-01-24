@@ -15,7 +15,7 @@
     "useOSC52Paste": true
   },
   "model": {
-    "name": "gemini-3-flash-preview"
+    "name": "gemini-2.5-flash"
   },
   "security": {
     "auth": {

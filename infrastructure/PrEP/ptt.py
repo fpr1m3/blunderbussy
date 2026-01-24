@@ -314,26 +314,52 @@ class PTTManager:
         """Add quick wins from CAS guidance as priority 1 vectors."""
         quick_wins = guidance.get("quick_wins", [])
         for qw in quick_wins:
-            # Parse quick win string (e.g., "hydra Bruteforce logins on ssh:22")
-            parts = qw.split(" on ")
-            if len(parts) == 2:
-                tool_action = parts[0]
-                service_port = parts[1]
+            # Handle both dict format (Gemini) and string format (legacy)
+            if isinstance(qw, dict):
+                # Gemini format: {"target": "IP:PORT", "action": "...", "difficulty": "...", "expected_outcome": "..."}
+                target = qw.get("target", "")
+                action = qw.get("action", "quick_win")
+                # Extract port from target (e.g., "10.129.242.203:80" -> 80)
+                if ":" in target:
+                    target_port = int(target.split(":")[-1])
+                else:
+                    continue
 
-                # Find matching service
+                # Find matching service by port
                 for host in engagement.hosts:
                     for service in host.services:
-                        if f"{service.service}:{service.port}" == service_port:
+                        if service.port == target_port:
                             # Create quick win vector
                             vector = Vector(
                                 id=str(uuid.uuid4()),
-                                name=f"quick_win_{tool_action.split()[0]}",
+                                name=f"quick_win_{action.split()[0].lower()}",
                                 category=VectorCategory.QUICK_WIN.value,
                                 priority=1
                             )
                             # Insert at beginning
                             service.vectors.insert(0, vector)
                             break
+            else:
+                # Legacy string format (e.g., "hydra Bruteforce logins on ssh:22")
+                parts = qw.split(" on ")
+                if len(parts) == 2:
+                    tool_action = parts[0]
+                    service_port = parts[1]
+
+                    # Find matching service
+                    for host in engagement.hosts:
+                        for service in host.services:
+                            if f"{service.service}:{service.port}" == service_port:
+                                # Create quick win vector
+                                vector = Vector(
+                                    id=str(uuid.uuid4()),
+                                    name=f"quick_win_{tool_action.split()[0]}",
+                                    category=VectorCategory.QUICK_WIN.value,
+                                    priority=1
+                                )
+                                # Insert at beginning
+                                service.vectors.insert(0, vector)
+                                break
 
     @classmethod
     def _apply_recommended_commands(cls, engagement: Engagement, guidance: Dict):

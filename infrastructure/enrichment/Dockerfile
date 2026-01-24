@@ -14,10 +14,19 @@ LABEL description="Faraday-integrated enrichment pipeline for scan data processi
 # Install system dependencies
 # - curl: healthcheck and general utilities
 # - jq: JSON processing
+# - nodejs/npm: for gemini-cli (attack guidance generation)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     jq \
+    nodejs \
+    npm \
     && rm -rf /var/lib/apt/lists/*
+
+# Install gemini-cli for AI-powered attack guidance
+RUN npm install -g @google/gemini-cli
+
+# Copy Gemini CLI settings
+COPY enrichment/settings.json /etc/gemini/settings.json
 
 # Create app directory structure
 WORKDIR /app
@@ -34,6 +43,9 @@ COPY enrichment/faraday_watcher.py .
 COPY enrichment/format-cas.py .
 COPY enrichment/init-ptt.py .
 COPY enrichment/update-manifest.py .
+
+# Copy prompts for Gemini attack guidance
+COPY enrichment/prompts/ ./prompts/
 
 # Keep custom enrichers (services, web - provide logic beyond Faraday)
 COPY enrichment/enrichers/enrich-services.py ./enrichers/
