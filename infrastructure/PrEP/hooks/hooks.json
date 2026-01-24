@@ -1,0 +1,43 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${extensionPath}/hooks/session_start.py",
+            "name": "session-state-loader",
+            "description": "Load session state and inject memory block into context",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "BeforeTool": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${extensionPath}/hooks/before_tool.py",
+            "name": "query-cache-check",
+            "description": "Check query cache for deduplication",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "AfterTool": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${extensionPath}/hooks/after_tool.py",
+            "name": "credential-extractor",
+            "description": "Extract credentials from shell command output",
+            "timeout": 5000
+          }
+        ]
+      }
+    ]
+  }
+}

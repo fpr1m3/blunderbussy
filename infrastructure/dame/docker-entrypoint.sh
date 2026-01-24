@@ -59,9 +59,15 @@ mkdir -p /root/.gemini/extensions
 # Only copy settings (container-specific config)
 cp /etc/gemini/settings.json /root/.gemini/settings.json
 
-# Link opulence extension (mounted at /ext/opulence)
-rm -rf /root/.gemini/extensions/opulence
-ln -s /ext/opulence /root/.gemini/extensions/opulence
+# Link opulence extension using gemini CLI (proper extension registration)
+# This ensures hooks.json is properly discovered and loaded
+if [ -d /ext/opulence ]; then
+    # Remove any existing extension registration
+    rm -rf /root/.gemini/extensions/opulence 2>/dev/null || true
+    # Use gemini CLI to properly link the extension
+    echo "[gemini] Linking opulence extension from /ext/opulence..."
+    gemini extensions link /ext/opulence --consent 2>&1 || echo "[gemini] Extension link failed, continuing..."
+fi
 
 # Note: OAuth tokens stored in mcp-oauth-tokens-v2.json
 # Persists in dame-gemini volume after first auth

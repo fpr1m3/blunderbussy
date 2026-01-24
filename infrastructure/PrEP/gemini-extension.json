@@ -1,24 +1,7 @@
 {
   "name": "opulence",
-  "version": "1.1.0",
+  "version": "1.2.1",
   "description": "Dame's offensive security extension - skill retrieval, engagement tools, and session state management",
-  "hooks": {
-    "SessionStart": {
-      "command": "python3",
-      "args": ["/ext/opulence/hooks/session_start.py"],
-      "description": "Load session state and inject memory block into context"
-    },
-    "PreToolUse": {
-      "command": "python3",
-      "args": ["/ext/opulence/hooks/pre_tool_use.py"],
-      "description": "Check query cache for deduplication"
-    },
-    "PostToolUse": {
-      "command": "python3",
-      "args": ["/ext/opulence/hooks/post_tool_use.py"],
-      "description": "Extract credentials from shell command output"
-    }
-  },
   "mcpServers": {
     "grimoire": {
       "command": "uvx",

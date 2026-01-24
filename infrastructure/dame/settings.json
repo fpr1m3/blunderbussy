@@ -24,5 +24,8 @@
   },
   "tools": {
     "enableHooks": true
+  },
+  "hooks": {
+    "enabled": true
   }
 }

@@ -52,11 +52,13 @@ RUN if [ "$TARGET_PLATFORM" = "windows" ]; then \
 # - build deps: For pwncat-cs netifaces native compilation
 # - iproute2: For split tunnel routing to gluetun VPN
 # - tmux: For persistent session management
+# - ripgrep: Fast search tool for code exploration
 RUN apt-get update && apt-get install -y --no-install-recommends \
     nodejs npm \
     python3 python3-pip python3-venv python3-dev \
     gcc libc-dev libffi-dev \
     tmux curl ca-certificates iproute2 \
+    ripgrep \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv (provides uvx for mcp-server-qdrant)

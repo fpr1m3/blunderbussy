@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PreToolUse Hook - Query Deduplication
+BeforeTool Hook - Query Deduplication
 ======================================
 Gemini CLI hook that checks for duplicate queries before execution.
 
@@ -8,10 +8,12 @@ Triggered before: qdrant-find, google_web_search, web_fetch tools
 Action: Check cache and optionally skip if recent duplicate exists
 
 Usage by Gemini CLI:
-    python3 /ext/opulence/hooks/pre_tool_use.py
+    python3 /ext/opulence/hooks/before_tool.py
 
-Input (stdin): JSON with tool_name, tool_input
-Output (stdout): JSON response with action (continue/skip)
+Input (stdin): JSON with tool_name, tool_input (BeforeToolInput interface)
+Output (stdout): JSON response using Gemini CLI HookOutput format:
+    - continue: true to proceed
+    - decision: "block" with reason to skip
 """
 
 import sys
@@ -60,11 +62,11 @@ def get_target_from_env() -> str:
 
 
 def main():
-    """Process PreToolUse event."""
+    """Process BeforeTool event."""
     try:
         input_data = json.load(sys.stdin)
     except json.JSONDecodeError:
-        print(json.dumps({"action": "continue"}))
+        print(json.dumps({"continue": True}))
         return
 
     tool_name = input_data.get("tool_name", "")
@@ -72,7 +74,7 @@ def main():
 
     # Only check query tools
     if tool_name not in QUERY_TOOLS:
-        print(json.dumps({"action": "continue"}))
+        print(json.dumps({"continue": True}))
         return
 
     # Get the query parameter name for this tool
@@ -80,13 +82,13 @@ def main():
     query = tool_input.get(query_param, "")
 
     if not query:
-        print(json.dumps({"action": "continue"}))
+        print(json.dumps({"continue": True}))
         return
 
     # Get target
     target = get_target_from_env()
     if not target:
-        print(json.dumps({"action": "continue"}))
+        print(json.dumps({"continue": True}))
         return
 
     # Check cache
@@ -97,7 +99,7 @@ def main():
         cached = mgr.check_query_cache(query, tool_name)
 
         if cached:
-            # Found cached result - suggest skipping
+            # Found cached result - block with cached result info
             age_minutes = int(
                 (
                     __import__("datetime").datetime.utcnow() -
@@ -106,26 +108,28 @@ def main():
             )
 
             print(json.dumps({
-                "action": "skip",
-                "reason": f"Query executed {age_minutes} minutes ago",
-                "cached_result": {
-                    "query": cached.query_text,
-                    "tool": cached.tool,
-                    "summary": cached.results_summary,
-                    "hit_count": cached.hit_count
-                },
-                "suggestion": f"Previous result: {cached.results_summary}"
+                "decision": "block",
+                "reason": f"Query executed {age_minutes} minutes ago. Previous result: {cached.results_summary}",
+                "hookSpecificOutput": {
+                    "hookEventName": "BeforeTool",
+                    "cached_result": {
+                        "query": cached.query_text,
+                        "tool": cached.tool,
+                        "summary": cached.results_summary,
+                        "hit_count": cached.hit_count
+                    }
+                }
             }))
             return
 
         # No cache hit - continue
-        print(json.dumps({"action": "continue"}))
+        print(json.dumps({"continue": True}))
 
     except Exception as e:
-        # Don't block on errors
+        # Don't block on errors - continue with warning in reason
         print(json.dumps({
-            "action": "continue",
-            "warning": f"Cache check failed: {str(e)}"
+            "continue": True,
+            "reason": f"Cache check failed: {str(e)}"
         }))
 
 

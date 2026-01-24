@@ -53,11 +53,10 @@ def main():
     target = get_target_from_input(input_data)
 
     if not target:
-        # No target, return minimal response
+        # No target, return minimal response using Gemini CLI HookOutput format
         print(json.dumps({
-            "action": "continue",
-            "context_injection": None,
-            "message": "No target specified, session state not loaded"
+            "continue": True,
+            "reason": "No target specified, session state not loaded"
         }))
         return
 
@@ -81,18 +80,21 @@ def main():
 
         mgr.save_all()
 
-        # Return context injection
+        # Return context injection using Gemini CLI HookOutput format
         response = {
-            "action": "continue",
-            "context_injection": memory_block,
-            "session_info": {
-                "session_id": mgr.state.session_id,
-                "target": target,
-                "access_level": mgr.state.current_access_level.value,
-                "flags_captured": list(mgr.state.flags_captured.keys()),
-                "shell_count": len(mgr.get_active_shells()),
-                "credential_count": len(mgr.get_all_credentials()),
-                "hypothesis_count": len(mgr.get_active_hypotheses())
+            "continue": True,
+            "systemMessage": memory_block,
+            "hookSpecificOutput": {
+                "hookEventName": "SessionStart",
+                "session_info": {
+                    "session_id": mgr.state.session_id,
+                    "target": target,
+                    "access_level": mgr.state.current_access_level.value,
+                    "flags_captured": list(mgr.state.flags_captured.keys()),
+                    "shell_count": len(mgr.get_active_shells()),
+                    "credential_count": len(mgr.get_all_credentials()),
+                    "hypothesis_count": len(mgr.get_active_hypotheses())
+                }
             }
         }
 
@@ -101,9 +103,8 @@ def main():
     except Exception as e:
         # Return error but don't block session
         print(json.dumps({
-            "action": "continue",
-            "context_injection": None,
-            "error": f"Failed to load session state: {str(e)}"
+            "continue": True,
+            "reason": f"Failed to load session state: {str(e)}"
         }))
 
 

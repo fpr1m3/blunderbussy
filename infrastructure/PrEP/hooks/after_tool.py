@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-PostToolUse Hook - Credential Extraction, Query Caching, Session Memory & Hypothesis Ranking
-=============================================================================================
+AfterTool Hook - Credential Extraction, Query Caching, Session Memory & Hypothesis Ranking
+===========================================================================================
 Gemini CLI hook that:
 1. Extracts credentials from shell command output
 2. Caches query results for deduplication
@@ -12,10 +12,12 @@ Triggered after: pwncat__command, Shell, bash, qdrant-find, google_web_search, w
 Action: Extract credentials, cache queries, index to session memory, update hypothesis confidence
 
 Usage by Gemini CLI:
-    python3 /ext/opulence/hooks/post_tool_use.py
+    python3 /ext/opulence/hooks/after_tool.py
 
-Input (stdin): JSON with tool_name, tool_input, tool_output
-Output (stdout): JSON response (pass-through, possibly with annotations)
+Input (stdin): JSON with tool_name, tool_input, tool_output (AfterToolInput interface)
+Output (stdout): JSON response using Gemini CLI HookOutput format:
+    - continue: true to proceed
+    - hookSpecificOutput.additionalContext for context injection
 """
 
 import sys
@@ -519,15 +521,15 @@ def handle_hypothesis_updates(
         # Don't fail the hook if hypothesis update fails
         pass
 
-    return {"action": "continue"}
+    return {"continue": True}
 
 
 def main():
-    """Process PostToolUse event."""
+    """Process AfterTool event."""
     try:
         input_data = json.load(sys.stdin)
     except json.JSONDecodeError:
-        print(json.dumps({"action": "continue"}))
+        print(json.dumps({"continue": True}))
         return
 
     tool_name = input_data.get("tool_name", "")
@@ -537,15 +539,15 @@ def main():
     # Get target
     target = get_target_from_env()
     if not target:
-        print(json.dumps({"action": "continue"}))
+        print(json.dumps({"continue": True}))
         return
 
     # Skip if no output
     if not tool_output or not isinstance(tool_output, str):
-        print(json.dumps({"action": "continue"}))
+        print(json.dumps({"continue": True}))
         return
 
-    result = {"action": "continue"}
+    result = {"continue": True}
     annotations = []
 
     # Handle query caching for search tools
@@ -572,9 +574,12 @@ def main():
         if "annotations" in hyp_result:
             annotations.extend(hyp_result["annotations"])
 
-    # Build final response
+    # Build final response using Gemini CLI HookOutput format
     if annotations:
-        result["annotations"] = annotations
+        result["hookSpecificOutput"] = {
+            "hookEventName": "AfterTool",
+            "additionalContext": "\n".join(annotations)
+        }
 
     print(json.dumps(result))
 
