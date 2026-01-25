@@ -15,4 +15,8 @@ ENV PYTHONUNBUFFERED=1
 ENV SLIVER_HOST=sliver
 ENV SLIVER_PORT=31337
 
+# Create non-root user for security
+RUN useradd -r -u 1001 -g root appuser
+USER appuser
+
 CMD ["python3", "/app/server.py"]

@@ -88,5 +88,10 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 # Expose healthcheck port
 EXPOSE 8080
 
+# Create non-root user for security
+RUN useradd -r -u 1001 -g root appuser && \
+    chown -R appuser:root /artifacts /app
+USER appuser
+
 # Run the Faraday-integrated watcher
 CMD ["python3", "/app/faraday_watcher.py"]

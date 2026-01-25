@@ -16,4 +16,8 @@ ENV MSF_HOST=msf
 ENV MSF_PORT=55553
 ENV MSF_TOKEN=msfrpc_token
 
+# Create non-root user for security
+RUN useradd -r -u 1001 -g root appuser
+USER appuser
+
 CMD ["python3", "/app/server.py"]

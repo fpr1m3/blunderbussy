@@ -21,4 +21,11 @@ COPY pwncat-server.py server.py
 ENV PYTHONUNBUFFERED=1
 ENV PWNCAT_SOCKET=/tmp/pwncat.sock
 
+# Create non-root user for security
+# Socket directory needs to be writable by appuser
+RUN useradd -r -u 1001 -g root appuser && \
+    mkdir -p /tmp/pwncat && chown appuser:root /tmp/pwncat
+ENV PWNCAT_SOCKET=/tmp/pwncat/pwncat.sock
+USER appuser
+
 CMD ["python3", "/app/server.py"]

@@ -99,6 +99,12 @@ services:
             - MSF_HOST=${MSF_HOST:-msf}
             - MSF_PORT=${MSF_PORT:-55553}
             - MSF_TOKEN=${MSF_TOKEN:-msfrpc_token}
+        healthcheck:
+            test: ["CMD", "python3", "-c", "print('healthy')"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 10s
         restart: unless-stopped
 
     # Sliver MCP Server (lightweight Python wrapper)
@@ -112,6 +118,12 @@ services:
             - PYTHONUNBUFFERED=1
             - SLIVER_HOST=${SLIVER_HOST:-sliver}
             - SLIVER_PORT=${SLIVER_PORT:-31337}
+        healthcheck:
+            test: ["CMD", "python3", "-c", "print('healthy')"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 10s
         restart: unless-stopped
 
     # Pwncat MCP Server (Python post-exploitation framework)
@@ -145,7 +157,12 @@ services:
             context: ./infrastructure/hexstrike-recon
             dockerfile: Dockerfile
         container_name: hexstrike-recon
-        privileged: true
+        cap_add:
+            - NET_ADMIN    # Network configuration
+            - NET_RAW      # Raw sockets (nmap SYN scans, masscan)
+            - SYS_PTRACE   # For gdb debugging
+        security_opt:
+            - seccomp:unconfined  # Required for some low-level tools
         network_mode: "service:gluetun"
         volumes:
             - artifacts:/artifacts

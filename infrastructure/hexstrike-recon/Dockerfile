@@ -1,6 +1,8 @@
 # Agent Opulence - HexStrike Container
 # Privileged container with offensive security tools
-FROM docker.io/kalilinux/kali-rolling:latest
+FROM docker.io/kalilinux/kali-last-release
+# Using kali-last-release for stable versioned releases
+# (kali-rolling updates continuously and can break unexpectedly)
 
 LABEL maintainer="Agent Opulence"
 LABEL description="HexStrike-AI with offensive security tools"
