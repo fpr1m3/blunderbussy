@@ -2460,8 +2460,8 @@ async def main_with_http():
     except Exception as e:
         logger.warning(f"Failed to start LHOST HTTP server: {e}")
 
-    # Run MCP server via stdio (FastMCP API changed from run_async to run_sse_async)
-    await mcp.run_sse_async()
+    # Run MCP server via stdio (MetaMCP spawns as subprocess)
+    await mcp.run_stdio_async()
 
 
 if __name__ == '__main__':
