@@ -1,0 +1,63 @@
+[project]
+name = "blunderbussy"
+version = "0.1.0"
+description = "Autonomous offensive security orchestration engine"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pyyaml>=6.0",
+    "pytest>=8.0",
+    "pytest-cov>=4.0",
+    "pytest-asyncio>=0.23",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+pythonpath = ["infrastructure/PrEP", "infrastructure/hexstrike-recon"]
+markers = [
+    "integration: mark test as an integration test (uses real parsers)",
+    "slow: mark test as slow (involves network operations or long timeouts)",
+    "qdrant: mark test as requiring Qdrant container (session memory tests)",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["infrastructure"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "B", "C4"]
+ignore = ["E501"]
+
+[tool.hatch.build.targets.wheel]
+packages = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

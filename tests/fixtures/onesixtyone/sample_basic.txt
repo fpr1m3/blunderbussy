@@ -1,5 +1,0 @@
-10.10.10.1 [public] Linux host 5.4.0-kali3-amd64
-10.10.10.2 [private] Hardware: x86 Family
-10.10.10.3 [public] Cisco IOS Software, 2800 Software
-10.10.10.4 [community] Windows Server 2019
-10.10.10.5 [public] Linux router 4.19.0
