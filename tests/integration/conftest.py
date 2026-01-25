@@ -1,4 +1,4 @@
-"""Integration test fixtures for AutoReconProcessor."""
+"""Integration test fixtures for AutoReconProcessor and Session Memory."""
 import json
 import logging
 import os
@@ -9,6 +9,7 @@ from typing import Dict, Any
 from unittest.mock import patch, MagicMock
 
 import pytest
+import requests
 
 # Add infrastructure modules to path
 INFRASTRUCTURE_DIR = Path(__file__).parent.parent.parent / "infrastructure" / "enrichment"
@@ -18,6 +19,116 @@ sys.path.insert(0, str(PARSERS_DIR))
 
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 
+# Add PrEP infrastructure to path for session_memory imports
+PREP_DIR = Path(__file__).parent.parent.parent / "infrastructure" / "PrEP"
+sys.path.insert(0, str(PREP_DIR))
+
+
+# =============================================================================
+# Qdrant / Session Memory Fixtures
+# =============================================================================
+
+QDRANT_TEST_URL = "http://localhost:6333"
+
+
+@pytest.fixture(scope="session")
+def qdrant_available():
+    """
+    Check if Qdrant is running and accessible.
+
+    Returns True if Qdrant responds at localhost:6333.
+    Session-scoped to avoid repeated health checks.
+    """
+    try:
+        resp = requests.get(f"{QDRANT_TEST_URL}/healthz", timeout=2)
+        return resp.status_code == 200
+    except (requests.ConnectionError, requests.Timeout):
+        return False
+
+
+@pytest.fixture
+def skip_without_qdrant(qdrant_available):
+    """
+    Skip test if Qdrant is not available.
+
+    Usage:
+        def test_foo(skip_without_qdrant, qdrant_url):
+            # This test only runs if Qdrant is up
+    """
+    if not qdrant_available:
+        pytest.skip("Qdrant not available at localhost:6333")
+
+
+@pytest.fixture
+def qdrant_url():
+    """Return Qdrant URL for tests."""
+    return QDRANT_TEST_URL
+
+
+@pytest.fixture(autouse=False)
+def clean_test_collections(qdrant_url):
+    """
+    Cleanup fixture to delete test collections after each test.
+
+    Deletes all collections matching dame_session_test_* pattern.
+    Use with autouse=True in test classes that create collections.
+    """
+    yield
+
+    # Cleanup after test
+    try:
+        resp = requests.get(f"{qdrant_url}/collections", timeout=5)
+        if resp.status_code != 200:
+            return
+
+        collections = resp.json().get("result", {}).get("collections", [])
+        for coll in collections:
+            name = coll.get("name", "")
+            # Only delete test collections (use test_ prefix in target names)
+            if name.startswith("dame_session_") and "test" in name.lower():
+                requests.delete(f"{qdrant_url}/collections/{name}", timeout=5)
+    except requests.RequestException:
+        pass  # Cleanup failures are non-fatal
+
+
+@pytest.fixture
+def session_memory_factory(skip_without_qdrant, qdrant_url, clean_test_collections):
+    """
+    Factory fixture to create SessionMemory instances for testing.
+
+    Returns a function that creates SessionMemory with the test Qdrant URL.
+    Collections are automatically cleaned up after each test.
+
+    Usage:
+        def test_foo(session_memory_factory):
+            mem = session_memory_factory("test_target_1")
+            mem.index_event(...)
+    """
+    from session_memory import SessionMemory
+
+    created_memories = []
+
+    def _factory(target: str) -> "SessionMemory":
+        # Prefix target with 'test_' to ensure cleanup
+        if not target.lower().startswith("test_"):
+            target = f"test_{target}"
+        mem = SessionMemory(target=target, qdrant_url=qdrant_url)
+        created_memories.append(mem)
+        return mem
+
+    yield _factory
+
+    # Additional cleanup: delete collections for all created memories
+    for mem in created_memories:
+        try:
+            mem.delete_collection()
+        except Exception:
+            pass
+
+
+# =============================================================================
+# AutoReconProcessor Fixtures
+# =============================================================================
 
 # Session-scoped fixture to create temp artifacts directory early
 @pytest.fixture(scope="session")

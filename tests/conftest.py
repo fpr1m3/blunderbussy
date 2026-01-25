@@ -10,3 +10,6 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "slow: mark test as slow (involves network operations or long timeouts)"
     )
+    config.addinivalue_line(
+        "markers", "qdrant: mark test as requiring Qdrant container (session memory tests)"
+    )
