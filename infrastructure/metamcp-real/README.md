@@ -41,13 +41,15 @@
 
 ### 2. MSF MCP (`infrastructure/msf/`)
 - **What**: Python wrapper for Metasploit RPC
+- **Backend**: Connects to msf-bridge HTTP API (Go) which talks to msfrpcd
 - **Tools**: `msf__search`, `msf__exploit`, `msf__auxiliary`, `msf__sessions_list`, etc.
-- **Transport**: stdio (JSON-RPC 2.0)
+- **Transport**: stdio (uses MSF_BRIDGE_URL env var)
 
 ### 3. Sliver MCP (`infrastructure/sliver/`)
 - **What**: Python wrapper for Sliver C2 gRPC
+- **Backend**: Connects to Sliver daemon via gRPC using sliver-py
 - **Tools**: `sliver__implant_generate`, `sliver__listener_start`, `sliver__execute`, etc.
-- **Transport**: stdio (JSON-RPC 2.0)
+- **Transport**: stdio (uses SLIVER_CONFIG env var for operator cert)
 
 ### 4. HTB MCP (external)
 - **What**: Go-based HackTheBox MCP server
@@ -78,8 +80,8 @@ METAMCP_AUTH_SECRET=$(openssl rand -hex 32)
 ```bash
 cd ~/Projects/blunderbussy
 
-# Start VPN, enrichment, MCP wrappers, and HexStrike
-podman-compose up -d gluetun enrichment msf-mcp sliver-mcp hexstrike-recon
+# Start VPN, C2 backends, MCP wrappers
+podman-compose up -d gluetun msf msf-bridge sliver msf-mcp sliver-mcp hexstrike-recon
 ```
 
 ### Step 2: Start MetaMCP
@@ -196,26 +198,21 @@ curl -H "Authorization: Bearer $HTB_TOKEN" \
 
 2. **HexStrike tool coverage**: Not all tools may be installed in container. Check Dockerfile and add as needed.
 
-3. **Real backend connections**: MSF and Sliver MCP wrappers return simulated data until real backends (Metasploit/Sliver servers) are deployed and configured.
+3. **Real backend connections**: MSF and Sliver containers are now deployed via docker-compose.yml with gluetun VPN routing. See main docker-compose.yml for configuration.
 
 ## Files
 
 ```
 infrastructure/
-├── metamcp-real/
-│   ├── docker-compose.metamcp.yml   # MetaMCP + PostgreSQL
-│   ├── mcp-servers.json             # Server configuration for import
-│   └── README.md                    # This file
-├── msf/
-│   ├── Dockerfile
-│   ├── server.py                    # MSF MCP wrapper
-│   └── requirements.txt
-├── sliver/
-│   ├── Dockerfile
-│   ├── server.py                    # Sliver MCP wrapper
-│   └── requirements.txt
-└── hexstrike-recon/
-    └── Dockerfile                   # Kali + security tools + HexStrike
+├── PrEP/servers/
+│   ├── msf-server.py              # MSF MCP wrapper (FastMCP)
+│   ├── sliver-server.py           # Sliver MCP wrapper (FastMCP)
+│   ├── pwncat-server.py           # Pwncat MCP wrapper (FastMCP)
+│   └── msf-bridge/                # Go HTTP bridge for MSFRPC
+│       ├── main.go
+│       ├── client.go
+│       ├── handlers.go
+│       └── Dockerfile
 ```
 
 ## References

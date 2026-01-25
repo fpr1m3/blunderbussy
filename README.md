@@ -57,6 +57,9 @@ Agent Opulence strictly separates **deterministic scanning** from **strategic de
 │                  HEXSTRIKE (Recon Tools)                     │
 │  AutoRecon, nmap, nuclei, feroxbuster, 150+ tools           │
 ├─────────────────────────────────────────────────────────────┤
+│                   C2 FRAMEWORKS (MSF + Sliver)               │
+│  msf (msfrpcd) + msf-bridge + sliver daemon                  │
+├─────────────────────────────────────────────────────────────┤
 │                 NETWORK ISOLATION (GLUETUN)                  │
 │  VPN tunnel + killswitch, all traffic through HTB VPN       │
 └─────────────────────────────────────────────────────────────┘
@@ -72,6 +75,9 @@ Agent Opulence strictly separates **deterministic scanning** from **strategic de
 | `dame` | Kali + gemini-cli | AI exploitation agent with full offensive toolkit |
 | `qdrant` | Vector DB | Technique library for exploitation knowledge |
 | `pwncat-mcp` | Python | Post-exploitation framework MCP server |
+| `msf` | Metasploit | Metasploit Framework with msfrpcd for exploitation |
+| `msf-bridge` | Go HTTP API | HTTP bridge for MSFRPC communication |
+| `sliver` | Sliver C2 | Sliver implant server for C2 operations |
 
 ### Network Architecture
 
@@ -104,6 +110,10 @@ Agent Opulence strictly separates **deterministic scanning** from **strategic de
 
 ```bash
 cd ~/Projects/blunderbussy
+
+# Copy and configure environment
+cp .env.example .env
+# Edit .env and set MSF_PASS and other required values
 
 # Copy HTB VPN config
 cp /path/to/lab.ovpn infrastructure/gluetun/htb.ovpn
@@ -162,10 +172,14 @@ blunderbussy/
 │   ├── dame/                  # Kali + gemini-cli container
 │   │   ├── Dockerfile        # Multi-platform build
 │   │   └── docker-entrypoint.sh  # Split tunnel setup
-│   ├── PrEP/                  # Gemini-CLI extension (Dame)
+│   ├── PrEP/                  # Gemini-CLI extension + MCP servers
+│   │   ├── servers/
+│   │   │   ├── pwncat-server.py  # Pwncat MCP (14 tools)
+│   │   │   ├── msf-server.py     # MSF MCP (11 tools)
+│   │   │   ├── sliver-server.py  # Sliver MCP (11 tools)
+│   │   │   └── msf-bridge/       # Go HTTP-to-MSFRPC bridge
 │   │   ├── gemini-extension.json
 │   │   ├── GEMINI.md         # Dame's system prompt
-│   │   ├── pwncat-server.py  # MCP server
 │   │   ├── ptt.py            # Pentesting Task Tree module
 │   │   └── commands/         # /attack command
 │   ├── hexstrike-recon/      # 150+ security tools
@@ -371,6 +385,8 @@ bd sync               # Sync with git
 - [x] HexStrike recon container (AutoRecon integration)
 - [x] Test framework (pytest with fixtures)
 - [x] Issue tracking (Beads)
+- [x] MCP server modernization (FastMCP, Pydantic, 172 tests)
+- [x] C2 framework integration (MSF + Sliver via gluetun VPN)
 - [ ] E2E testing on additional HTB machines
 - [ ] Multi-target parallelization
 

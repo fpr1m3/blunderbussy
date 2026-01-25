@@ -6,6 +6,68 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added - 2026-01-24
+
+#### MCP Server Modernization
+
+**Major refactor:** All MCP servers converted to FastMCP with Pydantic validation.
+
+**Changes:**
+- **pwncat-server.py** - Refactored to FastMCP, now 14 tools with full Pydantic models
+  - Added enumerate, privesc, persist tools
+  - ResponseFormat enum for JSON/Markdown output
+  - Type-safe input validation with field validators
+
+- **msf-server.py** - Refactored to FastMCP, now 11 tools
+  - Uses httpx client to call msf-bridge HTTP API
+  - ResponseFormat support for sessions, jobs, status
+
+- **sliver-server.py** - Complete rewrite using sliver-py gRPC
+  - 11 tools: listeners, sessions, beacons, execute, download, upload, portfwd, socks
+  - Real gRPC integration with Sliver daemon
+
+- **msf-bridge/** - New Go HTTP bridge for MSFRPC
+  - Uses go-msf-rpc library for msgpack RPC
+  - Exposes REST API on port 9997
+  - Deployed via gluetun network for VPN routing
+
+- **tests/mcp/** - New pytest test suite
+  - 172 tests for input validation (pwncat: 66, msf: 47, sliver: 59)
+  - Runs without backends via mocked imports
+
+**Related Beads Issues:**
+- blunderbussy-dqe2 - Refactor pwncat-server to FastMCP ✅
+- blunderbussy-d80m - Implement MSF go-msf-rpc bridge ✅
+- blunderbussy-hnzs - Add new pwncat tools ✅
+- blunderbussy-8pj6 - Implement Sliver backend ✅
+- blunderbussy-w4m2 - Add response formats ✅
+- blunderbussy-frx7 - Create test suite ✅
+
+---
+
+#### C2 Framework Containers
+
+**Added real C2 backends** with VPN routing through gluetun.
+
+**Changes:**
+- **docker-compose.yml** - Enabled MSF and Sliver containers
+  - `msf` service: Metasploit Framework with msfrpcd
+  - `msf-bridge` service: Go HTTP API for MSFRPC
+  - `sliver` service: Sliver C2 daemon
+  - All use `network_mode: "service:gluetun"` for HTB VPN routing
+  - Exposed ports: 4444, 4445 (MSF callbacks), 9997 (bridge), 31337 (Sliver)
+
+- **.env.example** - Created with required configuration
+  - MSF_PASS (required)
+  - FARADAY_DB_PASSWORD
+  - HTB target settings
+  - LHOST for payload callbacks
+
+**Network Architecture:**
+All C2 traffic routes through gluetun VPN for HTB target access.
+
+---
+
 ### Added - 2026-01-20
 
 #### PTT Integration into Enrichment Pipeline
