@@ -122,9 +122,11 @@ services:
             context: ./infrastructure/PrEP/servers
             dockerfile: Dockerfile.sliver
         container_name: sliver-mcp
+        user: root  # Need root for volume write access in rootless podman
         network_mode: "service:gluetun"  # Same network to access sliver on localhost
         volumes:
             - sliver-configs:/root/.sliver-client:ro  # Read operator config
+            - artifacts:/artifacts  # For implant storage
         environment:
             - PYTHONUNBUFFERED=1
             - SLIVER_CONFIG=/root/.sliver-client/configs/operator.cfg
@@ -275,6 +277,7 @@ services:
     msf:
         image: docker.io/metasploitframework/metasploit-framework:latest
         container_name: msf
+        privileged: true  # Required: CachyOS kernel blocks ruby exec without this
         network_mode: "service:gluetun"
         volumes:
             - msf-data:/root/.msf4
@@ -287,7 +290,7 @@ services:
         command: >
             ./msfrpcd -U ${MSF_USER:-msf} -P ${MSF_PASS} -S -a 0.0.0.0 -p 55553 -f
         healthcheck:
-            test: ["CMD-SHELL", "nc -z localhost 55553 || exit 1"]
+            test: ["CMD-SHELL", "curl --connect-timeout 2 -s -o /dev/null http://localhost:55553/; [ $? -ne 7 ]"]
             interval: 30s
             timeout: 10s
             start_period: 90s
@@ -324,17 +327,20 @@ services:
 
     # Sliver C2 Server
     # Routes through gluetun VPN for HTB implant callbacks
+    # Built from source - BishopFox doesn't publish Docker images
     sliver:
-        image: docker.io/bishopfox/sliver:latest
+        build:
+            context: https://github.com/BishopFox/sliver.git
+            target: production-slim
         container_name: sliver
         network_mode: "service:gluetun"
         volumes:
-            - sliver-data:/root/.sliver
-            - sliver-configs:/root/.sliver-client
+            - sliver-data:/home/sliver/.sliver
+            - sliver-configs:/home/sliver/.sliver-client
             - artifacts:/artifacts
-        command: daemon
+        command: ["daemon"]
         healthcheck:
-            test: ["CMD-SHELL", "nc -z localhost 31337 || exit 1"]
+            test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/31337'"]
             interval: 30s
             timeout: 10s
             start_period: 60s
