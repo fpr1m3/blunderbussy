@@ -1,3 +1,21 @@
 # Sliver MCP Server dependencies
+# Reference: https://github.com/moloch--/sliver-py
+
+# Core sliver-py library for gRPC communication
+sliver-py>=0.0.19
+
+# gRPC and protobuf (required by sliver-py)
 grpcio>=1.60.0
 protobuf>=4.25.0
+
+# Async file operations
+aiofiles>=23.0.0
+
+# MCP server framework
+mcp>=1.0.0
+
+# Input validation
+pydantic>=2.0.0
+
+# HTTP health check server
+aiohttp>=3.9.0
