@@ -30,16 +30,28 @@ from watchdog.events import FileSystemEventHandler, FileSystemEvent
 
 from faraday_client import FaradayClient, FaradayConfig
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('/artifacts/logs/faraday-watcher.log')
-    ]
-)
-logger = logging.getLogger('faraday-watcher')
+# Configure logging with graceful fallback
+def _setup_logging() -> logging.Logger:
+    """Configure logging with graceful file handler fallback."""
+    handlers = [logging.StreamHandler(sys.stdout)]
+
+    # Try to add file handler, but don't fail if permissions don't allow it
+    log_file = Path('/artifacts/logs/faraday-watcher.log')
+    try:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        handlers.append(logging.FileHandler(str(log_file)))
+    except (PermissionError, OSError) as e:
+        # File logging not available - this is OK for containers
+        print(f"Warning: File logging disabled ({e}), using stdout only", file=sys.stderr)
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=handlers
+    )
+    return logging.getLogger('faraday-watcher')
+
+logger = _setup_logging()
 
 
 def sanitize_workspace_name(name: str) -> str:
