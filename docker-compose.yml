@@ -13,7 +13,11 @@ services:
             - ./infrastructure/gluetun:/gluetun
             - ./infrastructure/gluetun/post-rules.txt:/iptables/post-rules.txt:ro
         ports:
-            - "9998:9998" # pwncat-mcp HTTP server (LHOST queries, health)
+            - "9998:9998"  # pwncat-mcp HTTP server (LHOST queries, health)
+            - "9997:9997"  # msf-bridge HTTP API
+            - "4444:4444"  # MSF default payload callback
+            - "4445:4445"  # MSF secondary payload callback
+            - "31337:31337" # Sliver multiplexer port
         environment:
             - VPN_SERVICE_PROVIDER=custom
             - VPN_TYPE=openvpn
@@ -87,18 +91,18 @@ services:
     # See: infrastructure/metamcp-real/README.md for setup instructions
     # ═══════════════════════════════════════════════════════════════════════════
 
-    # MSF MCP Server (lightweight Python wrapper)
+    # MSF MCP Server (Python MCP wrapper for msf-bridge)
     # Backend for MetaMCP - provides Metasploit tools via MCP protocol
+    # Connects to msf-bridge HTTP API (not directly to msfrpcd)
     msf-mcp:
         build:
             context: ./infrastructure/PrEP/servers
             dockerfile: Dockerfile.msf
         container_name: msf-mcp
+        network_mode: "service:gluetun"  # Same network to access bridge on localhost
         environment:
             - PYTHONUNBUFFERED=1
-            - MSF_HOST=${MSF_HOST:-msf}
-            - MSF_PORT=${MSF_PORT:-55553}
-            - MSF_TOKEN=${MSF_TOKEN:-msfrpc_token}
+            - MSF_BRIDGE_URL=http://127.0.0.1:9997
         healthcheck:
             test: ["CMD", "python3", "-c", "print('healthy')"]
             interval: 30s
@@ -106,18 +110,24 @@ services:
             retries: 3
             start_period: 10s
         restart: unless-stopped
+        depends_on:
+            msf-bridge:
+                condition: service_healthy
 
-    # Sliver MCP Server (lightweight Python wrapper)
+    # Sliver MCP Server (Python gRPC wrapper for Sliver)
     # Backend for MetaMCP - provides Sliver C2 tools via MCP protocol
+    # Connects to sliver daemon via gRPC
     sliver-mcp:
         build:
             context: ./infrastructure/PrEP/servers
             dockerfile: Dockerfile.sliver
         container_name: sliver-mcp
+        network_mode: "service:gluetun"  # Same network to access sliver on localhost
+        volumes:
+            - sliver-configs:/root/.sliver-client:ro  # Read operator config
         environment:
             - PYTHONUNBUFFERED=1
-            - SLIVER_HOST=${SLIVER_HOST:-sliver}
-            - SLIVER_PORT=${SLIVER_PORT:-31337}
+            - SLIVER_CONFIG=/root/.sliver-client/configs/operator.cfg
         healthcheck:
             test: ["CMD", "python3", "-c", "print('healthy')"]
             interval: 30s
@@ -125,6 +135,9 @@ services:
             retries: 3
             start_period: 10s
         restart: unless-stopped
+        depends_on:
+            sliver:
+                condition: service_healthy
 
     # Pwncat MCP Server (Python post-exploitation framework)
     # Backend for MetaMCP - provides pwncat-cs tools via MCP protocol
@@ -254,34 +267,81 @@ services:
             - qdrant
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # Backend Services (Optional - for live testing)
+    # Backend Services - C2 Frameworks
     # ═══════════════════════════════════════════════════════════════════════════
 
-    # Metasploit Framework (optional - for real exploitation)
-    # Uncomment when ready for live testing
-    # msf:
-    #   image: docker.io/metasploitframework/metasploit-framework:latest
-    #   container_name: msf
-    #   network_mode: "service:gluetun"
-    #   volumes:
-    #     - msf-data:/root/.msf4
-    #     - artifacts:/artifacts
-    #   environment:
-    #     - MSF_RPC_HOST=0.0.0.0
-    #     - MSF_RPC_PORT=55553
-    #   command: ["msfrpcd", "-P", "${MSF_TOKEN:-msfrpc_token}", "-S", "-a", "0.0.0.0"]
-    #   restart: unless-stopped
+    # Metasploit Framework with msfrpcd
+    # Routes through gluetun VPN for HTB payload callbacks
+    msf:
+        image: docker.io/metasploitframework/metasploit-framework:latest
+        container_name: msf
+        network_mode: "service:gluetun"
+        volumes:
+            - msf-data:/root/.msf4
+            - artifacts:/artifacts
+        environment:
+            - MSF_RPC_HOST=0.0.0.0
+            - MSF_RPC_PORT=55553
+            - MSF_RPC_USER=${MSF_USER:-msf}
+            - MSF_RPC_PASS=${MSF_PASS:?MSF_PASS required in .env}
+        command: >
+            ./msfrpcd -U ${MSF_USER:-msf} -P ${MSF_PASS} -S -a 0.0.0.0 -p 55553 -f
+        healthcheck:
+            test: ["CMD-SHELL", "nc -z localhost 55553 || exit 1"]
+            interval: 30s
+            timeout: 10s
+            start_period: 90s
+            retries: 5
+        restart: unless-stopped
+        depends_on:
+            - gluetun
 
-    # Sliver C2 (optional - for real C2 operations)
-    # Uncomment when ready for live testing
-    # sliver:
-    #   image: docker.io/bishopfox/sliver:latest
-    #   container_name: sliver
-    #   network_mode: "service:gluetun"
-    #   volumes:
-    #     - sliver-data:/root/.sliver
-    #     - artifacts:/artifacts
-    #   restart: unless-stopped
+    # MSF Bridge - HTTP API for msfrpcd
+    # Shares gluetun network to access msf on localhost:55553
+    # Port 9997 exposed through gluetun
+    msf-bridge:
+        build:
+            context: ./infrastructure/PrEP/servers/msf-bridge
+            dockerfile: Dockerfile
+        container_name: msf-bridge
+        network_mode: "service:gluetun"
+        environment:
+            - MSF_HOST=127.0.0.1
+            - MSF_PORT=55553
+            - MSF_USER=${MSF_USER:-msf}
+            - MSF_PASS=${MSF_PASS:?MSF_PASS required in .env}
+            - BRIDGE_PORT=9997
+        healthcheck:
+            test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9997/health"]
+            interval: 30s
+            timeout: 5s
+            start_period: 15s
+            retries: 3
+        restart: unless-stopped
+        depends_on:
+            msf:
+                condition: service_healthy
+
+    # Sliver C2 Server
+    # Routes through gluetun VPN for HTB implant callbacks
+    sliver:
+        image: docker.io/bishopfox/sliver:latest
+        container_name: sliver
+        network_mode: "service:gluetun"
+        volumes:
+            - sliver-data:/root/.sliver
+            - sliver-configs:/root/.sliver-client
+            - artifacts:/artifacts
+        command: daemon
+        healthcheck:
+            test: ["CMD-SHELL", "nc -z localhost 31337 || exit 1"]
+            interval: 30s
+            timeout: 10s
+            start_period: 60s
+            retries: 5
+        restart: unless-stopped
+        depends_on:
+            - gluetun
 
 volumes:
     # Shared artifacts volume for scan data and CAS documents
@@ -299,6 +359,12 @@ volumes:
     qdrant-data:
     # Dame gemini-cli config (persists OAuth tokens)
     dame-gemini:
+    # Metasploit Framework data (modules, loot, sessions)
+    msf-data:
+    # Sliver C2 server data
+    sliver-data:
+    # Sliver client configs (operator certs)
+    sliver-configs:
 
 networks:
     default:
