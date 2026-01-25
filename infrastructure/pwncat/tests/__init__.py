@@ -1,1 +1,0 @@
-# Pwncat MCP Server tests

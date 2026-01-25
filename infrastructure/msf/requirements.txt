@@ -1,3 +1,0 @@
-# MSF MCP Server dependencies
-msgpack>=1.0.0
-requests>=2.31.0
