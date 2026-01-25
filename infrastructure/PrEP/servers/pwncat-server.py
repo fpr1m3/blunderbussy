@@ -21,11 +21,23 @@ from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 from mcp.server.fastmcp import FastMCP
 
+# Protocol layer for structured YAML responses
+from infrastructure.PrEP.protocol import (
+    format_success,
+    format_error,
+    SessionNotFoundError,
+    SessionDeadError,
+    ErrorType,
+)
+
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger('pwncat-mcp')
 
 # Initialize FastMCP server
 mcp = FastMCP("pwncat_mcp")
+
+# Tool name constant for protocol responses
+TOOL_NAME = "pwncat"
 
 # Pwncat availability flag - set during initialize()
 PWNCAT_AVAILABLE = False
@@ -1753,17 +1765,12 @@ async def pwncat_listen(params: ListenInput) -> str:
             - timeout (Optional[float]): Maximum seconds to wait for connection
 
     Returns:
-        str: JSON-formatted response containing session info:
-            {
-                "session_id": str,    # Unique session identifier
-                "platform": str,      # Target OS (linux, windows)
-                "hostname": str,      # Target hostname
-                "user": str,          # Current user on target
-                "connected_at": str   # ISO timestamp
-            }
-            Or error: {"error": str, "message": str}
+        str: YAML-formatted response containing session info or error details
     """
     pwncat = await ensure_client_initialized()
+    context = {"host": params.host, "port": params.port}
+    if params.timeout:
+        context["timeout"] = params.timeout
 
     try:
         result = await pwncat.listen(
@@ -1771,14 +1778,12 @@ async def pwncat_listen(params: ListenInput) -> str:
             host=params.host,
             timeout=params.timeout
         )
-        return json.dumps(result, indent=2)
-    except TimeoutError as e:
-        return json.dumps({"error": "timeout", "message": str(e)}, indent=2)
-    except RuntimeError as e:
-        return json.dumps({"error": "runtime_error", "message": str(e)}, indent=2)
+        # Add session_id to context for successful response
+        context["session_id"] = result.get("session_id")
+        return format_success(result, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"pwncat_listen failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -1804,17 +1809,10 @@ async def pwncat_connect(params: ConnectInput) -> str:
             - platform (str): Target platform (linux or windows)
 
     Returns:
-        str: JSON-formatted response containing session info:
-            {
-                "session_id": str,    # Unique session identifier
-                "platform": str,      # Target OS
-                "hostname": str,      # Target hostname
-                "user": str,          # Current user on target
-                "connected_at": str   # ISO timestamp
-            }
-            Or error: {"error": str, "message": str}
+        str: YAML-formatted response containing session info or error details
     """
     pwncat = await ensure_client_initialized()
+    context = {"target": params.host, "port": params.port, "platform": params.platform}
 
     try:
         result = await pwncat.connect(
@@ -1822,12 +1820,11 @@ async def pwncat_connect(params: ConnectInput) -> str:
             port=params.port,
             platform=params.platform
         )
-        return json.dumps(result, indent=2)
-    except RuntimeError as e:
-        return json.dumps({"error": "runtime_error", "message": str(e)}, indent=2)
+        context["session_id"] = result.get("session_id")
+        return format_success(result, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"pwncat_connect failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -1851,19 +1848,23 @@ async def pwncat_sessions(params: SessionsListInput) -> str:
             - response_format (ResponseFormat): Output format (json/markdown)
 
     Returns:
-        str: JSON or Markdown formatted session list
+        str: YAML-formatted session list or error details
+             (Markdown format still available via response_format param)
     """
     pwncat = await ensure_client_initialized()
+    context = {"response_format": params.response_format.value}
 
     try:
         result = await pwncat.list_sessions()
 
         if params.response_format == ResponseFormat.MARKDOWN:
             return _format_sessions_markdown(result)
-        return json.dumps(result, indent=2)
+
+        context["session_count"] = len(result)
+        return format_success({"sessions": result}, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"pwncat_sessions failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -1888,27 +1889,28 @@ async def pwncat_command(params: CommandInput) -> str:
             - command (str): Shell command to execute
 
     Returns:
-        str: JSON-formatted response containing:
-            {
-                "command": str,       # The executed command
-                "output": str,        # Command output (stdout + stderr)
-                "exit_code": int,     # Command exit code
-                "executed_at": str    # ISO timestamp
-            }
+        str: YAML-formatted response containing command output or error details
     """
     pwncat = await ensure_client_initialized()
+    context = {"session_id": params.session_id, "command": params.command}
 
     try:
         result = await pwncat.run_command(
             session_id=params.session_id,
             command=params.command
         )
-        return json.dumps(result, indent=2)
-    except ValueError as e:
-        return json.dumps({"error": "session_not_found", "message": str(e)}, indent=2)
+        return format_success(result, TOOL_NAME, context)
+    except ValueError:
+        # Session not found - convert to semantic error
+        sessions = await pwncat.list_sessions()
+        err = SessionNotFoundError(
+            f"Session '{params.session_id}' not found",
+            context={"available_sessions": [s.get("session_id") for s in sessions]}
+        )
+        return format_error(err, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"pwncat_command failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -1934,18 +1936,14 @@ async def pwncat_module(params: ModuleInput) -> str:
             - options (Optional[Dict]): Module-specific options
 
     Returns:
-        str: JSON-formatted response containing:
-            {
-                "session_id": str,    # Session identifier
-                "module": str,        # Module name
-                "options": dict,      # Options used
-                "results": list,      # Module results
-                "status": str,        # "success" or "error"
-                "error": str,         # Error message (if status is "error")
-                "executed_at": str    # ISO timestamp
-            }
+        str: YAML-formatted response containing module results or error details
     """
     pwncat = await ensure_client_initialized()
+    context = {
+        "session_id": params.session_id,
+        "module": params.module,
+        "options": params.options or {}
+    }
 
     try:
         options = params.options or {}
@@ -1954,12 +1952,18 @@ async def pwncat_module(params: ModuleInput) -> str:
             module=params.module,
             **options
         )
-        return json.dumps(result, indent=2)
-    except ValueError as e:
-        return json.dumps({"error": "session_not_found", "message": str(e)}, indent=2)
+        return format_success(result, TOOL_NAME, context)
+    except ValueError:
+        # Session not found - convert to semantic error
+        sessions = await pwncat.list_sessions()
+        err = SessionNotFoundError(
+            f"Session '{params.session_id}' not found",
+            context={"available_sessions": [s.get("session_id") for s in sessions]}
+        )
+        return format_error(err, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"pwncat_module failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -1985,16 +1989,14 @@ async def pwncat_upload(params: FileTransferInput) -> str:
             - remote_path (str): Destination path on the target
 
     Returns:
-        str: JSON-formatted response containing:
-            {
-                "success": bool,           # Whether upload succeeded
-                "bytes_transferred": int,  # Number of bytes transferred
-                "remote_path": str,        # Destination path on target
-                "local_path": str,         # Source path locally
-                "error": str               # Error message (if success is false)
-            }
+        str: YAML-formatted response containing transfer result or error details
     """
     pwncat = await ensure_client_initialized()
+    context = {
+        "session_id": params.session_id,
+        "local_path": params.local_path,
+        "remote_path": params.remote_path
+    }
 
     try:
         result = await pwncat.upload(
@@ -2002,14 +2004,18 @@ async def pwncat_upload(params: FileTransferInput) -> str:
             local_path=params.local_path,
             remote_path=params.remote_path
         )
-        return json.dumps(result, indent=2)
-    except ValueError as e:
-        return json.dumps({"error": "session_not_found", "message": str(e)}, indent=2)
-    except FileNotFoundError as e:
-        return json.dumps({"error": "file_not_found", "message": str(e)}, indent=2)
+        return format_success(result, TOOL_NAME, context)
+    except ValueError:
+        # Session not found - convert to semantic error
+        sessions = await pwncat.list_sessions()
+        err = SessionNotFoundError(
+            f"Session '{params.session_id}' not found",
+            context={"available_sessions": [s.get("session_id") for s in sessions]}
+        )
+        return format_error(err, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"pwncat_upload failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -2035,16 +2041,14 @@ async def pwncat_download(params: FileTransferInput) -> str:
             - local_path (str): Destination path on the local system
 
     Returns:
-        str: JSON-formatted response containing:
-            {
-                "success": bool,           # Whether download succeeded
-                "bytes_transferred": int,  # Number of bytes transferred
-                "local_path": str,         # Destination path locally
-                "remote_path": str,        # Source path on target
-                "error": str               # Error message (if success is false)
-            }
+        str: YAML-formatted response containing transfer result or error details
     """
     pwncat = await ensure_client_initialized()
+    context = {
+        "session_id": params.session_id,
+        "remote_path": params.remote_path,
+        "local_path": params.local_path
+    }
 
     try:
         result = await pwncat.download(
@@ -2052,12 +2056,18 @@ async def pwncat_download(params: FileTransferInput) -> str:
             remote_path=params.remote_path,
             local_path=params.local_path
         )
-        return json.dumps(result, indent=2)
-    except ValueError as e:
-        return json.dumps({"error": "session_not_found", "message": str(e)}, indent=2)
+        return format_success(result, TOOL_NAME, context)
+    except ValueError:
+        # Session not found - convert to semantic error
+        sessions = await pwncat.list_sessions()
+        err = SessionNotFoundError(
+            f"Session '{params.session_id}' not found",
+            context={"available_sessions": [s.get("session_id") for s in sessions]}
+        )
+        return format_error(err, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"pwncat_download failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -2080,25 +2090,25 @@ async def pwncat_close(params: SessionInput) -> str:
             - session_id (str): Session identifier to close
 
     Returns:
-        str: JSON-formatted response containing:
-            {
-                "session_id": str,     # Session that was closed
-                "status": str,         # "closed" or "error"
-                "closed_at": str,      # ISO timestamp
-                "previous_info": dict, # Session info before closure
-                "error": str           # Error message (if status is "error")
-            }
+        str: YAML-formatted response containing closure result or error details
     """
     pwncat = await ensure_client_initialized()
+    context = {"session_id": params.session_id}
 
     try:
         result = await pwncat.close_session(session_id=params.session_id)
-        return json.dumps(result, indent=2)
-    except ValueError as e:
-        return json.dumps({"error": "session_not_found", "message": str(e)}, indent=2)
+        return format_success(result, TOOL_NAME, context)
+    except ValueError:
+        # Session not found - convert to semantic error
+        sessions = await pwncat.list_sessions()
+        err = SessionNotFoundError(
+            f"Session '{params.session_id}' not found",
+            context={"available_sessions": [s.get("session_id") for s in sessions]}
+        )
+        return format_error(err, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"pwncat_close failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -2122,21 +2132,17 @@ async def pwncat_get_lhost(params: GetLhostInput) -> str:
             - interface (str): Network interface to query (default: tun0)
 
     Returns:
-        str: JSON-formatted response containing:
-            {
-                "lhost": str,       # IP address for reverse shells
-                "interface": str    # Interface queried
-            }
-            Or error: {"error": str, "interface": str}
+        str: YAML-formatted response containing LHOST info or error details
     """
     pwncat = get_client()  # Don't need full init for lhost
+    context = {"interface": params.interface}
 
     try:
         result = await pwncat.get_lhost(interface=params.interface)
-        return json.dumps(result, indent=2)
+        return format_success(result, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"pwncat_get_lhost failed: {e}")
-        return json.dumps({"error": str(e), "interface": params.interface}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 # =============================================================================
@@ -2175,9 +2181,16 @@ async def pwncat_enumerate_all(params: EnumerateAllInput) -> str:
             - response_format (ResponseFormat): Output format (json/markdown)
 
     Returns:
-        str: JSON or Markdown formatted enumeration results
+        str: YAML-formatted enumeration results or error details
+             (Markdown format still available via response_format param)
     """
     pwncat = await ensure_client_initialized()
+    context = {
+        "session_id": params.session_id,
+        "categories": [c.value for c in params.categories],
+        "timeout_per_module": params.timeout_per_module,
+        "response_format": params.response_format.value
+    }
 
     try:
         result = await pwncat.enumerate_all(
@@ -2188,12 +2201,18 @@ async def pwncat_enumerate_all(params: EnumerateAllInput) -> str:
 
         if params.response_format == ResponseFormat.MARKDOWN:
             return _format_enumeration_markdown(result)
-        return json.dumps(result, indent=2)
-    except ValueError as e:
-        return json.dumps({"error": "session_not_found", "message": str(e)}, indent=2)
+        return format_success(result, TOOL_NAME, context)
+    except ValueError:
+        # Session not found - convert to semantic error
+        sessions = await pwncat.list_sessions()
+        err = SessionNotFoundError(
+            f"Session '{params.session_id}' not found",
+            context={"available_sessions": [s.get("session_id") for s in sessions]}
+        )
+        return format_error(err, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"pwncat_enumerate_all failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -2223,9 +2242,15 @@ async def pwncat_privesc_suggest(params: PrivescSuggestInput) -> str:
             - response_format (ResponseFormat): Output format (json/markdown)
 
     Returns:
-        str: JSON or Markdown formatted privilege escalation suggestions
+        str: YAML-formatted privilege escalation suggestions or error details
+             (Markdown format still available via response_format param)
     """
     pwncat = await ensure_client_initialized()
+    context = {
+        "session_id": params.session_id,
+        "run_enumeration": params.run_enumeration,
+        "response_format": params.response_format.value
+    }
 
     try:
         result = await pwncat.privesc_suggest(
@@ -2235,12 +2260,18 @@ async def pwncat_privesc_suggest(params: PrivescSuggestInput) -> str:
 
         if params.response_format == ResponseFormat.MARKDOWN:
             return _format_privesc_suggestions_markdown(result)
-        return json.dumps(result, indent=2)
-    except ValueError as e:
-        return json.dumps({"error": "session_not_found", "message": str(e)}, indent=2)
+        return format_success(result, TOOL_NAME, context)
+    except ValueError:
+        # Session not found - convert to semantic error
+        sessions = await pwncat.list_sessions()
+        err = SessionNotFoundError(
+            f"Session '{params.session_id}' not found",
+            context={"available_sessions": [s.get("session_id") for s in sessions]}
+        )
+        return format_error(err, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"pwncat_privesc_suggest failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -2272,20 +2303,14 @@ async def pwncat_privesc_auto(params: PrivescAutoInput) -> str:
               (default: True)
 
     Returns:
-        str: JSON-formatted response containing:
-            {
-                "session_id": str,
-                "success": bool,
-                "original_user": str,
-                "new_user": str,
-                "escalated_to": str,       # Only if success=True
-                "techniques_tried": [...],
-                "status": "success"|"no_escalation"|"error",
-                "error": str,              # If status=error
-                "executed_at": str
-            }
+        str: YAML-formatted response containing escalation result or error details
     """
     pwncat = await ensure_client_initialized()
+    context = {
+        "session_id": params.session_id,
+        "techniques": params.techniques,
+        "stop_on_success": params.stop_on_success
+    }
 
     try:
         result = await pwncat.privesc_auto(
@@ -2293,12 +2318,18 @@ async def pwncat_privesc_auto(params: PrivescAutoInput) -> str:
             techniques=params.techniques,
             stop_on_success=params.stop_on_success
         )
-        return json.dumps(result, indent=2)
-    except ValueError as e:
-        return json.dumps({"error": "session_not_found", "message": str(e)}, indent=2)
+        return format_success(result, TOOL_NAME, context)
+    except ValueError:
+        # Session not found - convert to semantic error
+        sessions = await pwncat.list_sessions()
+        err = SessionNotFoundError(
+            f"Session '{params.session_id}' not found",
+            context={"available_sessions": [s.get("session_id") for s in sessions]}
+        )
+        return format_error(err, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"pwncat_privesc_auto failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -2333,21 +2364,32 @@ async def pwncat_persist_list(params: PersistListInput) -> str:
             - response_format (ResponseFormat): Output format (json/markdown)
 
     Returns:
-        str: JSON or Markdown formatted persistence methods list
+        str: YAML-formatted persistence methods list or error details
+             (Markdown format still available via response_format param)
     """
     pwncat = await ensure_client_initialized()
+    context = {
+        "session_id": params.session_id,
+        "response_format": params.response_format.value
+    }
 
     try:
         result = await pwncat.persist_list(session_id=params.session_id)
 
         if params.response_format == ResponseFormat.MARKDOWN:
             return _format_persist_list_markdown(result)
-        return json.dumps(result, indent=2)
-    except ValueError as e:
-        return json.dumps({"error": "session_not_found", "message": str(e)}, indent=2)
+        return format_success(result, TOOL_NAME, context)
+    except ValueError:
+        # Session not found - convert to semantic error
+        sessions = await pwncat.list_sessions()
+        err = SessionNotFoundError(
+            f"Session '{params.session_id}' not found",
+            context={"available_sessions": [s.get("session_id") for s in sessions]}
+        )
+        return format_error(err, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"pwncat_persist_list failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -2383,20 +2425,14 @@ async def pwncat_persist_install(params: PersistInstallInput) -> str:
             - options (Optional[Dict]): Method-specific options
 
     Returns:
-        str: JSON-formatted response containing:
-            {
-                "session_id": str,
-                "method": str,
-                "options": dict,
-                "success": bool,
-                "output": [...],
-                "warning": str,            # Always present as reminder
-                "status": "success"|"failed"|"error",
-                "error": str,              # If status=error
-                "executed_at": str
-            }
+        str: YAML-formatted response containing installation result or error details
     """
     pwncat = await ensure_client_initialized()
+    context = {
+        "session_id": params.session_id,
+        "method": params.method,
+        "options": params.options or {}
+    }
 
     try:
         result = await pwncat.persist_install(
@@ -2404,12 +2440,18 @@ async def pwncat_persist_install(params: PersistInstallInput) -> str:
             method=params.method,
             options=params.options
         )
-        return json.dumps(result, indent=2)
-    except ValueError as e:
-        return json.dumps({"error": "session_not_found", "message": str(e)}, indent=2)
+        return format_success(result, TOOL_NAME, context)
+    except ValueError:
+        # Session not found - convert to semantic error
+        sessions = await pwncat.list_sessions()
+        err = SessionNotFoundError(
+            f"Session '{params.session_id}' not found",
+            context={"available_sessions": [s.get("session_id") for s in sessions]}
+        )
+        return format_error(err, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"pwncat_persist_install failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 # =============================================================================

@@ -22,8 +22,18 @@ from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 from mcp.server.fastmcp import FastMCP
 
+from infrastructure.PrEP.protocol import (
+    format_success,
+    format_error,
+    SessionNotFoundError,
+    SessionDeadError,
+)
+
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger('sliver-mcp')
+
+# Tool name constant for protocol responses
+TOOL_NAME = "sliver"
 
 # Initialize FastMCP server
 mcp = FastMCP("sliver_mcp")
@@ -1222,21 +1232,24 @@ async def sliver_listeners_list(params: ListenersListInput) -> str:
             - response_format (ResponseFormat): Output format (json/markdown)
 
     Returns:
-        str: JSON or Markdown formatted list of active listeners
+        str: YAML or Markdown formatted list of active listeners
     """
     sliver = await ensure_client_connected()
+    context = {"response_format": params.response_format.value}
 
     try:
         result = await sliver.list_jobs()
 
         if params.response_format == ResponseFormat.MARKDOWN:
             return _format_listeners_markdown(result)
-        return json.dumps(result, indent=2)
-    except RuntimeError as e:
-        return json.dumps({"error": "not_connected", "message": str(e)}, indent=2)
+        return format_success(
+            result={"listeners": result, "count": len(result)},
+            tool=TOOL_NAME,
+            context=context
+        )
     except Exception as e:
         logger.error(f"sliver_listeners_list failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -1263,17 +1276,15 @@ async def sliver_listener_start(params: ListenerStartInput) -> str:
             - persistent (bool): Auto-start with server
 
     Returns:
-        str: JSON-formatted response:
-            {
-                "success": bool,
-                "job_id": int,
-                "protocol": str,
-                "host": str,
-                "port": int,
-                "started_at": str
-            }
+        str: YAML-formatted response with job details
     """
     sliver = await ensure_client_connected()
+    context = {
+        "protocol": params.protocol,
+        "host": params.host,
+        "port": params.port,
+        "domain": params.domain,
+    }
 
     try:
         result = await sliver.start_listener(
@@ -1283,14 +1294,10 @@ async def sliver_listener_start(params: ListenerStartInput) -> str:
             domain=params.domain,
             persistent=params.persistent
         )
-        return json.dumps(result, indent=2)
-    except RuntimeError as e:
-        return json.dumps({"error": "not_connected", "message": str(e)}, indent=2)
-    except ValueError as e:
-        return json.dumps({"error": "invalid_input", "message": str(e)}, indent=2)
+        return format_success(result, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"sliver_listener_start failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -1313,24 +1320,17 @@ async def sliver_listener_stop(params: ListenerStopInput) -> str:
             - job_id (int): Job ID of the listener to stop
 
     Returns:
-        str: JSON-formatted response:
-            {
-                "success": bool,
-                "job_id": int,
-                "status": str,
-                "stopped_at": str
-            }
+        str: YAML-formatted response confirming stop
     """
     sliver = await ensure_client_connected()
+    context = {"job_id": params.job_id}
 
     try:
         result = await sliver.stop_listener(job_id=params.job_id)
-        return json.dumps(result, indent=2)
-    except RuntimeError as e:
-        return json.dumps({"error": "not_connected", "message": str(e)}, indent=2)
+        return format_success(result, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"sliver_listener_stop failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -1362,21 +1362,17 @@ async def sliver_implant_generate(params: ImplantGenerateInput) -> str:
             - evasion (bool): Enable evasion features
 
     Returns:
-        str: JSON-formatted response:
-            {
-                "success": bool,
-                "name": str,
-                "os": str,
-                "arch": str,
-                "format": str,
-                "type": str,           # "beacon" or "session"
-                "file_path": str,      # Path to implant file
-                "sha256": str,         # SHA256 hash
-                "size_bytes": int,     # File size
-                "generated_at": str    # ISO timestamp
-            }
+        str: YAML-formatted response with implant details
     """
     sliver = await ensure_client_connected()
+    context = {
+        "name": params.name,
+        "os": params.os,
+        "arch": params.arch,
+        "format": params.format,
+        "type": "beacon" if params.beacon else "session",
+        "c2_urls": params.c2_urls,
+    }
 
     try:
         result = await sliver.generate_implant(
@@ -1390,12 +1386,10 @@ async def sliver_implant_generate(params: ImplantGenerateInput) -> str:
             jitter=params.jitter,
             evasion=params.evasion
         )
-        return json.dumps(result, indent=2)
-    except RuntimeError as e:
-        return json.dumps({"error": "not_connected", "message": str(e)}, indent=2)
+        return format_success(result, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"sliver_implant_generate failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -1418,21 +1412,24 @@ async def sliver_sessions_list(params: SessionsListInput) -> str:
             - response_format (ResponseFormat): Output format (json/markdown)
 
     Returns:
-        str: JSON or Markdown formatted list of active sessions
+        str: YAML or Markdown formatted list of active sessions
     """
     sliver = await ensure_client_connected()
+    context = {"response_format": params.response_format.value}
 
     try:
         result = await sliver.list_sessions()
 
         if params.response_format == ResponseFormat.MARKDOWN:
             return _format_sessions_markdown(result)
-        return json.dumps(result, indent=2)
-    except RuntimeError as e:
-        return json.dumps({"error": "not_connected", "message": str(e)}, indent=2)
+        return format_success(
+            result={"sessions": result, "count": len(result)},
+            tool=TOOL_NAME,
+            context=context
+        )
     except Exception as e:
         logger.error(f"sliver_sessions_list failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -1455,21 +1452,24 @@ async def sliver_beacons_list(params: BeaconsListInput) -> str:
             - response_format (ResponseFormat): Output format (json/markdown)
 
     Returns:
-        str: JSON or Markdown formatted list of active beacons
+        str: YAML or Markdown formatted list of active beacons
     """
     sliver = await ensure_client_connected()
+    context = {"response_format": params.response_format.value}
 
     try:
         result = await sliver.list_beacons()
 
         if params.response_format == ResponseFormat.MARKDOWN:
             return _format_beacons_markdown(result)
-        return json.dumps(result, indent=2)
-    except RuntimeError as e:
-        return json.dumps({"error": "not_connected", "message": str(e)}, indent=2)
+        return format_success(
+            result={"beacons": result, "count": len(result)},
+            tool=TOOL_NAME,
+            context=context
+        )
     except Exception as e:
         logger.error(f"sliver_beacons_list failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -1495,18 +1495,14 @@ async def sliver_execute(params: ExecuteInput) -> str:
             - output (bool): Capture command output
 
     Returns:
-        str: JSON-formatted response:
-            {
-                "session_id": str,
-                "command": str,
-                "args": list,
-                "stdout": str,
-                "stderr": str,
-                "status": int,
-                "executed_at": str
-            }
+        str: YAML-formatted response with command output
     """
     sliver = await ensure_client_connected()
+    context = {
+        "session_id": params.session_id,
+        "command": params.command,
+        "args": params.args,
+    }
 
     try:
         result = await sliver.execute(
@@ -1515,12 +1511,10 @@ async def sliver_execute(params: ExecuteInput) -> str:
             args=params.args,
             output=params.output
         )
-        return json.dumps(result, indent=2)
-    except RuntimeError as e:
-        return json.dumps({"error": "not_connected", "message": str(e)}, indent=2)
+        return format_success(result, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"sliver_execute failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -1545,18 +1539,13 @@ async def sliver_download(params: DownloadInput) -> str:
             - filename (Optional[str]): Local filename override
 
     Returns:
-        str: JSON-formatted response:
-            {
-                "success": bool,
-                "session_id": str,
-                "remote_path": str,
-                "local_path": str,
-                "sha256": str,
-                "size_bytes": int,
-                "downloaded_at": str
-            }
+        str: YAML-formatted response with download details
     """
     sliver = await ensure_client_connected()
+    context = {
+        "session_id": params.session_id,
+        "remote_path": params.remote_path,
+    }
 
     try:
         result = await sliver.download(
@@ -1564,12 +1553,10 @@ async def sliver_download(params: DownloadInput) -> str:
             remote_path=params.remote_path,
             filename=params.filename
         )
-        return json.dumps(result, indent=2)
-    except RuntimeError as e:
-        return json.dumps({"error": "not_connected", "message": str(e)}, indent=2)
+        return format_success(result, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"sliver_download failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -1594,18 +1581,14 @@ async def sliver_upload(params: UploadInput) -> str:
             - remote_path (str): Destination path on target
 
     Returns:
-        str: JSON-formatted response:
-            {
-                "success": bool,
-                "session_id": str,
-                "local_path": str,
-                "remote_path": str,
-                "sha256": str,
-                "size_bytes": int,
-                "uploaded_at": str
-            }
+        str: YAML-formatted response with upload details
     """
     sliver = await ensure_client_connected()
+    context = {
+        "session_id": params.session_id,
+        "local_path": params.local_path,
+        "remote_path": params.remote_path,
+    }
 
     try:
         result = await sliver.upload(
@@ -1613,14 +1596,10 @@ async def sliver_upload(params: UploadInput) -> str:
             local_path=params.local_path,
             remote_path=params.remote_path
         )
-        return json.dumps(result, indent=2)
-    except RuntimeError as e:
-        return json.dumps({"error": "not_connected", "message": str(e)}, indent=2)
-    except FileNotFoundError as e:
-        return json.dumps({"error": "file_not_found", "message": str(e)}, indent=2)
+        return format_success(result, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"sliver_upload failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -1646,17 +1625,15 @@ async def sliver_portfwd_add(params: PortfwdAddInput) -> str:
             - remote_port (int): Remote port to forward to
 
     Returns:
-        str: JSON-formatted response:
-            {
-                "success": bool,
-                "session_id": str,
-                "local_port": int,
-                "remote_host": str,
-                "remote_port": int,
-                "created_at": str
-            }
+        str: YAML-formatted response with port forward details
     """
     sliver = await ensure_client_connected()
+    context = {
+        "session_id": params.session_id,
+        "local_port": params.local_port,
+        "remote_host": params.remote_host,
+        "remote_port": params.remote_port,
+    }
 
     try:
         result = await sliver.portfwd_add(
@@ -1665,12 +1642,10 @@ async def sliver_portfwd_add(params: PortfwdAddInput) -> str:
             remote_host=params.remote_host,
             remote_port=params.remote_port
         )
-        return json.dumps(result, indent=2)
-    except RuntimeError as e:
-        return json.dumps({"error": "not_connected", "message": str(e)}, indent=2)
+        return format_success(result, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"sliver_portfwd_add failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -1694,27 +1669,23 @@ async def sliver_socks_start(params: SocksStartInput) -> str:
             - port (int): Local port for SOCKS proxy (default: 1080)
 
     Returns:
-        str: JSON-formatted response:
-            {
-                "success": bool,
-                "session_id": str,
-                "port": int,
-                "created_at": str
-            }
+        str: YAML-formatted response with SOCKS proxy details
     """
     sliver = await ensure_client_connected()
+    context = {
+        "session_id": params.session_id,
+        "port": params.port,
+    }
 
     try:
         result = await sliver.socks_start(
             session_id=params.session_id,
             port=params.port
         )
-        return json.dumps(result, indent=2)
-    except RuntimeError as e:
-        return json.dumps({"error": "not_connected", "message": str(e)}, indent=2)
+        return format_success(result, TOOL_NAME, context)
     except Exception as e:
         logger.error(f"sliver_socks_start failed: {e}")
-        return json.dumps({"error": "internal_error", "message": str(e)}, indent=2)
+        return format_error(e, TOOL_NAME, context)
 
 
 # =============================================================================

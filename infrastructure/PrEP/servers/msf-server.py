@@ -19,6 +19,16 @@ import httpx
 from pydantic import BaseModel, Field, ConfigDict
 from mcp.server.fastmcp import FastMCP
 
+# Protocol layer for standardized YAML responses
+from infrastructure.PrEP.protocol import (
+    format_success,
+    format_error,
+    BridgeUnavailableError,
+)
+
+# Tool name for protocol layer context
+TOOL_NAME = "msf"
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger('msf-mcp')
@@ -374,8 +384,14 @@ bridge = MSFBridgeClient(MSF_BRIDGE_URL, HTTP_TIMEOUT)
 
 
 # Error handling utilities
+# DEPRECATED: This function is replaced by the protocol layer (format_error).
+# Kept for reference during migration. Remove after all tools are updated.
 def _handle_bridge_error(e: Exception) -> str:
-    """Format bridge communication errors."""
+    """Format bridge communication errors.
+
+    DEPRECATED: Use format_error() from infrastructure.PrEP.protocol instead.
+    This function returns plain text; format_error returns structured YAML.
+    """
     if isinstance(e, httpx.ConnectError):
         return f"Error: Cannot connect to MSF bridge at {MSF_BRIDGE_URL}. Is the bridge running?"
     elif isinstance(e, httpx.TimeoutException):
@@ -421,13 +437,19 @@ async def msf_search(params: SearchModulesInput) -> str:
             - response_format (ResponseFormat): Output format (markdown/json)
 
     Returns:
-        str: Search results formatted as markdown or JSON
+        str: Search results formatted as YAML with structured response
 
     Examples:
         - Search for SSH modules: query="ssh"
         - Search for SMB exploits: query="smb", module_type="exploit"
         - Search for CVE: query="cve-2021"
     """
+    context = {
+        "query": params.query,
+        "module_type": params.module_type.value if params.module_type else None,
+        "limit": params.limit,
+    }
+
     try:
         all_modules: List[str] = []
         types_to_search = (
@@ -449,35 +471,16 @@ async def msf_search(params: SearchModulesInput) -> str:
         # Filter by query
         filtered = _filter_modules(all_modules, params.query, params.limit)
 
-        if not filtered:
-            return f"No modules found matching '{params.query}'"
+        result_data = {
+            "query": params.query,
+            "count": len(filtered),
+            "modules": filtered,
+        }
 
-        if params.response_format == ResponseFormat.JSON:
-            return json.dumps({
-                "query": params.query,
-                "count": len(filtered),
-                "modules": filtered
-            }, indent=2)
-
-        # Markdown format
-        lines = [
-            f"# Metasploit Module Search: '{params.query}'",
-            "",
-            f"Found **{len(filtered)}** modules",
-            "",
-            "| Module | Type |",
-            "|--------|------|"
-        ]
-        for mod in filtered:
-            parts = mod.split("/", 1)
-            mod_type = parts[0] if len(parts) > 1 else "unknown"
-            mod_name = parts[1] if len(parts) > 1 else mod
-            lines.append(f"| `{mod_name}` | {mod_type} |")
-
-        return "\n".join(lines)
+        return format_success(result_data, TOOL_NAME, context)
 
     except Exception as e:
-        return _handle_bridge_error(e)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -503,56 +506,31 @@ async def msf_module_info(params: ModuleInfoInput) -> str:
             - response_format (ResponseFormat): Output format
 
     Returns:
-        str: Module information formatted as markdown or JSON
+        str: Module information formatted as YAML with structured response
     """
+    context = {
+        "module_type": params.module_type.value,
+        "module": params.module,
+    }
+
     try:
         info = await bridge.module_info(params.module_type.value, params.module)
         options = await bridge.module_options(params.module_type.value, params.module)
 
-        if params.response_format == ResponseFormat.JSON:
-            return json.dumps({
-                "info": info,
-                "options": options
-            }, indent=2)
+        result_data = {
+            "name": info.get("name", params.module),
+            "type": params.module_type.value,
+            "rank": info.get("rank", "unknown"),
+            "description": info.get("description", "No description available."),
+            "authors": info.get("authors", []),
+            "options": options,
+            "references": info.get("references", [])[:10],
+        }
 
-        # Markdown format
-        lines = [
-            f"# {info.get('name', params.module)}",
-            "",
-            f"**Type:** {params.module_type.value}",
-            f"**Rank:** {info.get('rank', 'unknown')}",
-            "",
-            "## Description",
-            info.get("description", "No description available."),
-            "",
-            "## Authors",
-        ]
-
-        authors = info.get("authors", [])
-        for author in authors:
-            lines.append(f"- {author}")
-
-        lines.extend(["", "## Options", ""])
-        lines.append("| Option | Required | Default | Description |")
-        lines.append("|--------|----------|---------|-------------|")
-
-        for opt_name, opt_info in options.items():
-            required = "Yes" if opt_info.get("required") else "No"
-            default = str(opt_info.get("default", "")) or "-"
-            desc = opt_info.get("desc", "")[:50]
-            lines.append(f"| `{opt_name}` | {required} | {default} | {desc} |")
-
-        refs = info.get("references", [])
-        if refs:
-            lines.extend(["", "## References"])
-            for ref in refs[:10]:  # Limit references
-                if len(ref) >= 2:
-                    lines.append(f"- [{ref[0]}] {ref[1]}")
-
-        return "\n".join(lines)
+        return format_success(result_data, TOOL_NAME, context)
 
     except Exception as e:
-        return _handle_bridge_error(e)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -582,11 +560,18 @@ async def msf_exploit(params: ExploitInput) -> str:
             - additional_options (Optional[Dict]): Extra module options
 
     Returns:
-        str: Execution result with job ID
+        str: Execution result formatted as YAML with job ID
 
     Warning:
         Only use against authorized targets with proper permission.
     """
+    context = {
+        "module": f"exploit/{params.module}",
+        "target": params.rhosts,
+        "rport": params.rport,
+        "payload": params.payload,
+    }
+
     try:
         # Build options dict
         options: Dict[str, str] = {
@@ -607,19 +592,21 @@ async def msf_exploit(params: ExploitInput) -> str:
         result = await bridge.module_execute("exploit", params.module, options)
 
         job_id = result.get("job_id", "unknown")
-        return "\n".join([
-            "# Exploit Execution Started",
-            "",
-            f"**Module:** `exploit/{params.module}`",
-            f"**Target:** {params.rhosts}",
-            f"**Job ID:** {job_id}",
-            "",
-            "Use `msf_sessions_list` to check for new sessions.",
-            "Use `msf_jobs_list` to monitor job status."
-        ])
+        result_data = {
+            "status": "started",
+            "module": f"exploit/{params.module}",
+            "target": params.rhosts,
+            "job_id": job_id,
+            "next_steps": [
+                "Use msf_sessions_list to check for new sessions",
+                "Use msf_jobs_list to monitor job status",
+            ],
+        }
+
+        return format_success(result_data, TOOL_NAME, context)
 
     except Exception as e:
-        return _handle_bridge_error(e)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -645,8 +632,13 @@ async def msf_auxiliary(params: AuxiliaryInput) -> str:
             - options (Optional[Dict]): Additional module options
 
     Returns:
-        str: Execution result with job ID
+        str: Execution result formatted as YAML with job ID
     """
+    context = {
+        "module": f"auxiliary/{params.module}",
+        "target": params.rhosts,
+    }
+
     try:
         options: Dict[str, str] = {
             "RHOSTS": params.rhosts
@@ -657,18 +649,20 @@ async def msf_auxiliary(params: AuxiliaryInput) -> str:
         result = await bridge.module_execute("auxiliary", params.module, options)
 
         job_id = result.get("job_id", "unknown")
-        return "\n".join([
-            "# Auxiliary Module Started",
-            "",
-            f"**Module:** `auxiliary/{params.module}`",
-            f"**Target:** {params.rhosts}",
-            f"**Job ID:** {job_id}",
-            "",
-            "Use `msf_jobs_list` to monitor progress."
-        ])
+        result_data = {
+            "status": "started",
+            "module": f"auxiliary/{params.module}",
+            "target": params.rhosts,
+            "job_id": job_id,
+            "next_steps": [
+                "Use msf_jobs_list to monitor progress",
+            ],
+        }
+
+        return format_success(result_data, TOOL_NAME, context)
 
     except Exception as e:
-        return _handle_bridge_error(e)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -692,37 +686,23 @@ async def msf_sessions_list(params: SessionsListInput) -> str:
             - response_format (ResponseFormat): Output format (markdown/json)
 
     Returns:
-        str: Formatted list of active sessions (JSON or Markdown)
+        str: Session list formatted as YAML with structured response
     """
+    context = {}
+
     try:
         result = await bridge.sessions()
         sessions = result.get("sessions", [])
 
-        if params.response_format == ResponseFormat.JSON:
-            return json.dumps({"sessions": sessions, "count": len(sessions)}, indent=2)
+        result_data = {
+            "count": len(sessions),
+            "sessions": sessions,
+        }
 
-        if not sessions:
-            return "## Active Sessions (0)\n\nNo active sessions."
-
-        lines = [
-            f"## Active Sessions ({len(sessions)})",
-            "",
-            "| ID | Type | Host | Exploit | Info |",
-            "|----|------|------|---------|------|"
-        ]
-
-        for sess in sessions:
-            sid = f"`{sess.get('id', '?')}`"
-            stype = sess.get('type', 'unknown')
-            host = f"{sess.get('session_host', 'unknown')}:{sess.get('session_port', '?')}"
-            exploit = sess.get('via_exploit', 'unknown')[:25]
-            info = (sess.get('info', 'N/A') or 'N/A')[:20]
-            lines.append(f"| {sid} | {stype} | {host} | {exploit} | {info} |")
-
-        return "\n".join(lines)
+        return format_success(result_data, TOOL_NAME, context)
 
     except Exception as e:
-        return _handle_bridge_error(e)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -746,8 +726,13 @@ async def msf_session_interact(params: SessionInteractInput) -> str:
             - command (str): Command to execute
 
     Returns:
-        str: Command output from the session
+        str: Command output formatted as YAML with structured response
     """
+    context = {
+        "session_id": params.session_id,
+        "command": params.command,
+    }
+
     try:
         # Try shell execute first, then meterpreter
         try:
@@ -757,18 +742,16 @@ async def msf_session_interact(params: SessionInteractInput) -> str:
 
         output = result.get("output") or result.get("result", "")
 
-        return "\n".join([
-            f"# Session {params.session_id} - Command Output",
-            "",
-            f"**Command:** `{params.command}`",
-            "",
-            "```",
-            output if output else "(no output)",
-            "```"
-        ])
+        result_data = {
+            "session_id": params.session_id,
+            "command": params.command,
+            "output": output if output else "(no output)",
+        }
+
+        return format_success(result_data, TOOL_NAME, context)
 
     except Exception as e:
-        return _handle_bridge_error(e)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -794,8 +777,14 @@ async def msf_session_upgrade(params: SessionUpgradeInput) -> str:
             - lport (int): Local port (default: 4433)
 
     Returns:
-        str: Upgrade result
+        str: Upgrade result formatted as YAML with structured response
     """
+    context = {
+        "session_id": params.session_id,
+        "lhost": params.lhost,
+        "lport": params.lport,
+    }
+
     try:
         result = await bridge.session_upgrade(
             params.session_id,
@@ -803,18 +792,20 @@ async def msf_session_upgrade(params: SessionUpgradeInput) -> str:
             params.lport
         )
 
-        return "\n".join([
-            "# Session Upgrade Initiated",
-            "",
-            f"**Session ID:** {params.session_id}",
-            f"**Callback:** {params.lhost}:{params.lport}",
-            f"**Result:** {result.get('result', 'unknown')}",
-            "",
-            "Use `msf_sessions_list` to check for the new Meterpreter session."
-        ])
+        result_data = {
+            "status": "initiated",
+            "session_id": params.session_id,
+            "callback": f"{params.lhost}:{params.lport}",
+            "result": result.get('result', 'unknown'),
+            "next_steps": [
+                "Use msf_sessions_list to check for new Meterpreter session",
+            ],
+        }
+
+        return format_success(result_data, TOOL_NAME, context)
 
     except Exception as e:
-        return _handle_bridge_error(e)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -838,32 +829,23 @@ async def msf_jobs_list(params: JobsListInput) -> str:
             - response_format (ResponseFormat): Output format (markdown/json)
 
     Returns:
-        str: Formatted list of running jobs (JSON or Markdown)
+        str: Jobs list formatted as YAML with structured response
     """
+    context = {}
+
     try:
         result = await bridge.jobs()
         jobs = result.get("jobs", [])
 
-        if params.response_format == ResponseFormat.JSON:
-            return json.dumps({"jobs": jobs, "count": len(jobs)}, indent=2)
+        result_data = {
+            "count": len(jobs),
+            "jobs": jobs,
+        }
 
-        if not jobs:
-            return "## Running Jobs (0)\n\nNo running jobs."
-
-        lines = [
-            f"## Running Jobs ({len(jobs)})",
-            "",
-            "| Job ID | Name |",
-            "|--------|------|"
-        ]
-
-        for job in jobs:
-            lines.append(f"| `{job.get('id', '?')}` | {job.get('name', 'unknown')} |")
-
-        return "\n".join(lines)
+        return format_success(result_data, TOOL_NAME, context)
 
     except Exception as e:
-        return _handle_bridge_error(e)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -886,20 +868,25 @@ async def msf_job_stop(params: JobStopInput) -> str:
             - job_id (str): ID of the job to stop
 
     Returns:
-        str: Result of the stop operation
+        str: Stop result formatted as YAML with structured response
     """
+    context = {
+        "job_id": params.job_id,
+    }
+
     try:
         result = await bridge.job_stop(params.job_id)
 
-        return "\n".join([
-            "# Job Stopped",
-            "",
-            f"**Job ID:** {params.job_id}",
-            f"**Result:** {result.get('result', 'stopped')}"
-        ])
+        result_data = {
+            "status": "stopped",
+            "job_id": params.job_id,
+            "result": result.get('result', 'stopped'),
+        }
+
+        return format_success(result_data, TOOL_NAME, context)
 
     except Exception as e:
-        return _handle_bridge_error(e)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -923,40 +910,30 @@ async def msf_payloads(params: PayloadsInput) -> str:
             - response_format (ResponseFormat): Output format (markdown/json)
 
     Returns:
-        str: List of compatible payloads (JSON or Markdown)
+        str: Compatible payloads formatted as YAML with structured response
     """
+    context = {
+        "module": params.module,
+    }
+
     try:
         result = await bridge.compatible_payloads(params.module)
         payloads = result.get("payloads", [])
 
-        if params.response_format == ResponseFormat.JSON:
-            return json.dumps({
-                "module": params.module,
-                "payloads": payloads,
-                "count": len(payloads)
-            }, indent=2)
-
-        if not payloads:
-            return f"## Compatible Payloads\n\nNo compatible payloads found for `{params.module}`"
-
-        lines = [
-            f"## Compatible Payloads for `{params.module}`",
-            "",
-            f"**Total:** {len(payloads)}",
-            ""
-        ]
-
-        # Group by architecture
-        for payload in sorted(payloads)[:100]:  # Limit output
-            lines.append(f"- `{payload}`")
+        result_data = {
+            "module": params.module,
+            "count": len(payloads),
+            "payloads": sorted(payloads)[:100],  # Limit output
+        }
 
         if len(payloads) > 100:
-            lines.append(f"\n... and {len(payloads) - 100} more")
+            result_data["truncated"] = True
+            result_data["total_available"] = len(payloads)
 
-        return "\n".join(lines)
+        return format_success(result_data, TOOL_NAME, context)
 
     except Exception as e:
-        return _handle_bridge_error(e)
+        return format_error(e, TOOL_NAME, context)
 
 
 @mcp.tool(
@@ -979,8 +956,12 @@ async def msf_status(params: StatusInput) -> str:
             - response_format (ResponseFormat): Output format (markdown/json)
 
     Returns:
-        str: Connection status and MSF version info (JSON or Markdown)
+        str: Connection status formatted as YAML with structured response
     """
+    context = {
+        "bridge_url": MSF_BRIDGE_URL,
+    }
+
     try:
         health = await bridge.health()
         connected = health.get("connected", False)
@@ -1002,28 +983,10 @@ async def msf_status(params: StatusInput) -> str:
             except Exception:
                 pass
 
-        if params.response_format == ResponseFormat.JSON:
-            return json.dumps(status_data, indent=2)
-
-        lines = [
-            "## Metasploit Status",
-            "",
-            f"**Bridge URL:** {MSF_BRIDGE_URL}",
-            f"**Status:** {'Connected' if connected else 'Disconnected'}",
-        ]
-
-        if connected and status_data.get('version'):
-            lines.extend([
-                f"**MSF Host:** {status_data.get('host', 'unknown')}",
-                f"**Version:** {status_data.get('version', 'unknown')}",
-                f"**Ruby:** {status_data.get('ruby', 'unknown')}",
-                f"**API:** {status_data.get('api', 'unknown')}"
-            ])
-
-        return "\n".join(lines)
+        return format_success(status_data, TOOL_NAME, context)
 
     except Exception as e:
-        return _handle_bridge_error(e)
+        return format_error(e, TOOL_NAME, context)
 
 
 if __name__ == "__main__":
