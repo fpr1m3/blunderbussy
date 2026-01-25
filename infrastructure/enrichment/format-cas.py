@@ -30,6 +30,27 @@ import yaml
 # Web service names that should be included in web_services mapping
 WEB_SERVICE_NAMES = {'http', 'https', 'http-proxy', 'https-proxy', 'http-alt'}
 
+# Token efficiency limits - balance context richness vs. token budget
+MAX_HOSTS_IN_PROMPT = 10
+MAX_VULNS_IN_PROMPT = 20
+MAX_WEB_SERVICES_IN_PROMPT = 10
+MAX_ITEMS_DEFAULT = 20
+MAX_KEY_FINDINGS = 15
+MAX_DESCRIPTION_LENGTH = 200
+
+# Severity levels that require immediate attention
+HIGH_PRIORITY_SEVERITIES = frozenset({'critical', 'high'})
+
+# Severity ordering for sorting (lower = more severe)
+SEVERITY_ORDER = {
+    'critical': 0,
+    'high': 1,
+    'medium': 2,
+    'low': 3,
+    'info': 4,
+    'informational': 5
+}
+
 
 def format_facts_for_prompt(
     hosts: List[Dict],
@@ -50,9 +71,9 @@ def format_facts_for_prompt(
         YAML string suitable for prompt injection
     """
     facts = {
-        'hosts': hosts[:10],  # Limit for token efficiency
-        'vulnerabilities': vulns[:20],
-        'web_services': web_services[:10]
+        'hosts': hosts[:MAX_HOSTS_IN_PROMPT],
+        'vulnerabilities': vulns[:MAX_VULNS_IN_PROMPT],
+        'web_services': web_services[:MAX_WEB_SERVICES_IN_PROMPT]
     }
     return yaml.dump(facts, default_flow_style=False)
 
@@ -85,14 +106,13 @@ def generate_fallback_guidance(
 
     # Extract high-severity vulnerabilities as quick wins
     quick_wins = []
-    severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'info': 4}
     sorted_vulns = sorted(
         vulns,
-        key=lambda v: severity_order.get(v.get('severity', 'info'), 5)
+        key=lambda v: SEVERITY_ORDER.get(v.get('severity', 'info'), 5)
     )
 
     for vuln in sorted_vulns[:3]:
-        if vuln.get('severity') in ('critical', 'high'):
+        if vuln.get('severity') in HIGH_PRIORITY_SEVERITIES:
             quick_wins.append({
                 'target': f"{vuln.get('host', 'unknown')}:{vuln.get('port', '')}",
                 'action': f"Investigate {vuln.get('name', 'vulnerability')}",
@@ -311,8 +331,7 @@ def process_faraday_vulnerabilities(
         cas_vulns.append(cas_vuln)
 
     # Sort by severity (critical > high > medium > low > info)
-    severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'info': 4, 'informational': 5}
-    cas_vulns.sort(key=lambda v: severity_order.get(v.get('severity', 'info'), 6))
+    cas_vulns.sort(key=lambda v: SEVERITY_ORDER.get(v.get('severity', 'info'), 6))
 
     return cas_vulns
 
@@ -645,7 +664,7 @@ def process_faraday_data(input_data: Dict) -> Dict:
         return findings
 
     # Separate vulns by severity for CAS structure
-    critical_high_vulns = [v for v in cas_vulns if v.get('severity') in ['critical', 'high']]
+    critical_high_vulns = [v for v in cas_vulns if v.get('severity') in HIGH_PRIORITY_SEVERITIES]
     low_info_vulns = [v for v in cas_vulns if v.get('severity') in ['medium', 'low', 'info']]
 
     # Build final CAS document
@@ -747,10 +766,10 @@ class CASFormatter:
     """Formats enriched data into CAS YAML documents."""
 
     def __init__(self):
-        self.max_items_per_section = 20
-        self.max_description_length = 200
+        self.max_items_per_section = MAX_ITEMS_DEFAULT
+        self.max_description_length = MAX_DESCRIPTION_LENGTH
 
-    def _truncate(self, text: str, max_len: int = 200) -> str:
+    def _truncate(self, text: str, max_len: int = MAX_DESCRIPTION_LENGTH) -> str:
         """Truncate text to max length."""
         if not text:
             return ''
@@ -949,7 +968,7 @@ class CASFormatter:
         # From manual commands (AutoRecon _manual_commands.txt)
         # These are the primary source for attack recommendations
         if 'recommendations' in data and data['recommendations']:
-            for rec in data['recommendations'][:15]:
+            for rec in data['recommendations'][:MAX_KEY_FINDINGS]:
                 cmd_entry = {
                     'service': rec.get('service', ''),
                     'port': rec.get('port', 0),
@@ -1059,7 +1078,7 @@ class CASFormatter:
         # Critical vulnerabilities
         if 'vulnerabilities' in data:
             for vuln in data['vulnerabilities']:
-                if vuln.get('severity') in ['critical', 'high']:
+                if vuln.get('severity') in HIGH_PRIORITY_SEVERITIES:
                     # Handle both nikto and nuclei formats
                     if 'description' in vuln:  # Nikto
                         summary = self._truncate(vuln.get('description', 'Unknown vulnerability'), 100)
@@ -1098,10 +1117,9 @@ class CASFormatter:
                         })
 
         # Sort by severity
-        severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'info': 4}
-        findings.sort(key=lambda x: severity_order.get(x.get('severity', 'info'), 5))
+        findings.sort(key=lambda x: SEVERITY_ORDER.get(x.get('severity', 'info'), 5))
 
-        return findings[:15]
+        return findings[:MAX_KEY_FINDINGS]
 
     def format_cas(self, input_data: Dict) -> Dict:
         """Format enriched data into CAS structure.
@@ -1128,13 +1146,13 @@ class CASFormatter:
         target = input_data.get('target', 'unknown')
         session_id = input_data.get('session_id', '')
         scan_type = input_data.get('scan_type', 'unknown')
-        timestamp = input_data.get('timestamp', datetime.utcnow().isoformat())
+        timestamp = input_data.get('timestamp', datetime.now(timezone.utc).isoformat())
         data = input_data.get('data', input_data)
 
         # Build CAS document
         cas = {
             'cas_version': '1.1',
-            'generated_at': datetime.utcnow().isoformat(),
+            'generated_at': datetime.now(timezone.utc).isoformat(),
             'target': {
                 'identifier': target,
                 'session_id': session_id,
@@ -1182,7 +1200,6 @@ class CASFormatter:
         # Process vulnerabilities - split by severity
         # critical/high go to main vulnerabilities list (immediate attention)
         # medium/low/info go to low_priority_vulns (available on request)
-        HIGH_PRIORITY_SEVERITIES = {'critical', 'high'}
         if 'vulnerabilities' in data:
             critical_count = 0
             low_priority_count = 0
@@ -1299,7 +1316,7 @@ class CASFormatter:
 
         return cas
 
-    def write_cas(self, cas_data: Dict, output_path: Path):
+    def write_cas(self, cas_data: Dict, output_path: Path) -> None:
         """Write CAS document to YAML file.
 
         Externalizes low_priority_vulns to last_resort.yaml in the same
@@ -1464,7 +1481,7 @@ class CASFormatter:
             if finding.get('summary', '') not in finding_summaries:
                 existing_findings.append(finding)
 
-        existing['key_findings'] = existing_findings[:15]
+        existing['key_findings'] = existing_findings[:MAX_KEY_FINDINGS]
 
         # Update attack guidance
         existing['attack_guidance'] = new.get('attack_guidance', {})

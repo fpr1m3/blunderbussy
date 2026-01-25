@@ -12,6 +12,7 @@ Flow:
 """
 
 import os
+import re
 import sys
 import time
 import json
@@ -20,7 +21,7 @@ import logging
 import subprocess
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
@@ -54,7 +55,6 @@ def sanitize_workspace_name(name: str) -> str:
     Returns:
         Sanitized workspace name (e.g., "ws_10_129_2_163")
     """
-    import re
     # Replace common invalid characters with underscores
     sanitized = name.replace('.', '_').replace(':', '_').replace('-', '_')
     # Remove any other non-alphanumeric characters except underscores
@@ -225,6 +225,127 @@ class ProcessedFileTracker:
 
 # Supported file extensions for Faraday upload
 SUPPORTED_EXTENSIONS: Set[str] = {'.xml', '.json', '.jsonl', '.txt', '.html'}
+
+
+def generate_cas_from_workspace(
+    client: FaradayClient,
+    workspace: str,
+    target: str,
+    scan_type: str = 'faraday',
+    generate_ptt: bool = True
+) -> Optional[Path]:
+    """
+    Generate CAS YAML from Faraday workspace data.
+
+    Shared function used by both FaradaScanHandler and AutoReconProcessor
+    to avoid code duplication.
+
+    Args:
+        client: Authenticated FaradayClient
+        workspace: Faraday workspace name
+        target: Target identifier (IP or hostname)
+        scan_type: Type of scan ('faraday', 'autorecon', etc.)
+        generate_ptt: Whether to initialize PTT after CAS generation
+
+    Returns:
+        Path to generated context.yaml, or None if generation failed
+    """
+    logger.info(f'Generating CAS for workspace {workspace}, target {target}')
+
+    try:
+        # Query Faraday for data
+        hosts = client.get_hosts(workspace)
+        vulns = client.get_vulnerabilities(workspace)
+        services = client.get_services(workspace)
+        stats = client.get_workspace_stats(workspace)
+
+        logger.info(
+            f'Fetched from Faraday: {len(hosts)} hosts, '
+            f'{len(services)} services, {len(vulns)} vulns'
+        )
+
+        # Prepare data for CAS formatter
+        cas_input: Dict[str, Any] = {
+            'target': target,
+            'session_id': f'{target}_{datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")}',
+            'scan_type': scan_type,
+            'data': {
+                'hosts': hosts,
+                'vulnerabilities': vulns,
+                'services': services,
+                'stats': stats
+            },
+            'source': f'faraday:{workspace}',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }
+
+        # Create target directory
+        cas_path = Path(f'/artifacts/{target}/context.yaml')
+        cas_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Call CAS formatter
+        result = subprocess.run(
+            ['python3', '/app/format-cas.py', str(cas_path)],
+            input=json.dumps(cas_input),
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+
+        if result.returncode != 0:
+            logger.error(f'CAS formatter failed: {result.stderr}')
+            return None
+
+        logger.info(f'Generated CAS: {cas_path}')
+
+        # Trigger PTT initialization
+        if generate_ptt:
+            _init_ptt_from_cas(cas_path)
+
+        return cas_path
+
+    except subprocess.TimeoutExpired:
+        logger.error('CAS formatter timed out')
+        return None
+    except Exception as e:
+        logger.error(f'CAS generation failed for {target}: {e}')
+        return None
+
+
+def _init_ptt_from_cas(cas_path: Path) -> bool:
+    """
+    Initialize PTT from CAS file.
+
+    Args:
+        cas_path: Path to context.yaml
+
+    Returns:
+        True if initialization successful
+    """
+    logger.info(f'Initializing PTT from {cas_path}')
+
+    try:
+        result = subprocess.run(
+            ['python3', '/app/init-ptt.py', str(cas_path)],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+
+        if result.returncode != 0:
+            logger.error(f'PTT initialization failed: {result.stderr}')
+            return False
+
+        ptt_path = cas_path.parent / 'ptt.yaml'
+        logger.info(f'Initialized PTT: {ptt_path}')
+        return True
+
+    except subprocess.TimeoutExpired:
+        logger.error('PTT initialization timed out')
+        return False
+    except Exception as e:
+        logger.error(f'PTT initialization failed: {e}')
+        return False
 
 # Debounce interval in seconds
 DEBOUNCE_SECONDS: float = 2.0
@@ -469,9 +590,7 @@ class FaradayScanHandler(FileSystemEventHandler):
         """
         Generate CAS YAML from Faraday workspace.
 
-        Queries all data from Faraday workspace, formats it for the CAS
-        formatter, and generates context.yaml. Optionally triggers PTT
-        initialization.
+        Delegates to shared generate_cas_from_workspace() function.
 
         Args:
             workspace: Faraday workspace name
@@ -481,101 +600,13 @@ class FaradayScanHandler(FileSystemEventHandler):
             Path to generated context.yaml, or None if generation failed
         """
         target = target or workspace
-        logger.info(f'Generating CAS for workspace {workspace}, target {target}')
-
-        try:
-            # Query Faraday for data
-            hosts = self.client.get_hosts(workspace)
-            vulns = self.client.get_vulnerabilities(workspace)
-            services = self.client.get_services(workspace)
-            stats = self.client.get_workspace_stats(workspace)
-
-            logger.info(
-                f'Fetched from Faraday: {len(hosts)} hosts, '
-                f'{len(services)} services, {len(vulns)} vulns'
-            )
-
-            # Prepare data for CAS formatter
-            cas_input: Dict[str, Any] = {
-                'target': target,
-                'session_id': f'{target}_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}',
-                'scan_type': 'faraday',
-                'data': {
-                    'hosts': hosts,
-                    'vulnerabilities': vulns,
-                    'services': services,
-                    'stats': stats
-                },
-                'source': f'faraday:{workspace}',
-                'timestamp': datetime.utcnow().isoformat()
-            }
-
-            # Create target directory
-            cas_path = Path(f'/artifacts/{target}/context.yaml')
-            cas_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Call CAS formatter
-            result = subprocess.run(
-                ['python3', '/app/format-cas.py', str(cas_path)],
-                input=json.dumps(cas_input),
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-
-            if result.returncode != 0:
-                logger.error(f'CAS formatter failed: {result.stderr}')
-                return None
-
-            logger.info(f'Generated CAS: {cas_path}')
-
-            # Trigger PTT initialization
-            if self.config.generate_ptt:
-                self._init_ptt(cas_path)
-
-            return cas_path
-
-        except subprocess.TimeoutExpired:
-            logger.error('CAS formatter timed out')
-            return None
-        except Exception as e:
-            logger.error(f'CAS generation failed: {e}')
-            return None
-
-    def _init_ptt(self, cas_path: Path) -> bool:
-        """
-        Initialize PTT from CAS file.
-
-        Args:
-            cas_path: Path to context.yaml
-
-        Returns:
-            True if initialization successful
-        """
-        logger.info(f'Initializing PTT from {cas_path}')
-
-        try:
-            result = subprocess.run(
-                ['python3', '/app/init-ptt.py', str(cas_path)],
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-
-            if result.returncode != 0:
-                logger.error(f'PTT initialization failed: {result.stderr}')
-                return False
-
-            ptt_path = cas_path.parent / 'ptt.yaml'
-            logger.info(f'Initialized PTT: {ptt_path}')
-            return True
-
-        except subprocess.TimeoutExpired:
-            logger.error('PTT initialization timed out')
-            return False
-        except Exception as e:
-            logger.error(f'PTT initialization failed: {e}')
-            return False
+        return generate_cas_from_workspace(
+            client=self.client,
+            workspace=workspace,
+            target=target,
+            scan_type='faraday',
+            generate_ptt=self.config.generate_ptt
+        )
 
     def on_created(self, event: FileSystemEvent) -> None:
         """
@@ -789,6 +820,8 @@ class AutoReconProcessor:
         """
         Generate CAS for the target.
 
+        Delegates to shared generate_cas_from_workspace() function.
+
         Args:
             workspace: Faraday workspace name
             target: Original target name
@@ -796,79 +829,13 @@ class AutoReconProcessor:
         Returns:
             Path to generated CAS file, or None if failed
         """
-        logger.info(f'Generating CAS for AutoRecon target: {target}')
-
-        try:
-            # Query Faraday for data
-            hosts = self.client.get_hosts(workspace)
-            vulns = self.client.get_vulnerabilities(workspace)
-            services = self.client.get_services(workspace)
-            stats = self.client.get_workspace_stats(workspace)
-
-            # Prepare data for CAS formatter
-            cas_input: Dict[str, Any] = {
-                'target': target,
-                'session_id': f'{target}_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}',
-                'scan_type': 'autorecon',
-                'data': {
-                    'hosts': hosts,
-                    'vulnerabilities': vulns,
-                    'services': services,
-                    'stats': stats
-                },
-                'source': f'faraday:{workspace}',
-                'timestamp': datetime.utcnow().isoformat()
-            }
-
-            # Create target directory
-            cas_path = Path(f'/artifacts/{target}/context.yaml')
-            cas_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Call CAS formatter
-            result = subprocess.run(
-                ['python3', '/app/format-cas.py', str(cas_path)],
-                input=json.dumps(cas_input),
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-
-            if result.returncode != 0:
-                logger.error(f'CAS formatter failed: {result.stderr}')
-                return None
-
-            logger.info(f'Generated CAS: {cas_path}')
-
-            # Trigger PTT initialization
-            if self.config.generate_ptt:
-                self._init_ptt(cas_path)
-
-            return cas_path
-
-        except Exception as e:
-            logger.error(f'CAS generation failed for {target}: {e}')
-            return None
-
-    def _init_ptt(self, cas_path: Path) -> bool:
-        """Initialize PTT from CAS file."""
-        try:
-            result = subprocess.run(
-                ['python3', '/app/init-ptt.py', str(cas_path)],
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-
-            if result.returncode != 0:
-                logger.error(f'PTT initialization failed: {result.stderr}')
-                return False
-
-            logger.info(f'Initialized PTT for {cas_path.parent.name}')
-            return True
-
-        except Exception as e:
-            logger.error(f'PTT initialization failed: {e}')
-            return False
+        return generate_cas_from_workspace(
+            client=self.client,
+            workspace=workspace,
+            target=target,
+            scan_type='autorecon',
+            generate_ptt=self.config.generate_ptt
+        )
 
     def poll(self) -> int:
         """

@@ -19,7 +19,7 @@ import sys
 import json
 import re
 from typing import Dict, List, Any, Optional, Set
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
@@ -517,7 +517,7 @@ class WebEnricher:
         # Add enrichment summary
         enriched['enrichment'] = enriched.get('enrichment', {})
         enriched['enrichment']['web'] = {
-            'enriched_at': datetime.utcnow().isoformat(),
+            'enriched_at': datetime.now(timezone.utc).isoformat(),
             'high_value_targets': high_value_targets[:10],
             'total_tech_vulns': len(all_tech_vulns),
             'total_security_issues': len(all_security_issues),

@@ -23,7 +23,7 @@ import json
 import os
 from pathlib import Path
 from typing import Dict, List, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import yaml
 import fcntl
 
@@ -65,8 +65,8 @@ class ManifestManager:
         # Default manifest structure
         return {
             'manifest_version': '1.0',
-            'created_at': datetime.utcnow().isoformat(),
-            'updated_at': datetime.utcnow().isoformat(),
+            'created_at': datetime.now(timezone.utc).isoformat(),
+            'updated_at': datetime.now(timezone.utc).isoformat(),
             'sessions': {},
             'targets': {},
             'key_findings': [],
@@ -108,7 +108,7 @@ class ManifestManager:
                         'name': vuln.get('template_name', '')[:80],
                         'host': vuln.get('host', ''),
                         'cves': vuln.get('cves', [])[:3],
-                        'discovered_at': datetime.utcnow().isoformat()
+                        'discovered_at': datetime.now(timezone.utc).isoformat()
                     })
 
         # Exploitable CVEs
@@ -122,7 +122,7 @@ class ManifestManager:
                     'cvss': cve_detail.get('cvss_v3_score', 0),
                     'in_kev': cve in enriched_data.get('cisa_kev_cves', []),
                     'exploit_sources': cve_detail.get('exploit_sources', [])[:3],
-                    'discovered_at': datetime.utcnow().isoformat()
+                    'discovered_at': datetime.now(timezone.utc).isoformat()
                 })
 
         # High-value services
@@ -140,7 +140,7 @@ class ManifestManager:
                             'version': port.get('version_string', '')[:50],
                             'priority': enrichment.get('priority_score'),
                             'vulns': enrichment.get('known_vulns', [])[:3],
-                            'discovered_at': datetime.utcnow().isoformat()
+                            'discovered_at': datetime.now(timezone.utc).isoformat()
                         })
 
         # Interesting subdomains
@@ -153,7 +153,7 @@ class ManifestManager:
                         'severity': 'info',
                         'host': host,
                         'category': category,
-                        'discovered_at': datetime.utcnow().isoformat()
+                        'discovered_at': datetime.now(timezone.utc).isoformat()
                     })
 
         return findings
@@ -165,8 +165,8 @@ class ManifestManager:
 
         if target not in targets:
             targets[target] = {
-                'first_seen': datetime.utcnow().isoformat(),
-                'last_updated': datetime.utcnow().isoformat(),
+                'first_seen': datetime.now(timezone.utc).isoformat(),
+                'last_updated': datetime.now(timezone.utc).isoformat(),
                 'scan_types': [],
                 'hosts_count': 0,
                 'vulns_count': 0,
@@ -176,7 +176,7 @@ class ManifestManager:
             }
 
         target_entry = targets[target]
-        target_entry['last_updated'] = datetime.utcnow().isoformat()
+        target_entry['last_updated'] = datetime.now(timezone.utc).isoformat()
 
         # Update counts
         if 'hosts' in enriched_data:
@@ -207,8 +207,8 @@ class ManifestManager:
 
         if session_id not in sessions:
             sessions[session_id] = {
-                'created_at': datetime.utcnow().isoformat(),
-                'updated_at': datetime.utcnow().isoformat(),
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'updated_at': datetime.now(timezone.utc).isoformat(),
                 'target': target,
                 'scans': [],
                 'status': 'active',
@@ -216,12 +216,12 @@ class ManifestManager:
             }
 
         session = sessions[session_id]
-        session['updated_at'] = datetime.utcnow().isoformat()
+        session['updated_at'] = datetime.now(timezone.utc).isoformat()
 
         # Add scan to session
         scan_entry = {
             'type': scan_type,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
 
         if scan_entry not in session['scans']:
@@ -235,7 +235,7 @@ class ManifestManager:
         history = manifest.setdefault('scan_history', [])
 
         entry = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'target': target,
             'scan_type': scan_type,
             'source_file': source_file
@@ -359,7 +359,7 @@ class ManifestManager:
         scan_type = input_data.get('scan_type', 'unknown')
         cas_path = input_data.get('cas_path', '')
         enriched_data = input_data.get('enriched_data', {})
-        timestamp = input_data.get('timestamp', datetime.utcnow().isoformat())
+        timestamp = input_data.get('timestamp', datetime.now(timezone.utc).isoformat())
 
         # Extract Faraday-specific info if scan_type is 'faraday'
         faraday_info = None
@@ -404,7 +404,7 @@ class ManifestManager:
             self._update_attack_progress(manifest, enriched_data)
 
             # Update timestamp
-            manifest['updated_at'] = datetime.utcnow().isoformat()
+            manifest['updated_at'] = datetime.now(timezone.utc).isoformat()
 
             # Save manifest
             self._save_manifest(manifest)

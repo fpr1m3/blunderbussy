@@ -19,7 +19,7 @@ import sys
 import json
 import re
 from typing import Dict, List, Any, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass, asdict, field
 
 
@@ -500,7 +500,7 @@ class ServiceEnricher:
         # Add enrichment metadata
         enriched['enrichment'] = enriched.get('enrichment', {})
         enriched['enrichment']['services'] = {
-            'enriched_at': datetime.utcnow().isoformat(),
+            'enriched_at': datetime.now(timezone.utc).isoformat(),
             'services_found': services_found,
             'high_priority_targets': high_priority_targets[:10],
             'total_services_with_default_creds': total_default_creds,
