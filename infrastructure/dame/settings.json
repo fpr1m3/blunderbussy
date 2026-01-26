@@ -23,7 +23,10 @@
     }
   },
   "tools": {
-    "enableHooks": true
+    "enableHooks": true,
+    "enableToolOutputTruncation": true,
+    "truncateToolOutputThreshold": 15000,
+    "truncateToolOutputLines": 100
   },
   "hooks": {
     "enabled": true

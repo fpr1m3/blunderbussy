@@ -28,7 +28,7 @@ Look for additional artifacts:
 - `/artifacts/{{args}}/source_code*` - Any leaked source code
 - `/artifacts/{{args}}/*.tar.gz` - Downloaded archives
 
-If source code exists, extract and analyze it for vulnerabilities before attacking.
+If source code exists, delegate analysis to the source_code agent (see GEMINI.md <subagent_delegation>).
 
 ## Phase 2: Network Setup
 
@@ -84,14 +84,18 @@ Before executing, query the skills database:
 qdrant-find "<platform> <service> <technique_name>"
 ```
 
-### Step 3.3: Analyze Source Code (if available)
-If source code was found in artifacts:
-1. Extract and review the code
-2. Identify input validation flaws
-3. Find hardcoded credentials or secrets
-4. Map routes/endpoints to functionality
-5. Look for dangerous functions (eval, exec, system, etc.)
-6. Check for path traversal, injection points, file operations
+### Step 3.3: Delegate Source Code Analysis (if available)
+If source code was found in artifacts or gained via filesystem access:
+```
+delegate_to_agent("source_code", "Analyze <path> for vulnerabilities. Target: {{args}}, Platform: <os>, Technologies: <from CAS>")
+```
+The source_code agent will return a vulnerability brief with:
+- Critical findings (file:line references, exploit commands)
+- Attack surface map
+- Hardcoded secrets
+- Recommended attack order
+
+Act on the brief's recommendations.
 
 ## Phase 4: Exploitation Execution
 

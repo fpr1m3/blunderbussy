@@ -13,11 +13,11 @@ This document summarizes procedural improvements for the Dame agent based on the
 *   **Implementation:** "Large Output Management" section in GEMINI.md explicitly prohibits `ls -laR`, `find /` with mitigation strategies.
 
 ## 2. Targeted Source Code Analysis (Grep Before Read)
-*   **Status:** ⚠️ **PARTIALLY IMPLEMENTED** - needs explicit prompt guidance
+*   **Status:** ✅ **IMPLEMENTED** in `GEMINI.md` (lines 122-162)
 *   **Issue:** The agent read multiple entire PHP files (config, db, login, register, admin) sequentially without knowing if they contained relevant logic.
 *   **Evidence:** Lines 138-185.
 *   **Lesson:** Prioritize `grep -r` for high-value sinks (e.g., `eval`, `system`, `runkit`, `PDO`) to identify vulnerable files before committing to a full `ReadFile` operation.
-*   **TODO:** Add "Grep Before Read" section to GEMINI.md with sink patterns for PHP, Python, JS.
+*   **Implementation:** Added `<grep_before_read>` section with sink patterns for PHP, Python, and JavaScript.
 
 ## 3. Silent Brute-forcing & Iteration
 *   **Status:** ✅ **IMPLEMENTED** in `GEMINI.md` (lines 225-231)
@@ -41,11 +41,11 @@ This document summarizes procedural improvements for the Dame agent based on the
 *   **Implementation:** "Web Content Filtering" section in GEMINI.md with `html2text`, `head`, `curl -I` patterns.
 
 ## 6. Session State Management
-*   **Status:** ❌ **NOT IMPLEMENTED** - needs prompt guidance
+*   **Status:** ✅ **IMPLEMENTED** in `GEMINI.md` (lines 164-199)
 *   **Issue:** The agent re-ran the full login process multiple times without checking if the existing `cookies.txt` was still valid after a perceived failure.
 *   **Evidence:** Lines 712, 915.
 *   **Lesson:** Verify session validity (e.g., `curl -I -b cookies.txt`) before executing re-authentication logic to minimize redundant network noise and token usage.
-*   **TODO:** Add "Session Management" section to GEMINI.md with cookie validation patterns.
+*   **Implementation:** Added `<session_management>` section with cookie validation patterns and full workflow.
 
 ---
 
@@ -54,16 +54,13 @@ This document summarizes procedural improvements for the Dame agent based on the
 | # | Lesson | Status |
 |---|--------|--------|
 | 1 | Optimize Discovery | ✅ Implemented |
-| 2 | Grep Before Read | ⚠️ Needs prompt addition |
+| 2 | Grep Before Read | ✅ Implemented |
 | 3 | Silent Brute-forcing | ✅ Implemented |
 | 4 | Environment-Aware Tooling | ✅ Fixed (infra) |
 | 5 | Aggressive Content Filtering | ✅ Implemented |
-| 6 | Session State Management | ❌ Needs prompt addition |
+| 6 | Session State Management | ✅ Implemented |
 
-**Remaining Work:**
-- Add "Grep Before Read" section to GEMINI.md
-- Add "Session Management" section to GEMINI.md
-- Consider adding to memory research (blunderbussy-0we) as these are stateful concerns
+**All agent efficiency lessons implemented.** Consider adding to memory research (blunderbussy-0we) as these are stateful concerns.
 
 ---
 
@@ -112,3 +109,43 @@ This document summarizes procedural improvements for the Dame agent based on the
 | 10 | Workspace Name Sanitization | ✅ Fixed |
 
 **Key Takeaway:** When integrating with REST APIs, always test actual response formats with `curl` before assuming structure based on documentation. Documentation may be outdated or inconsistent across API versions.
+
+---
+
+# Lessons Learned: Git History Context Explosion
+
+**Source:** Dame session failure (2026-01-25)
+**Last Review:** 2026-01-25
+
+## 11. Git History Search Causes Context Explosion
+*   **Status:** ✅ **FIXED** via BeforeTool hook + GEMINI.md guidance
+*   **Issue:** Dame ran `git grep "password" $(git rev-list --all)` which searched ALL git history, returning megabytes of minified JavaScript (jQuery contains "password" for form handling).
+*   **Evidence:** Session compressed from 686,574 to 249,065 tokens before crashing.
+*   **Lesson:** NEVER search all git history. Minified JS libraries (jQuery, React, etc.) contain common keywords and will overwhelm context.
+*   **Root Cause:** AfterTool hooks can add annotations but CANNOT MODIFY tool output - the truncation only affects internal hook processing.
+*   **Fix Applied:**
+    1. Added `<git_safety>` section to GEMINI.md with safe alternatives
+    2. Extended `shellcheck_validator.py` (BeforeTool hook) to BLOCK dangerous patterns:
+       - `git grep/log/show/diff $(git rev-list --all)` → blocked
+       - `git rev-list --all` without piping → blocked
+       - `git log` without `-n` or `--max-count` → blocked
+    3. Lowered `truncateToolOutputThreshold` from 50000 to 15000 chars
+    4. Added git safety guidance to `source_code.md` agent
+
+## 12. Hook Architecture Limitation
+*   **Status:** ⚠️ **KNOWN LIMITATION** - documented for awareness
+*   **Issue:** AfterTool hooks receive tool output but cannot modify what goes into conversation context.
+*   **Evidence:** `truncate_output()` in `after_tool.py` truncates to 8K chars but this only affects hook-internal processing (credential extraction, caching). The CLI itself uses `truncateToolOutputThreshold` (previously 50K) for conversation context.
+*   **Lesson:** For context protection, use BeforeTool hooks to BLOCK dangerous commands rather than relying on AfterTool to truncate output.
+*   **Mitigation:** BeforeTool pattern detection now blocks commands before they run, preventing the output from ever being generated.
+
+---
+
+## Summary (Git/Context)
+
+| # | Lesson | Status |
+|---|--------|--------|
+| 11 | Git History Search Blocked | ✅ Fixed (BeforeTool hook) |
+| 12 | Hook Architecture Limitation | ⚠️ Documented |
+
+**Key Takeaway:** For context window protection, PREVENTION (BeforeTool blocking) is more effective than REMEDIATION (AfterTool truncation). The hook cannot modify output that has already been generated.
