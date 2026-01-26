@@ -43,6 +43,7 @@ COPY enrichment/faraday_watcher.py .
 COPY enrichment/format-cas.py .
 COPY enrichment/init-ptt.py .
 COPY enrichment/update-manifest.py .
+COPY enrichment/regenerate-cas.py .
 
 # Copy prompts for Gemini attack guidance
 COPY enrichment/prompts/ ./prompts/

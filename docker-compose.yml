@@ -47,6 +47,7 @@ services:
             context: ./infrastructure
             dockerfile: enrichment/Dockerfile
         container_name: enrichment
+        user: root  # Need root for volume write access in rootless podman
         volumes:
             # Shared artifacts volume
             - artifacts:/artifacts

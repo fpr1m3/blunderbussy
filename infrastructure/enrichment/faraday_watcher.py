@@ -236,7 +236,9 @@ class ProcessedFileTracker:
 
 
 # Supported file extensions for Faraday upload
-SUPPORTED_EXTENSIONS: Set[str] = {'.xml', '.json', '.jsonl', '.txt', '.html'}
+# Official Faraday formats: .xml, .txt, .zip
+# .json is supported via Faraday's plugin system (e.g., nuclei JSON output)
+SUPPORTED_EXTENSIONS: Set[str] = {'.xml', '.json', '.txt', '.zip'}
 
 
 def generate_cas_from_workspace(
@@ -358,6 +360,62 @@ def _init_ptt_from_cas(cas_path: Path) -> bool:
     except Exception as e:
         logger.error(f'PTT initialization failed: {e}')
         return False
+
+
+def wait_for_processing(
+    client: FaradayClient,
+    workspace: str,
+    command_ids: List[int],
+    timeout: int = 120,
+    poll_interval: int = 2
+) -> bool:
+    """
+    Wait for Faraday to finish processing uploaded reports.
+
+    Polls command status until all commands complete or timeout.
+
+    Args:
+        client: Authenticated FaradayClient
+        workspace: Workspace name
+        command_ids: List of command IDs from upload_report() calls
+        timeout: Maximum wait time in seconds (default: 120)
+        poll_interval: Seconds between status checks (default: 2)
+
+    Returns:
+        True if all commands completed successfully, False on timeout
+    """
+    if not command_ids:
+        logger.debug('No command IDs to wait for')
+        return True
+
+    start_time = time.time()
+    total_commands = len(command_ids)
+    completed_count = 0
+
+    while time.time() - start_time < timeout:
+        completed_count = 0
+
+        for cmd_id in command_ids:
+            if client.is_command_complete(workspace, cmd_id):
+                completed_count += 1
+
+        if completed_count == total_commands:
+            logger.info(
+                f'Faraday processing complete: {completed_count}/{total_commands} commands finished'
+            )
+            return True
+
+        logger.debug(
+            f'Waiting for Faraday processing: {completed_count}/{total_commands} complete'
+        )
+        time.sleep(poll_interval)
+
+    logger.warning(
+        f'Timeout waiting for Faraday processing after {timeout}s: '
+        f'{completed_count}/{total_commands} complete'
+    )
+    return False
+
 
 # Debounce interval in seconds
 DEBOUNCE_SECONDS: float = 2.0
@@ -792,6 +850,7 @@ class AutoReconProcessor:
 
             uploaded = 0
             failed = 0
+            command_ids = []
 
             for scan_file in scans_dir.rglob('*'):
                 # Skip directories
@@ -809,13 +868,20 @@ class AutoReconProcessor:
                     continue
 
                 try:
-                    self.client.upload_report(workspace, scan_file)
+                    result = self.client.upload_report(workspace, scan_file)
                     uploaded += 1
+                    if result.get('command_id'):
+                        command_ids.append(result['command_id'])
                 except Exception as e:
                     logger.warning(f'Failed to upload {scan_file.name}: {e}')
                     failed += 1
 
             logger.info(f'Uploaded {uploaded} files for {target} ({failed} failed)')
+
+            # Wait for Faraday to finish processing before generating CAS
+            if command_ids:
+                if not wait_for_processing(self.client, workspace, command_ids):
+                    logger.warning(f'Processing timeout for {target}, generating CAS anyway')
 
             # Generate CAS
             if self.config.generate_cas:

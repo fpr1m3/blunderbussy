@@ -37,6 +37,16 @@ from dataclasses import dataclass, field, asdict
 from enum import Enum
 
 
+# Circuit breaker: Hard stop after this many total attempts across all techniques.
+# Prevents unbounded exploitation loops. Soft limits (15 failures → guidance) still apply.
+MAX_ENGAGEMENT_ATTEMPTS = 50
+
+
+class ExhaustionError(Exception):
+    """Raised when engagement hits MAX_ENGAGEMENT_ATTEMPTS circuit breaker."""
+    pass
+
+
 class Status(str, Enum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
@@ -243,7 +253,13 @@ class PTTManager:
         """Detect target platform from CAS data."""
         for host in cas.get("hosts", []):
             os_info = host.get("os", {})
-            os_name = os_info.get("name", "").lower() if os_info else ""
+            # Handle os_info being a string, dict, or None
+            if isinstance(os_info, str):
+                os_name = os_info.lower()
+            elif isinstance(os_info, dict):
+                os_name = os_info.get("name", "").lower()
+            else:
+                os_name = ""
             if "linux" in os_name or "ubuntu" in os_name or "debian" in os_name:
                 return "linux"
             elif "windows" in os_name:
@@ -253,11 +269,20 @@ class PTTManager:
     @classmethod
     def _transform_host(cls, cas_host: Dict) -> Host:
         """Transform CAS host to PTT Host node."""
+        # Handle os being a string, dict, or None
+        os_info = cas_host.get("os", {})
+        if isinstance(os_info, str):
+            os_value = os_info
+        elif isinstance(os_info, dict):
+            os_value = os_info.get("name", "")
+        else:
+            os_value = ""
+
         host = Host(
             id=str(uuid.uuid4()),
             ip=cas_host.get("ip", ""),
             hostname=cas_host.get("hostname", ""),
-            os=cas_host.get("os", {}).get("name", "") if cas_host.get("os") else "",
+            os=os_value,
             priority=cas_host.get("priority", 5)
         )
 
@@ -416,7 +441,19 @@ class PTTManager:
         return vector
 
     def get_next_technique(self) -> Optional[Technique]:
-        """Get the next technique to attempt based on priority."""
+        """Get the next technique to attempt based on priority.
+
+        Raises:
+            ExhaustionError: If total_attempts >= MAX_ENGAGEMENT_ATTEMPTS (circuit breaker).
+        """
+        # Circuit breaker: hard stop after MAX_ENGAGEMENT_ATTEMPTS
+        total = self.engagement.iteration_stats.get("total_attempts", 0)
+        if total >= MAX_ENGAGEMENT_ATTEMPTS:
+            raise ExhaustionError(
+                f"Circuit breaker triggered: {total} attempts reached "
+                f"(max={MAX_ENGAGEMENT_ATTEMPTS}). Engagement exhausted."
+            )
+
         candidates = []
 
         for host in self.engagement.hosts:

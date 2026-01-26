@@ -565,3 +565,69 @@ class FaradayClient:
             },
             'last_activity': data.get('update_date') or data.get('last_activity')
         }
+
+    # ─────────────────────────────────────────────────────────────────
+    # Command Status (blunderbussy-wim5)
+    # ─────────────────────────────────────────────────────────────────
+
+    def get_command(self, workspace: str, command_id: int) -> Dict[str, Any]:
+        """
+        Get details of a command/processing job.
+
+        Args:
+            workspace: Workspace name
+            command_id: Command ID returned from upload_report()
+
+        Returns:
+            dict with keys:
+                - id: Command ID
+                - duration: Processing duration in seconds, or "In progress"
+                - tool: Tool name (nmap, nuclei, etc.)
+                - command: Command string or "error" on failure
+                - start_date: Processing start timestamp
+                - end_date: Processing end timestamp (None if in progress)
+        """
+        self._require_auth()
+
+        url = f"{self.config.url}/_api/v3/ws/{workspace}/commands/{command_id}/"
+        response = self.session.get(url, timeout=self.config.timeout)
+        response.raise_for_status()
+
+        data = response.json()
+
+        return {
+            'id': data.get('id') or data.get('_id'),
+            'duration': data.get('duration'),
+            'tool': data.get('tool'),
+            'command': data.get('command'),
+            'start_date': data.get('start_date'),
+            'end_date': data.get('end_date')
+        }
+
+    def is_command_complete(self, workspace: str, command_id: int) -> bool:
+        """
+        Check if a command/processing job has completed.
+
+        A command is complete when:
+        - duration is numeric (not "In progress" string)
+        - command is not "error"
+
+        Args:
+            workspace: Workspace name
+            command_id: Command ID returned from upload_report()
+
+        Returns:
+            bool: True if processing is complete and successful
+        """
+        cmd = self.get_command(workspace, command_id)
+
+        # Check for error state
+        if cmd.get('command') == 'error':
+            return False
+
+        # Check if duration is numeric (complete) vs "In progress" (still running)
+        duration = cmd.get('duration')
+        if isinstance(duration, (int, float)):
+            return True
+
+        return False
