@@ -717,11 +717,13 @@ class AutoReconProcessor:
     Attributes:
         client: FaradayClient for API calls
         config: WatcherConfig with paths and settings
-        processed_targets: Set of already-processed target names
+        processed_targets: Dict mapping target name to processing timestamp
     """
 
     # File extensions to skip during upload
-    SKIP_EXTENSIONS: Set[str] = {'.log', '.txt', '.md'}
+    # NOTE: .html added because Faraday doesn't parse HTML files, causing
+    # commands to never complete and blocking CAS generation
+    SKIP_EXTENSIONS: Set[str] = {'.log', '.txt', '.md', '.html'}
 
     def __init__(self, client: FaradayClient, config: WatcherConfig):
         """
@@ -733,7 +735,7 @@ class AutoReconProcessor:
         """
         self.client = client
         self.config = config
-        self.processed_targets: Set[str] = set()
+        self.processed_targets: Dict[str, float] = {}
         self._storage_path = config.logs_dir / 'autorecon_processed.json'
         self._load_processed_targets()
 
@@ -742,24 +744,31 @@ class AutoReconProcessor:
         if self._storage_path.exists():
             try:
                 data = json.loads(self._storage_path.read_text())
-                # Handle both old format (list) and new format (dict with 'targets' key)
+                # Handle old format (list) and new format (dict with timestamps)
                 if isinstance(data, list):
-                    self.processed_targets = set(data)
+                    # Migrate old format: list -> dict with timestamps
+                    self.processed_targets = {t: 0 for t in data}
+                    logger.info(f'Migrated {len(self.processed_targets)} targets to new format')
+                elif 'targets' in data and isinstance(data['targets'], list):
+                    # Intermediate format: dict with list
+                    self.processed_targets = {t: 0 for t in data['targets']}
+                    logger.info(f'Migrated {len(self.processed_targets)} targets to new format')
                 else:
-                    self.processed_targets = set(data.get('targets', []))
+                    # New format: dict mapping target -> processed_timestamp
+                    self.processed_targets = data
                 logger.info(f'Loaded {len(self.processed_targets)} processed AutoRecon targets')
             except (json.JSONDecodeError, IOError) as e:
                 logger.warning(f'Failed to load processed targets: {e}')
-                self.processed_targets = set()
+                self.processed_targets = {}
+        else:
+            self.processed_targets = {}
 
     def _save_processed_target(self, target: str) -> None:
-        """Save target to processed list."""
-        self.processed_targets.add(target)
+        """Save target with processing timestamp."""
+        self.processed_targets[target] = time.time()
         try:
             self._storage_path.parent.mkdir(parents=True, exist_ok=True)
-            self._storage_path.write_text(json.dumps({
-                'targets': list(self.processed_targets)
-            }, indent=2))
+            self._storage_path.write_text(json.dumps(self.processed_targets, indent=2))
         except IOError as e:
             logger.error(f'Failed to save processed target: {e}')
 
@@ -785,12 +794,48 @@ class AutoReconProcessor:
         except IOError:
             return False
 
+    def get_scan_completion_time(self, target_dir: Path) -> float:
+        """
+        Get the completion timestamp of a scan.
+
+        Uses autorecon_meta.json if available, otherwise falls back to
+        _commands.log modification time.
+
+        Args:
+            target_dir: Path to target directory
+
+        Returns:
+            Unix timestamp of scan completion, or 0 if unknown
+        """
+        # Try autorecon_meta.json first (written by our wrapper)
+        meta_file = target_dir / 'autorecon_meta.json'
+        if meta_file.exists():
+            try:
+                meta = json.loads(meta_file.read_text())
+                if meta.get('completed_at'):
+                    from datetime import datetime
+                    completed = datetime.fromisoformat(meta['completed_at'].replace('Z', '+00:00'))
+                    return completed.timestamp()
+            except (json.JSONDecodeError, IOError, ValueError):
+                pass
+
+        # Fall back to _commands.log mtime
+        commands_log = target_dir / 'scans' / '_commands.log'
+        if commands_log.exists():
+            try:
+                return commands_log.stat().st_mtime
+            except OSError:
+                pass
+
+        return 0
+
     def find_ready_targets(self) -> List[Path]:
         """
-        Find completed AutoRecon targets not yet processed.
+        Find completed AutoRecon targets ready for processing.
 
-        Scans the results directory for target subdirectories with
-        completed scans that haven't been processed yet.
+        A target is ready if:
+        1. Scan is complete (has completion marker)
+        2. Either never processed, OR scan completed after last processing (rescan)
 
         Returns:
             List of target directory paths ready for processing
@@ -806,14 +851,22 @@ class AutoReconProcessor:
 
             target_name = target_dir.name
 
-            # Skip already processed
-            if target_name in self.processed_targets:
+            # Check if scan is complete
+            if not self.is_scan_complete(target_dir):
                 continue
 
-            # Check if scan is complete
-            if self.is_scan_complete(target_dir):
-                ready.append(target_dir)
-                logger.debug(f'Found ready target: {target_name}')
+            # Check if already processed
+            last_processed = self.processed_targets.get(target_name, 0)
+            if last_processed > 0:
+                # Check if this is a rescan (completed after we processed)
+                scan_completed = self.get_scan_completion_time(target_dir)
+                if scan_completed <= last_processed:
+                    # Already processed this scan
+                    continue
+                logger.info(f'Detected rescan for {target_name} (scan: {scan_completed:.0f}, processed: {last_processed:.0f})')
+
+            ready.append(target_dir)
+            logger.debug(f'Found ready target: {target_name}')
 
         return ready
 
@@ -863,9 +916,8 @@ class AutoReconProcessor:
                 if scan_file.stat().st_size == 0:
                     continue
 
-                # Skip files starting with underscore (internal AutoRecon files)
-                if scan_file.name.startswith('_'):
-                    continue
+                # NOTE: AutoRecon prefixes output files with underscore (e.g. _full_tcp_nmap.xml)
+                # This is their standard naming convention, not internal files to skip
 
                 try:
                     result = self.client.upload_report(workspace, scan_file)
@@ -922,12 +974,20 @@ class AutoReconProcessor:
         Returns:
             Number of targets processed
         """
+        logger.debug('Polling for ready AutoRecon targets...')
         ready = self.find_ready_targets()
+
+        if not ready:
+            logger.debug('No ready targets found')
+            return 0
+
+        logger.info(f'Found {len(ready)} ready targets: {[t.name for t in ready]}')
         processed = 0
 
         for target_dir in ready:
             if self.process_target(target_dir):
                 processed += 1
+                logger.info(f'Successfully processed {target_dir.name}')
 
         return processed
 
@@ -1101,18 +1161,32 @@ def main():
 
     # Main loop with AutoRecon polling
     last_autorecon_check = time.time()
+    last_heartbeat = time.time()
+    heartbeat_interval = 300  # Log heartbeat every 5 minutes
+    poll_count = 0
 
     try:
         while True:
             time.sleep(1)
 
-            # Periodic AutoRecon check
             now = time.time()
+
+            # Periodic AutoRecon check
             if now - last_autorecon_check >= config.autorecon_poll_interval:
+                poll_count += 1
                 targets_processed = autorecon.poll()
                 if targets_processed > 0:
-                    logger.info(f'Processed {targets_processed} AutoRecon targets')
+                    logger.info(f'Poll completed: processed {targets_processed} AutoRecon targets')
                 last_autorecon_check = now
+
+            # Periodic heartbeat
+            if now - last_heartbeat >= heartbeat_interval:
+                logger.info(
+                    f'Heartbeat: {poll_count} polls, '
+                    f'{len(autorecon.processed_targets)} targets tracked'
+                )
+                poll_count = 0
+                last_heartbeat = now
 
     except KeyboardInterrupt:
         logger.info('Shutting down...')
