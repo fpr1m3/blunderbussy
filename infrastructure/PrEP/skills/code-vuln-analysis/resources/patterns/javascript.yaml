@@ -1,0 +1,421 @@
+# JavaScript/TypeScript Dangerous Sink Patterns
+# Used by Recon Agent for fast pattern matching to identify attack surface
+# Reference: CODE_ANALYSIS_AGENT_DESIGN.md lines 859-868
+
+version: "1.0"
+language: javascript
+file_extensions: [".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"]
+
+patterns:
+  code_execution:
+    - name: eval
+      regex: '\beval\s*\('
+      severity: 10
+      cwe: CWE-94
+      description: Evaluate arbitrary JavaScript
+      examples:
+        - "eval(userInput)"
+        - "eval(req.body.code)"
+
+    - name: function_constructor
+      regex: '\bnew\s+Function\s*\('
+      severity: 10
+      cwe: CWE-94
+      description: Dynamic function creation
+      examples:
+        - "new Function(code)()"
+        - "new Function('return ' + expr)()"
+
+    - name: setTimeout_string
+      regex: '\b(setTimeout|setInterval)\s*\(\s*["\''`]'
+      severity: 9
+      cwe: CWE-94
+      description: Timer with string argument (evaluated as code)
+      examples:
+        - "setTimeout('alert(1)', 1000)"
+        - "setInterval(userCode, 5000)"
+
+    - name: vm_runInContext
+      regex: '\bvm\.(runInContext|runInNewContext|runInThisContext|Script)\s*\('
+      severity: 10
+      cwe: CWE-94
+      description: Node.js VM execution
+      examples:
+        - "vm.runInNewContext(code)"
+
+  command_injection:
+    - name: exec_child_process
+      regex: '(child_process\.)?(exec|execSync)\s*\('
+      severity: 10
+      cwe: CWE-78
+      description: Shell command execution
+      examples:
+        - "exec('ls ' + dir)"
+
+    - name: spawn_shell
+      regex: '(spawn|spawnSync)\s*\([^)]*shell\s*:\s*true'
+      severity: 10
+      cwe: CWE-78
+      description: Spawn with shell option enabled
+      examples:
+        - "spawn(cmd, { shell: true })"
+
+    - name: execFile_unsafe
+      regex: '(execFile|execFileSync)\s*\([^)]*,\s*\[[^\]]*\+[^\]]*\]'
+      severity: 8
+      cwe: CWE-78
+      description: execFile with constructed arguments
+      examples:
+        - "execFile('/bin/sh', ['-c', userCmd])"
+
+  sql_injection:
+    - name: query_template_literal
+      regex: '\.(query|execute|run)\s*\(\s*`'
+      severity: 9
+      cwe: CWE-89
+      description: SQL query with template literal (often injectable)
+      examples:
+        - "db.query(`SELECT * FROM users WHERE id = ${userId}`)"
+
+    - name: query_concatenation
+      regex: '\.(query|execute|run)\s*\([^)]+\+'
+      severity: 9
+      cwe: CWE-89
+      description: SQL query with string concatenation
+      examples:
+        - "db.query('SELECT * FROM users WHERE id = ' + userId)"
+
+    - name: raw_sequelize
+      regex: 'sequelize\.(query|literal)\s*\('
+      severity: 8
+      cwe: CWE-89
+      description: Sequelize raw query - verify parameterization
+      examples:
+        - "sequelize.query(`SELECT * FROM users WHERE id = ${id}`)"
+
+    - name: knex_raw
+      regex: '\.raw\s*\(\s*`'
+      severity: 8
+      cwe: CWE-89
+      description: Knex raw query with template literal
+      examples:
+        - "knex.raw(`SELECT * FROM ${table}`)"
+
+    - name: mongoose_where
+      regex: '\.\$where\s*\('
+      severity: 9
+      cwe: CWE-943
+      description: MongoDB $where operator - allows JS execution
+      examples:
+        - "Model.find({ $where: userInput })"
+
+  nosql_injection:
+    - name: mongo_query_object
+      regex: '\.find\s*\(\s*req\.(body|query|params)'
+      severity: 8
+      cwe: CWE-943
+      description: MongoDB query with direct request object
+      examples:
+        - "User.find(req.body)"
+
+    - name: mongo_where_injection
+      regex: '\$where.*req\.(body|query|params)'
+      severity: 9
+      cwe: CWE-943
+      description: MongoDB $where with user input
+      examples:
+        - "collection.find({ $where: req.query.filter })"
+
+  file_operations:
+    - name: fs_readFile
+      regex: '\bfs\.(readFile|readFileSync|createReadStream)\s*\([^)]*req\.'
+      severity: 7
+      cwe: CWE-22
+      description: File read with user-controlled path
+      examples:
+        - "fs.readFile(req.query.file)"
+
+    - name: fs_writeFile
+      regex: '\bfs\.(writeFile|writeFileSync|createWriteStream)\s*\('
+      severity: 7
+      cwe: CWE-22
+      description: File write operation
+      examples:
+        - "fs.writeFile(path, content)"
+
+    - name: fs_unlink
+      regex: '\bfs\.(unlink|unlinkSync|rmdir|rmdirSync|rm|rmSync)\s*\('
+      severity: 6
+      cwe: CWE-22
+      description: File/directory deletion
+      examples:
+        - "fs.unlink(req.body.file)"
+
+    - name: path_join_traversal
+      regex: 'path\.join\s*\([^)]*req\.'
+      severity: 6
+      cwe: CWE-22
+      description: Path join with user input - may allow traversal
+      examples:
+        - "path.join(baseDir, req.params.file)"
+      false_positive_hint: "Verify if path is validated after join"
+
+    - name: require_dynamic
+      regex: '\brequire\s*\([^)]*req\.|require\s*\([^)]*\+[^)]*\)'
+      severity: 8
+      cwe: CWE-98
+      description: Dynamic require with user input
+      examples:
+        - "require(req.query.module)"
+        - "require('./modules/' + name)"
+
+  deserialization:
+    - name: node_serialize
+      regex: '(node-serialize|serialize-javascript).*\.unserialize\s*\('
+      severity: 10
+      cwe: CWE-502
+      description: Node serialize/unserialize - allows RCE
+      examples:
+        - "serialize.unserialize(data)"
+
+    - name: yaml_load
+      regex: '\b(js-)?yaml\.(load|safeLoad)\s*\([^)]*req\.'
+      severity: 8
+      cwe: CWE-502
+      description: YAML parsing with user input
+      examples:
+        - "yaml.load(req.body.config)"
+
+    - name: json_parse_reviver
+      regex: 'JSON\.parse\s*\([^,]+,\s*[^)]+\)'
+      severity: 5
+      cwe: CWE-502
+      description: JSON.parse with reviver function - verify reviver safety
+      examples:
+        - "JSON.parse(data, customReviver)"
+
+  xss:
+    - name: innerHTML
+      regex: '\.innerHTML\s*='
+      severity: 6
+      cwe: CWE-79
+      description: Direct HTML injection
+      examples:
+        - "element.innerHTML = userHtml"
+
+    - name: outerHTML
+      regex: '\.outerHTML\s*='
+      severity: 6
+      cwe: CWE-79
+      description: Direct HTML replacement
+      examples:
+        - "element.outerHTML = userContent"
+
+    - name: document_write
+      regex: '\bdocument\.(write|writeln)\s*\('
+      severity: 6
+      cwe: CWE-79
+      description: Document write with potential XSS
+      examples:
+        - "document.write(userInput)"
+
+    - name: insertAdjacentHTML
+      regex: '\.insertAdjacentHTML\s*\('
+      severity: 6
+      cwe: CWE-79
+      description: HTML insertion
+      examples:
+        - "elem.insertAdjacentHTML('beforeend', html)"
+
+    - name: jquery_html
+      regex: '\$\([^)]+\)\.(html|append|prepend|after|before)\s*\([^)]*\+'
+      severity: 5
+      cwe: CWE-79
+      description: jQuery HTML manipulation with concatenation
+      examples:
+        - "$('#div').html(userContent)"
+
+    - name: dangerouslySetInnerHTML
+      regex: 'dangerouslySetInnerHTML\s*=\s*\{'
+      severity: 6
+      cwe: CWE-79
+      description: React dangerous HTML setting
+      examples:
+        - "dangerouslySetInnerHTML={{ __html: userHtml }}"
+
+    - name: v_html_vue
+      regex: 'v-html\s*='
+      severity: 6
+      cwe: CWE-79
+      description: Vue.js HTML directive
+      examples:
+        - "<div v-html=\"userContent\"></div>"
+
+    - name: res_send_unsanitized
+      regex: '\bres\.(send|write)\s*\([^)]*req\.(body|query|params)'
+      severity: 5
+      cwe: CWE-79
+      description: Express response with unsanitized user input
+      examples:
+        - "res.send(req.query.name)"
+
+  ssrf:
+    - name: fetch_user_url
+      regex: '\bfetch\s*\([^)]*req\.(body|query|params)'
+      severity: 6
+      cwe: CWE-918
+      description: Fetch with user-controlled URL
+      examples:
+        - "fetch(req.body.url)"
+
+    - name: axios_request
+      regex: '\baxios\.(get|post|put|delete|request)\s*\([^)]*req\.'
+      severity: 6
+      cwe: CWE-918
+      description: Axios request with user URL
+      examples:
+        - "axios.get(req.query.url)"
+
+    - name: http_request
+      regex: '\bhttp(s)?\.request\s*\([^)]*req\.'
+      severity: 6
+      cwe: CWE-918
+      description: Native HTTP request with user input
+      examples:
+        - "https.request(req.body.endpoint)"
+
+    - name: got_request
+      regex: '\bgot\s*\([^)]*req\.'
+      severity: 6
+      cwe: CWE-918
+      description: Got HTTP library with user URL
+      examples:
+        - "got(req.query.url)"
+
+  prototype_pollution:
+    - name: object_assign_merge
+      regex: 'Object\.assign\s*\(\s*\{\},\s*req\.(body|query)'
+      severity: 7
+      cwe: CWE-1321
+      description: Object.assign with user-controlled object
+      examples:
+        - "Object.assign({}, req.body)"
+
+    - name: spread_operator
+      regex: '\.\.\.\s*req\.(body|query|params)'
+      severity: 7
+      cwe: CWE-1321
+      description: Spread operator with user object
+      examples:
+        - "const config = { ...req.body }"
+
+    - name: lodash_merge
+      regex: '(_|lodash)\.(merge|defaultsDeep|set)\s*\('
+      severity: 7
+      cwe: CWE-1321
+      description: Lodash deep merge/set - may allow prototype pollution
+      examples:
+        - "_.merge(obj, req.body)"
+
+  open_redirect:
+    - name: res_redirect
+      regex: '\bres\.redirect\s*\([^)]*req\.(body|query|params)'
+      severity: 4
+      cwe: CWE-601
+      description: Redirect with user-controlled URL
+      examples:
+        - "res.redirect(req.query.next)"
+
+    - name: location_assign
+      regex: '(window\.)?location\.(href|assign|replace)\s*=.*req\.'
+      severity: 4
+      cwe: CWE-601
+      description: Client-side redirect with user input
+      examples:
+        - "window.location.href = userUrl"
+
+  xml_external_entity:
+    - name: xml2js_parse
+      regex: 'xml2js\.parseString\s*\('
+      severity: 6
+      cwe: CWE-611
+      description: XML parsing - verify XXE prevention settings
+      examples:
+        - "xml2js.parseString(xmlData)"
+
+    - name: domparser
+      regex: '(new\s+)?DOMParser\s*\(\s*\)\.parseFromString\s*\('
+      severity: 5
+      cwe: CWE-611
+      description: DOM XML parsing
+      examples:
+        - "new DOMParser().parseFromString(xml, 'text/xml')"
+
+user_input_sources:
+  express:
+    - pattern: 'req\.(body|query|params)\[?'
+      proximity: 10
+      description: Express request data
+    - pattern: 'req\.cookies\[?'
+      proximity: 8
+      description: Express cookies
+    - pattern: 'req\.headers\[?'
+      proximity: 5
+      description: Request headers
+    - pattern: 'req\.files?\[?'
+      proximity: 9
+      description: Uploaded files
+
+  koa:
+    - pattern: 'ctx\.(request\.)?(body|query|params)'
+      proximity: 10
+      description: Koa context data
+
+  fastify:
+    - pattern: 'request\.(body|query|params)'
+      proximity: 10
+      description: Fastify request data
+
+  browser:
+    - pattern: 'location\.(search|hash|href)'
+      proximity: 10
+      description: URL parameters
+    - pattern: 'document\.cookie'
+      proximity: 8
+      description: Document cookies
+    - pattern: 'localStorage\[|sessionStorage\['
+      proximity: 7
+      description: Web storage (may contain user data)
+    - pattern: 'postMessage|addEventListener\s*\(\s*["\''](message)'
+      proximity: 9
+      description: PostMessage data
+
+  general:
+    - pattern: 'process\.argv\['
+      proximity: 9
+      description: Command line arguments
+
+  environment:
+    - pattern: 'process\.env\[?'
+      proximity: 3
+      description: Environment variables
+
+sanitization_functions:
+  sql:
+    - "parameterized queries"
+    - "prepared statements"
+    - "query placeholders (?)"
+  html:
+    - DOMPurify.sanitize
+    - escape-html
+    - he.encode
+    - xss-filters
+  path:
+    - path.basename
+    - path.normalize (with validation)
+  general:
+    - parseInt
+    - parseFloat
+    - Number()
+    - validator.escape
+    - joi/yup schema validation

@@ -1,0 +1,369 @@
+# PHP Dangerous Sink Patterns
+# Used by Recon Agent for fast pattern matching to identify attack surface
+# Reference: CODE_ANALYSIS_AGENT_DESIGN.md lines 822-839
+
+version: "1.0"
+language: php
+file_extensions: [".php", ".phtml", ".php5", ".php7", ".inc"]
+
+patterns:
+  code_execution:
+    - name: eval
+      regex: '\beval\s*\('
+      severity: 10
+      cwe: CWE-94
+      description: Direct code evaluation
+      examples:
+        - "eval($code)"
+        - "eval($_GET['cmd'])"
+
+    - name: assert_string
+      regex: '\bassert\s*\(\s*["\''$]'
+      severity: 10
+      cwe: CWE-94
+      description: Assert with string argument (executes code in PHP 5)
+      examples:
+        - "assert($condition)"
+        - "assert('$x == 1')"
+
+    - name: preg_replace_e
+      regex: 'preg_replace\s*\(\s*["\'']/.*?/[a-zA-Z]*e[a-zA-Z]*["\'']\s*,'
+      severity: 10
+      cwe: CWE-94
+      description: preg_replace with /e modifier enables code execution
+      examples:
+        - "preg_replace('/.*/e', $code, $input)"
+
+    - name: create_function
+      regex: '\bcreate_function\s*\('
+      severity: 10
+      cwe: CWE-94
+      description: Dynamic function creation (deprecated but still dangerous)
+      examples:
+        - "create_function('$x', $code)"
+
+    - name: call_user_func
+      regex: '\bcall_user_func(_array)?\s*\('
+      severity: 8
+      cwe: CWE-94
+      description: Indirect function call - dangerous if function name is user-controlled
+      examples:
+        - "call_user_func($_GET['func'])"
+        - "call_user_func_array($callback, $args)"
+
+    - name: variable_function
+      regex: '\$\w+\s*\([^)]*\)'
+      severity: 7
+      cwe: CWE-94
+      description: Variable function call - function name from variable
+      examples:
+        - "$func()"
+        - "$_GET['f']()"
+      false_positive_hint: "Common in legitimate callback patterns - verify variable source"
+
+  command_injection:
+    - name: system
+      regex: '\bsystem\s*\('
+      severity: 10
+      cwe: CWE-78
+      description: Execute command and display output
+      examples:
+        - "system($cmd)"
+        - "system('ping ' . $_GET['host'])"
+
+    - name: exec
+      regex: '\bexec\s*\('
+      severity: 10
+      cwe: CWE-78
+      description: Execute command, return last line
+      examples:
+        - "exec($command, $output)"
+
+    - name: shell_exec
+      regex: '\bshell_exec\s*\('
+      severity: 10
+      cwe: CWE-78
+      description: Execute command via shell
+      examples:
+        - "shell_exec('ls ' . $dir)"
+
+    - name: backtick_operator
+      regex: '`[^`]*\$[^`]+`'
+      severity: 10
+      cwe: CWE-78
+      description: Backtick shell execution with variable
+      examples:
+        - "`whoami`"
+        - "`ls $dir`"
+
+    - name: passthru
+      regex: '\bpassthru\s*\('
+      severity: 10
+      cwe: CWE-78
+      description: Execute command and pass raw output
+      examples:
+        - "passthru($cmd)"
+
+    - name: popen
+      regex: '\b(popen|proc_open)\s*\('
+      severity: 10
+      cwe: CWE-78
+      description: Open process file pointer
+      examples:
+        - "popen($command, 'r')"
+        - "proc_open($cmd, $descriptors, $pipes)"
+
+    - name: pcntl_exec
+      regex: '\bpcntl_exec\s*\('
+      severity: 10
+      cwe: CWE-78
+      description: Execute program in current process space
+      examples:
+        - "pcntl_exec('/bin/sh', ['-c', $cmd])"
+
+  sql_injection:
+    - name: mysql_query
+      regex: '\b(mysql_query|mysqli_query|pg_query|sqlite_query)\s*\('
+      severity: 8
+      cwe: CWE-89
+      description: Direct query execution - check for concatenation
+      examples:
+        - "mysql_query('SELECT * FROM users WHERE id=' . $id)"
+        - "mysqli_query($conn, $query)"
+
+    - name: query_method
+      regex: '->query\s*\([^)]*\$'
+      severity: 8
+      cwe: CWE-89
+      description: PDO/mysqli query method with variable - verify parameterization
+      examples:
+        - "$pdo->query('SELECT * FROM ' . $table)"
+
+    - name: exec_method
+      regex: '->exec\s*\([^)]*\$'
+      severity: 8
+      cwe: CWE-89
+      description: PDO exec with variable interpolation
+      examples:
+        - "$pdo->exec('DELETE FROM ' . $table)"
+
+    - name: string_concat_query
+      regex: '(SELECT|INSERT|UPDATE|DELETE|FROM|WHERE).*\.\s*\$_?(GET|POST|REQUEST|COOKIE)'
+      severity: 9
+      cwe: CWE-89
+      description: SQL keyword with direct superglobal concatenation
+      examples:
+        - "'SELECT * FROM users WHERE id=' . $_GET['id']"
+
+  file_operations:
+    - name: include_require
+      regex: '\b(include|require|include_once|require_once)\s*\(?[^)]*\$'
+      severity: 8
+      cwe: CWE-98
+      description: File inclusion with variable - potential LFI/RFI
+      examples:
+        - "include($_GET['page'] . '.php')"
+        - "require($template)"
+
+    - name: file_get_contents
+      regex: '\bfile_get_contents\s*\([^)]*\$'
+      severity: 7
+      cwe: CWE-22
+      description: Read file with variable path - potential path traversal or SSRF
+      examples:
+        - "file_get_contents($_GET['file'])"
+        - "file_get_contents($url)"
+
+    - name: file_put_contents
+      regex: '\bfile_put_contents\s*\('
+      severity: 7
+      cwe: CWE-22
+      description: Write file - check for path/content control
+      examples:
+        - "file_put_contents($path, $data)"
+
+    - name: fopen
+      regex: '\bfopen\s*\([^)]*\$'
+      severity: 6
+      cwe: CWE-22
+      description: Open file handle with variable
+      examples:
+        - "fopen($_GET['file'], 'r')"
+
+    - name: readfile
+      regex: '\breadfile\s*\([^)]*\$'
+      severity: 6
+      cwe: CWE-22
+      description: Read and output file
+      examples:
+        - "readfile($path)"
+
+    - name: unlink_delete
+      regex: '\bunlink\s*\([^)]*\$'
+      severity: 6
+      cwe: CWE-22
+      description: Delete file with variable path
+      examples:
+        - "unlink($_POST['file'])"
+
+    - name: move_uploaded_file
+      regex: '\bmove_uploaded_file\s*\([^,]+,\s*[^)]*\$'
+      severity: 7
+      cwe: CWE-434
+      description: Upload handling - check destination path sanitization
+      examples:
+        - "move_uploaded_file($tmp, $target_dir . $filename)"
+
+  deserialization:
+    - name: unserialize
+      regex: '\bunserialize\s*\([^)]*\$'
+      severity: 9
+      cwe: CWE-502
+      description: PHP object deserialization - critical if user-controlled
+      examples:
+        - "unserialize($_COOKIE['data'])"
+        - "unserialize(base64_decode($_GET['obj']))"
+
+    - name: yaml_parse
+      regex: '\byaml_parse(_file|_url)?\s*\('
+      severity: 8
+      cwe: CWE-502
+      description: YAML parsing - can instantiate objects
+      examples:
+        - "yaml_parse($yaml_string)"
+        - "yaml_parse_file($_GET['config'])"
+
+  xss:
+    - name: echo_print
+      regex: '\b(echo|print)\s+\$_(GET|POST|REQUEST|COOKIE)'
+      severity: 5
+      cwe: CWE-79
+      description: Direct output of superglobal without encoding
+      examples:
+        - "echo $_GET['name']"
+        - "print $_POST['search']"
+
+    - name: printf_direct
+      regex: '\b(printf|vprintf)\s*\([^,]+,\s*\$_(GET|POST|REQUEST|COOKIE)'
+      severity: 5
+      cwe: CWE-79
+      description: Formatted output with superglobal
+      examples:
+        - "printf('Hello %s', $_GET['name'])"
+
+  ssrf:
+    - name: curl_exec
+      regex: '\bcurl_exec\s*\('
+      severity: 6
+      cwe: CWE-918
+      description: cURL execution - check if URL is user-controlled
+      examples:
+        - "curl_setopt($ch, CURLOPT_URL, $_GET['url']); curl_exec($ch)"
+
+    - name: file_get_contents_url
+      regex: 'file_get_contents\s*\(\s*["\''](https?|ftp)://|file_get_contents\s*\([^)]*\$.*url'
+      severity: 6
+      cwe: CWE-918
+      description: URL fetch via file_get_contents
+      examples:
+        - "file_get_contents('http://' . $_GET['host'])"
+
+  ldap_injection:
+    - name: ldap_search
+      regex: '\bldap_search\s*\([^)]*\$'
+      severity: 6
+      cwe: CWE-90
+      description: LDAP search with variable filter
+      examples:
+        - "ldap_search($ds, $dn, '(uid=' . $username . ')')"
+
+  xpath_injection:
+    - name: xpath_query
+      regex: '(->query|->xpath|xpath_eval)\s*\([^)]*\$'
+      severity: 5
+      cwe: CWE-643
+      description: XPath query with variable
+      examples:
+        - "$xml->xpath('//user[@id=\"' . $id . '\"]')"
+
+  xml_external_entity:
+    - name: simplexml_load
+      regex: '\bsimplexml_load_(string|file)\s*\([^)]*\$'
+      severity: 7
+      cwe: CWE-611
+      description: XML parsing - check for XXE prevention
+      examples:
+        - "simplexml_load_string($_POST['xml'])"
+
+    - name: dom_loadxml
+      regex: '->loadXML\s*\([^)]*\$'
+      severity: 7
+      cwe: CWE-611
+      description: DOM XML loading with user input
+      examples:
+        - "$doc->loadXML($xml)"
+
+user_input_sources:
+  direct:
+    - pattern: '\$_GET\[[\''"]?\w+[\''"]?\]'
+      proximity: 10
+      description: GET parameter
+    - pattern: '\$_POST\[[\''"]?\w+[\''"]?\]'
+      proximity: 10
+      description: POST parameter
+    - pattern: '\$_REQUEST\[[\''"]?\w+[\''"]?\]'
+      proximity: 10
+      description: REQUEST parameter (GET/POST/COOKIE)
+    - pattern: 'file_get_contents\s*\(\s*["\''"]php://input["\'']\s*\)'
+      proximity: 10
+      description: Raw POST body
+
+  cookies_session:
+    - pattern: '\$_COOKIE\[[\''"]?\w+[\''"]?\]'
+      proximity: 8
+      description: Cookie value
+    - pattern: '\$_SESSION\[[\''"]?\w+[\''"]?\]'
+      proximity: 7
+      description: Session value (may contain user data)
+
+  files:
+    - pattern: '\$_FILES\[[\''"]?\w+[\''"]?\]'
+      proximity: 9
+      description: Uploaded file data
+
+  headers:
+    - pattern: '\$_SERVER\[[\''"]HTTP_'
+      proximity: 5
+      description: HTTP header (except Host)
+    - pattern: 'getallheaders\s*\(\)'
+      proximity: 5
+      description: All HTTP headers
+
+  environment:
+    - pattern: '\$_ENV\['
+      proximity: 3
+      description: Environment variable
+    - pattern: 'getenv\s*\('
+      proximity: 3
+      description: Environment variable via function
+
+sanitization_functions:
+  sql:
+    - mysqli_real_escape_string
+    - pg_escape_string
+    - addslashes  # weak
+    - PDO::quote
+  html:
+    - htmlspecialchars
+    - htmlentities
+    - strip_tags
+  path:
+    - basename
+    - realpath
+  general:
+    - filter_var
+    - filter_input
+    - intval
+    - floatval
+    - (int)
+    - (float)

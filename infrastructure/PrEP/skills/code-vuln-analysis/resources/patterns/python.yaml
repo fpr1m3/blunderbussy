@@ -1,0 +1,376 @@
+# Python Dangerous Sink Patterns
+# Used by Recon Agent for fast pattern matching to identify attack surface
+# Reference: CODE_ANALYSIS_AGENT_DESIGN.md lines 843-854
+
+version: "1.0"
+language: python
+file_extensions: [".py", ".pyw", ".pyi"]
+
+patterns:
+  code_execution:
+    - name: eval
+      regex: '\beval\s*\('
+      severity: 10
+      cwe: CWE-94
+      description: Evaluate arbitrary expression
+      examples:
+        - "eval(user_input)"
+        - "eval(request.args.get('expr'))"
+
+    - name: exec
+      regex: '\bexec\s*\('
+      severity: 10
+      cwe: CWE-94
+      description: Execute arbitrary statements
+      examples:
+        - "exec(code_string)"
+        - "exec(f'x = {value}')"
+
+    - name: compile
+      regex: '\bcompile\s*\([^)]+,\s*[^)]+,\s*["\''](exec|eval|single)["\'']\s*\)'
+      severity: 10
+      cwe: CWE-94
+      description: Compile code for later execution
+      examples:
+        - "compile(source, 'file', 'exec')"
+
+    - name: dynamic_import
+      regex: '\b__import__\s*\([^)]*\$|\bimportlib\.import_module\s*\('
+      severity: 8
+      cwe: CWE-94
+      description: Dynamic module import - dangerous if name is user-controlled
+      examples:
+        - "__import__(module_name)"
+        - "importlib.import_module(user_module)"
+
+    - name: getattr_call
+      regex: 'getattr\s*\([^,]+,\s*[^)]+\)\s*\('
+      severity: 7
+      cwe: CWE-94
+      description: Dynamic attribute access followed by call
+      examples:
+        - "getattr(obj, method_name)()"
+      false_positive_hint: "Common in legitimate reflection - verify attribute source"
+
+  command_injection:
+    - name: os_system
+      regex: '\bos\.system\s*\('
+      severity: 10
+      cwe: CWE-78
+      description: Execute shell command
+      examples:
+        - "os.system('ping ' + host)"
+        - "os.system(f'ls {directory}')"
+
+    - name: os_popen
+      regex: '\bos\.popen\s*\('
+      severity: 10
+      cwe: CWE-78
+      description: Open pipe to shell command
+      examples:
+        - "os.popen(command)"
+
+    - name: subprocess_shell_true
+      regex: 'subprocess\.(run|call|Popen|check_output|check_call)\s*\([^)]*shell\s*=\s*True'
+      severity: 10
+      cwe: CWE-78
+      description: Subprocess with shell=True - dangerous with user input
+      examples:
+        - "subprocess.run(cmd, shell=True)"
+        - "subprocess.call(f'echo {msg}', shell=True)"
+
+    - name: subprocess_string
+      regex: 'subprocess\.(run|call|Popen)\s*\(\s*["\''f]'
+      severity: 8
+      cwe: CWE-78
+      description: Subprocess with string command (may imply shell)
+      examples:
+        - "subprocess.run('ls -la')"
+
+    - name: commands_module
+      regex: '\bcommands\.(getoutput|getstatusoutput)\s*\('
+      severity: 10
+      cwe: CWE-78
+      description: Legacy commands module (Python 2)
+      examples:
+        - "commands.getoutput(cmd)"
+
+  sql_injection:
+    - name: cursor_execute_fstring
+      regex: '\.execute\s*\(\s*f["\''"]'
+      severity: 9
+      cwe: CWE-89
+      description: SQL execute with f-string (direct injection)
+      examples:
+        - "cursor.execute(f'SELECT * FROM users WHERE id={user_id}')"
+
+    - name: cursor_execute_format
+      regex: '\.execute\s*\([^)]+\.format\s*\('
+      severity: 9
+      cwe: CWE-89
+      description: SQL execute with .format() string
+      examples:
+        - "cursor.execute('SELECT * FROM users WHERE id={}'.format(user_id))"
+
+    - name: cursor_execute_percent
+      regex: '\.execute\s*\([^)]+%\s*[(\[]'
+      severity: 9
+      cwe: CWE-89
+      description: SQL execute with % formatting
+      examples:
+        - "cursor.execute('SELECT * FROM users WHERE id=%s' % user_id)"
+
+    - name: cursor_execute_concat
+      regex: '\.execute\s*\([^)]+\+'
+      severity: 8
+      cwe: CWE-89
+      description: SQL execute with string concatenation
+      examples:
+        - "cursor.execute('SELECT * FROM users WHERE id=' + user_id)"
+
+    - name: raw_sql_django
+      regex: '\.raw\s*\(\s*["\''f]|RawSQL\s*\('
+      severity: 8
+      cwe: CWE-89
+      description: Django raw SQL - check for parameterization
+      examples:
+        - "Model.objects.raw(f'SELECT * FROM table WHERE id={id}')"
+
+    - name: extra_django
+      regex: '\.extra\s*\('
+      severity: 7
+      cwe: CWE-89
+      description: Django extra() - deprecated, often SQL injectable
+      examples:
+        - "queryset.extra(where=[f'id={user_id}'])"
+
+  file_operations:
+    - name: open_variable
+      regex: '\bopen\s*\([^)]*request\.|open\s*\([^)]*\+[^)]*\)'
+      severity: 7
+      cwe: CWE-22
+      description: File open with user-controlled path
+      examples:
+        - "open(request.args['file'])"
+        - "open(base_path + filename)"
+
+    - name: pathlib_read
+      regex: 'Path\s*\([^)]*\)\.(read_text|read_bytes|open)\s*\('
+      severity: 6
+      cwe: CWE-22
+      description: Pathlib file operations
+      examples:
+        - "Path(user_path).read_text()"
+
+    - name: shutil_copy
+      regex: '\bshutil\.(copy|copy2|copytree|move)\s*\('
+      severity: 6
+      cwe: CWE-22
+      description: File copy/move operations
+      examples:
+        - "shutil.copy(src, dest)"
+
+    - name: os_remove
+      regex: '\bos\.(remove|unlink|rmdir)\s*\('
+      severity: 6
+      cwe: CWE-22
+      description: File/directory deletion
+      examples:
+        - "os.remove(filepath)"
+
+  deserialization:
+    - name: pickle_loads
+      regex: '\bpickle\.(loads?|Unpickler)\s*\('
+      severity: 10
+      cwe: CWE-502
+      description: Pickle deserialization - CRITICAL, allows RCE
+      examples:
+        - "pickle.loads(data)"
+        - "pickle.load(file)"
+
+    - name: yaml_load_unsafe
+      regex: '\byaml\.load\s*\([^)]*\)(?!\s*,\s*Loader\s*=\s*(yaml\.)?SafeLoader)'
+      severity: 9
+      cwe: CWE-502
+      description: YAML load without SafeLoader
+      examples:
+        - "yaml.load(data)"
+        - "yaml.load(file, Loader=yaml.FullLoader)"
+
+    - name: yaml_unsafe_load
+      regex: '\byaml\.(unsafe_load|full_load)\s*\('
+      severity: 9
+      cwe: CWE-502
+      description: Explicitly unsafe YAML loading
+      examples:
+        - "yaml.unsafe_load(data)"
+
+    - name: marshal_loads
+      regex: '\bmarshal\.loads?\s*\('
+      severity: 8
+      cwe: CWE-502
+      description: Marshal deserialization
+      examples:
+        - "marshal.loads(data)"
+
+    - name: shelve_open
+      regex: '\bshelve\.open\s*\('
+      severity: 7
+      cwe: CWE-502
+      description: Shelve uses pickle internally
+      examples:
+        - "shelve.open(filename)"
+
+    - name: jsonpickle
+      regex: '\bjsonpickle\.decode\s*\('
+      severity: 9
+      cwe: CWE-502
+      description: jsonpickle allows arbitrary object creation
+      examples:
+        - "jsonpickle.decode(data)"
+
+  template_injection:
+    - name: jinja2_from_string
+      regex: '(Template|Environment)\s*\([^)]*\)\.from_string\s*\([^)]*request|render_template_string\s*\('
+      severity: 9
+      cwe: CWE-1336
+      description: Server-side template injection
+      examples:
+        - "Template(user_input).render()"
+        - "render_template_string(request.args['template'])"
+
+    - name: mako_template
+      regex: '\bTemplate\s*\(\s*[^)]*request'
+      severity: 8
+      cwe: CWE-1336
+      description: Mako template with user input
+      examples:
+        - "Template(user_template).render()"
+
+  xss:
+    - name: mark_safe_django
+      regex: '\bmark_safe\s*\([^)]*request'
+      severity: 5
+      cwe: CWE-79
+      description: Django mark_safe with user input
+      examples:
+        - "mark_safe(request.GET['html'])"
+
+    - name: safe_filter
+      regex: '\|\s*safe\b'
+      severity: 5
+      cwe: CWE-79
+      description: Jinja2/Django safe filter - verify input source
+      examples:
+        - "{{ user_input | safe }}"
+
+  ssrf:
+    - name: requests_get
+      regex: '\brequests\.(get|post|put|delete|head|options)\s*\([^)]*request\.'
+      severity: 6
+      cwe: CWE-918
+      description: HTTP request with user-controlled URL
+      examples:
+        - "requests.get(request.args['url'])"
+
+    - name: urllib_open
+      regex: '\burllib\.(request\.)?urlopen\s*\('
+      severity: 6
+      cwe: CWE-918
+      description: urllib URL fetch
+      examples:
+        - "urllib.request.urlopen(url)"
+
+    - name: httpx_client
+      regex: '\bhttpx\.(get|post|Client)\s*\([^)]*request\.'
+      severity: 6
+      cwe: CWE-918
+      description: httpx with user-controlled URL
+      examples:
+        - "httpx.get(user_url)"
+
+  xml_external_entity:
+    - name: etree_parse
+      regex: '\b(etree|ElementTree)\.parse\s*\('
+      severity: 7
+      cwe: CWE-611
+      description: XML parsing - verify DTD is disabled
+      examples:
+        - "ElementTree.parse(xml_file)"
+
+    - name: lxml_parse
+      regex: '\blxml\.(etree\.)?parse\s*\('
+      severity: 7
+      cwe: CWE-611
+      description: lxml parsing - may be vulnerable to XXE
+      examples:
+        - "lxml.etree.parse(xml_data)"
+
+  ldap_injection:
+    - name: ldap_search
+      regex: '\.search(_s|_st|_ext)?\s*\([^)]*request\.'
+      severity: 6
+      cwe: CWE-90
+      description: LDAP search with user input
+      examples:
+        - "conn.search_s(base, scope, f'(uid={username})')"
+
+user_input_sources:
+  flask:
+    - pattern: 'request\.(args|form|data|json|files|values)\[?'
+      proximity: 10
+      description: Flask request data
+    - pattern: 'request\.get_json\s*\('
+      proximity: 10
+      description: Flask JSON body
+    - pattern: 'request\.cookies\[?'
+      proximity: 8
+      description: Flask cookies
+
+  django:
+    - pattern: 'request\.(GET|POST|DATA|body|FILES)\[?'
+      proximity: 10
+      description: Django request data
+    - pattern: 'request\.COOKIES\[?'
+      proximity: 8
+      description: Django cookies
+
+  fastapi:
+    - pattern: '\b(Query|Path|Body|Form|File|Header|Cookie)\s*\('
+      proximity: 10
+      description: FastAPI parameter injection
+
+  general:
+    - pattern: 'input\s*\('
+      proximity: 10
+      description: Console input
+    - pattern: 'sys\.argv\['
+      proximity: 9
+      description: Command line arguments
+    - pattern: 'argparse'
+      proximity: 9
+      description: Parsed command line arguments
+
+  environment:
+    - pattern: 'os\.environ\[?|os\.getenv\s*\('
+      proximity: 3
+      description: Environment variables
+
+sanitization_functions:
+  sql:
+    - "?placeholder"  # parameterized queries
+    - "%s with tuple"
+    - "execute(query, params)"
+  html:
+    - escape
+    - bleach.clean
+    - markupsafe.escape
+  path:
+    - os.path.basename
+    - os.path.realpath
+    - pathlib.Path.resolve
+  general:
+    - int()
+    - float()
+    - str.isalnum
+    - re.match with whitelist
