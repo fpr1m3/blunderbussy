@@ -47,7 +47,7 @@ Activate this skill when:
 
 ## Phase 1: Reconnaissance
 
-**Agent:** `code-analysis/recon`
+**Agent:** `code-analysis-recon`
 **Turn Budget:** 5 turns max
 **Purpose:** Map codebase structure WITHOUT reading file contents deeply
 
@@ -55,7 +55,7 @@ Activate this skill when:
 
 ```
 delegate_to_agent(
-  agent="code-analysis/recon",
+  agent="code-analysis-recon",
   query="Map source code structure at {repo_path}. Languages detected: {languages}. Find dangerous sinks, entry points, and dependency graph."
 )
 ```
@@ -98,7 +98,7 @@ Before proceeding to Triage, verify:
 
 ## Phase 2: Triage
 
-**Agent:** `code-analysis/triage`
+**Agent:** `code-analysis-triage`
 **Turn Budget:** 3 turns max
 **Purpose:** Prioritize files by attack surface potential
 
@@ -106,7 +106,7 @@ Before proceeding to Triage, verify:
 
 ```
 delegate_to_agent(
-  agent="code-analysis/triage",
+  agent="code-analysis-triage",
   query="Prioritize analysis targets from recon output. Create chunks of 5-12k tokens grouped by data flow."
 )
 ```
@@ -170,7 +170,7 @@ Before proceeding to Analysis, verify:
 
 ## Phase 3: Analysis
 
-**Agent:** `code-analysis/analysis`
+**Agent:** `code-analysis-analysis`
 **Turn Budget:** 12 turns total (process chunks until budget exhausted)
 **Purpose:** Deep vulnerability analysis on prioritized chunks
 
@@ -178,7 +178,7 @@ Before proceeding to Analysis, verify:
 
 ```
 delegate_to_agent(
-  agent="code-analysis/analysis",
+  agent="code-analysis-analysis",
   query="Analyze chunk {chunk_id}: {focus}. Files: {files}. Look for: {attack_surface}"
 )
 ```
@@ -235,7 +235,7 @@ After each chunk, evaluate:
 
 ## Phase 4: Validation
 
-**Agent:** `code-analysis/validation`
+**Agent:** `code-analysis-validation`
 **Turn Budget:** 5 turns max
 **Purpose:** Confirm exploitability, reduce false positives
 
@@ -243,7 +243,7 @@ After each chunk, evaluate:
 
 ```
 delegate_to_agent(
-  agent="code-analysis/validation",
+  agent="code-analysis-validation",
   query="Validate these findings. Check for missed sanitization, auth requirements, and exploitability."
 )
 ```
@@ -378,6 +378,115 @@ Use these placeholders in PoCs (Dame substitutes during execution):
 - Re-examine sanitization paths
 - Consider auth-required exploits
 - Report "potential vulnerabilities require privileged access"
+
+---
+
+## Security Mitigations (MAESTRO Framework)
+
+This multi-agent system implements mitigations for agentic AI risks identified by the MAESTRO framework.
+
+### Agent Constraints
+
+Each agent operates under strict capability limits:
+
+| Agent | Read | Write | Execute | Network |
+|-------|------|-------|---------|---------|
+| Recon | ✓ | ✗ | grep/rg only | ✗ |
+| Triage | ✓ | ✗ | ✗ | ✗ |
+| Analysis | ✓ | ✗ | ✗ | ✗ |
+| Validation | ✓ | ✗ | ✗ | ✗ |
+
+**Enforcement:**
+- Recon agent: Can only use `Glob`, `Grep`, `Read` tools. No `Write`, `Edit`, or `Bash` (except search commands).
+- Triage/Analysis/Validation: Read-only access. No tool execution beyond file reads.
+- PoC commands are documented, never executed by these agents.
+
+### Determinism
+
+All agents MUST operate with deterministic settings:
+
+```yaml
+agent_config:
+  temperature: 0
+  top_p: 1
+  seed: 42  # When available
+```
+
+**Why:** Non-deterministic outputs make vulnerability findings unreproducible. Same codebase should produce same findings across runs.
+
+### Structured Output Format
+
+All inter-agent communication uses YAML with strict schemas:
+
+```yaml
+# Every agent output MUST include:
+_metadata:
+  agent: recon|triage|analysis|validation
+  timestamp: 2026-01-26T12:00:00Z
+  turn: 3
+  checksum: sha256:<hash_of_payload>
+
+# Payload follows schema defined in each phase section
+```
+
+**Why:** Structured data prevents prompt injection between agents. Free-text outputs could contain adversarial content.
+
+### Output Verification
+
+Before passing agent output to next phase:
+
+1. **Schema validation:** Output matches expected YAML structure
+2. **Checksum verification:** `_metadata.checksum` matches sha256 of payload
+3. **Bounds checking:** Token counts, file counts within expected ranges
+
+```python
+def verify_agent_output(output: dict, expected_schema: str) -> bool:
+    # 1. Validate YAML structure
+    if not validate_schema(output, expected_schema):
+        return False
+
+    # 2. Verify checksum (payload = output without _metadata)
+    payload = {k: v for k, v in output.items() if k != '_metadata'}
+    expected_hash = hashlib.sha256(yaml.dump(payload).encode()).hexdigest()
+    if output['_metadata']['checksum'] != f"sha256:{expected_hash}":
+        return False
+
+    return True
+```
+
+### Sanitization Between Phases
+
+When passing findings between agents:
+
+1. **Strip code blocks:** Re-read original files rather than trusting quoted code
+2. **Validate file references:** Confirm referenced files exist at claimed paths
+3. **Bound numeric values:** CVSS, confidence scores must be in valid ranges
+
+**Anti-Pattern:** Never pass `evidence.code` directly - always re-read from source.
+
+### Chain of Custody
+
+Each finding tracks its journey through the pipeline:
+
+```yaml
+finding:
+  id: VULN-001
+  provenance:
+    - agent: recon
+      turn: 2
+      action: "identified dangerous sink"
+    - agent: triage
+      turn: 1
+      action: "prioritized as critical"
+    - agent: analysis
+      turn: 4
+      action: "confirmed taint path"
+    - agent: validation
+      turn: 2
+      action: "verified exploitability"
+```
+
+**Why:** Audit trail for each finding enables debugging false positives and understanding agent reasoning.
 
 ---
 
