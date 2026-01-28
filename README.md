@@ -1,5 +1,7 @@
 # Agent Opulence (Blunderbussy)
 
+[![Tests](https://github.com/fprime/blunderbussy/actions/workflows/test.yml/badge.svg)](https://github.com/fprime/blunderbussy/actions/workflows/test.yml)
+
 > **"Dumb Tools Scan, Smart Agents Plan"**
 
 Autonomous offensive security orchestration engine. Automated pipelines handle reconnaissance, AI agents handle exploitation.
@@ -132,8 +134,8 @@ podman exec gluetun wget -qO- ifconfig.me
 # Start hexstrike-recon (recon container)
 HTB_TARGET=10.10.10.3 podman-compose up -d hexstrike-recon
 
-# Run AutoRecon
-podman exec hexstrike-recon /opt/run-autorecon.sh 10.10.10.3
+# Run AutoRecon (hostname first enables vhost enumeration)
+podman exec hexstrike-recon /opt/run-autorecon.sh lame.htb 10.10.10.3
 
 # Watch for CAS generation
 watch ls artifacts/10.10.10.3/
@@ -164,29 +166,29 @@ gemini
 blunderbussy/
 ├── infrastructure/
 │   ├── enrichment/           # Enrichment pipeline
-│   │   ├── watcher.py        # File system watcher
-│   │   ├── format-cas.py     # CAS YAML formatter
-│   │   ├── init-ptt.py       # PTT initializer (CAS → PTT)
-│   │   ├── parsers/          # 24+ tool parsers
-│   │   └── enrichers/        # CVE lookup, service analysis
+│   │   ├── faraday_watcher.py    # File watcher + Faraday uploader
+│   │   ├── faraday_client.py     # Faraday REST API client
+│   │   ├── format-cas.py         # CAS YAML formatter
+│   │   ├── init-ptt.py           # PTT initializer (CAS → PTT)
+│   │   └── enrichers/            # Service analysis, web detection
 │   ├── dame/                  # Kali + gemini-cli container
-│   │   ├── Dockerfile        # Multi-platform build
+│   │   ├── Dockerfile        # Multi-platform build (linux/windows)
 │   │   └── docker-entrypoint.sh  # Split tunnel setup
 │   ├── PrEP/                  # Gemini-CLI extension + MCP servers
 │   │   ├── servers/
-│   │   │   ├── pwncat-server.py  # Pwncat MCP (14 tools)
-│   │   │   ├── msf-server.py     # MSF MCP (11 tools)
-│   │   │   ├── sliver-server.py  # Sliver MCP (11 tools)
+│   │   │   ├── pwncat-server.py  # Pwncat MCP server
+│   │   │   ├── msf-server.py     # MSF MCP server
+│   │   │   ├── sliver-server.py  # Sliver MCP server
 │   │   │   └── msf-bridge/       # Go HTTP-to-MSFRPC bridge
+│   │   ├── agents/           # Sub-agents (code-analysis-*, archivist)
+│   │   ├── skills/           # Skills (code-vuln-analysis, etc.)
 │   │   ├── gemini-extension.json
 │   │   ├── GEMINI.md         # Dame's system prompt
 │   │   ├── ptt.py            # Pentesting Task Tree module
 │   │   └── commands/         # /attack command
-│   ├── hexstrike-recon/      # 150+ security tools
+│   ├── hexstrike-recon/      # AutoRecon + 150+ security tools
 │   ├── gluetun/              # VPN configuration
-│   ├── pwncat/               # Pwncat MCP server
-│   ├── msf/                  # Metasploit MCP server
-│   └── sliver/               # Sliver C2 MCP server
+│   └── faraday/              # Faraday vulnerability management
 ├── artifacts/                # Runtime (mounted volume)
 │   ├── raw/                  # Raw scan output
 │   └── {target}/             # Per-target directories
@@ -194,9 +196,10 @@ blunderbussy/
 │       ├── ptt.yaml          # Task tree
 │       └── loot/             # Flags, creds
 ├── tests/                    # Test suite
-│   ├── parsers/              # Parser unit tests
-│   ├── fixtures/             # Test data
-│   └── integration/          # Integration tests
+│   ├── fixtures/             # Test data (autorecon, nmap, nuclei, etc.)
+│   ├── integration/          # Integration tests
+│   ├── mcp/                  # MCP server input validation tests
+│   └── test_protocol/        # Protocol action/response tests
 ├── docker-compose.yml        # Stack definition
 ├── CLAUDE.md                 # Development instructions
 ├── GEMINI.md                 # Implementation guide
@@ -207,30 +210,31 @@ blunderbussy/
 
 ## Enrichment Pipeline
 
-### Supported Parsers (24+)
+### Faraday Integration (80+ Parsers)
 
-| Category | Parsers |
-|----------|---------|
-| **Network** | nmap, dnsrecon, onesixtyone, snmpwalk |
-| **Web** | httpx, feroxbuster, gobuster, dirsearch, ffuf, nikto, whatweb, wpscan, nuclei, sslscan |
-| **SMB/Enum** | smbmap, enum4linux, showmount |
-| **Specialized** | subfinder, rpcdump, dirb, redis-cli, dig, manual-commands |
+Parsing is handled by Faraday's built-in plugins, supporting 80+ security tool formats including:
+
+| Category | Example Tools |
+|----------|---------------|
+| **Network** | nmap, masscan, dnsrecon, snmpwalk |
+| **Web** | burp, nikto, nuclei, feroxbuster, gobuster, ffuf, whatweb, wpscan |
+| **Vulnerability** | nessus, openvas, qualys, nexpose |
+| **SMB/Enum** | enum4linux, smbmap, crackmapexec |
 
 ### Pipeline Flow
 
 ```
 Raw scan file detected (inotify)
     ↓
-Watcher matches file to parser (pattern matching)
+faraday_watcher.py uploads to Faraday API
     ↓
-Parser converts to JSON (host/port/service/vuln objects)
+Faraday parses with 80+ built-in plugins
     ↓
 Enrichers add context:
-  - CVE lookup (NVD API with caching)
-  - Service vulnerability scoring
+  - Service priority scoring
   - Web technology detection
     ↓
-CAS Formatter outputs YAML
+CAS Formatter outputs YAML (with Gemini attack guidance)
     ↓
 PTT Initializer transforms CAS → PTT (deterministic)
     ↓
@@ -324,7 +328,7 @@ podman build --build-arg TARGET_PLATFORM=windows -t dame:windows \
   -f infrastructure/dame/Dockerfile infrastructure/dame/
 ```
 
-**Core tools (all builds):** nc, nmap, feroxbuster, ffuf, gobuster, whatweb, sqlmap, nikto, enum4linux, smbmap, smbclient, impacket-scripts, crackmapexec, pwncat-cs
+**Core tools (all builds):** nc, nmap, feroxbuster, ffuf, gobuster, whatweb, sqlmap, nikto, enum4linux, smbmap, smbclient, impacket-scripts, crackmapexec, hydra, dnsrecon, nbtscan, git-dumper, pwncat-cs (via uv)
 
 ---
 
@@ -354,8 +358,9 @@ podman exec -it <name> sh  # Execute in container
 
 ```bash
 cd ~/Projects/blunderbussy
-uv run pytest tests/parsers/  # Parser unit tests
-uv run pytest tests/ -v       # All tests
+uv run pytest tests/mcp/          # MCP server tests
+uv run pytest tests/integration/  # Integration tests
+uv run pytest tests/ -v           # All tests (~430 tests)
 ```
 
 ---
@@ -379,13 +384,13 @@ bd sync               # Sync with git
 **Current Phase:** Production-ready PoC
 
 - [x] Docker environment + network isolation (gluetun VPN)
-- [x] Enrichment pipeline (24+ parsers, enrichers, CAS formatter)
+- [x] Enrichment pipeline (Faraday 80+ parsers, enrichers, CAS formatter)
 - [x] Dame container (Kali + gemini-cli + pwncat-cs)
 - [x] Opulence extension (MCP servers, task tree, error handling)
 - [x] HexStrike recon container (AutoRecon integration)
 - [x] Test framework (pytest with fixtures)
 - [x] Issue tracking (Beads)
-- [x] MCP server modernization (FastMCP, Pydantic, 172 tests)
+- [x] MCP server modernization (FastMCP, Pydantic, ~430 tests)
 - [x] C2 framework integration (MSF + Sliver via gluetun VPN)
 - [ ] E2E testing on additional HTB machines
 - [ ] Multi-target parallelization

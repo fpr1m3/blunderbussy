@@ -48,4 +48,86 @@ podman build --build-arg TARGET_PLATFORM=linux -t dame:linux -f infrastructure/d
 podman build --build-arg TARGET_PLATFORM=windows -t dame:windows -f infrastructure/dame/Dockerfile infrastructure/dame/
 ```
 
-Core tools (always installed): nc, ping, traceroute, wget, socat, rlwrap, git, jq, dig, proxychains4, nbtscan, onesixtyone, snmpwalk
+Core tools (always installed): nc, ping, traceroute, wget, socat, rlwrap, git, jq, dig, proxychains4, nbtscan, onesixtyone, snmpwalk, nmap, dnsrecon, gobuster, feroxbuster, ffuf, whatweb, sqlmap, nikto, enum4linux, smbmap, smbclient, impacket-scripts, crackmapexec, hydra, tmux, ripgrep
+
+## Gemini CLI Extension System (Dame)
+
+Dame runs on gemini-cli with the `opulence` extension. **This is an undocumented experimental feature** - not in official docs, extracted from source code at `~/Code/gemini-cli/`. See `docs/gemini-cli-agents.md` for reference.
+
+### Extension Structure
+
+The extension is installed during Dame container entrypoint from `infrastructure/PrEP/`:
+
+```
+infrastructure/PrEP/
+├── gemini-extension.json    # Extension manifest (MCP servers, metadata)
+├── GEMINI.md                # Dame's system prompt
+├── system.md                # System-level instructions
+├── session_state.py         # Session state management
+├── session_memory.py        # Memory persistence
+├── agents/                  # Subagents (delegate_to_agent)
+│   ├── archivist.md         # Multi-step research (saves context window)
+│   ├── code-analysis-recon.md
+│   ├── code-analysis-triage.md
+│   ├── code-analysis-analysis.md
+│   └── code-analysis-validation.md
+├── skills/                  # Skills (activate_skill)
+│   ├── SCHEMA.md            # Skill schema documentation
+│   ├── code-vuln-analysis/  # Multi-agent vulnerability analysis
+│   │   ├── SKILL.md
+│   │   ├── prompts/         # Agent prompts
+│   │   ├── resources/       # Patterns and anti-patterns
+│   │   └── scripts/         # Helper scripts (tokens, taint, etc.)
+│   ├── initial-access/
+│   ├── pentest-checklist/
+│   ├── pentest-commands/
+│   ├── red-team-tactics/
+│   ├── scanning-tools/
+│   ├── sql-injection-testing/
+│   ├── api-fuzzing-bug-bounty/
+│   └── vulnerability-scanner/
+├── hooks/                   # Tool execution hooks
+│   ├── hooks.json
+│   ├── session_start.py
+│   ├── before_tool.py
+│   └── after_tool.py
+├── servers/                 # MCP servers
+│   ├── pwncat-server.py
+│   ├── msf-server.py
+│   └── sliver-server.py
+├── protocol/                # IPC protocol definitions
+└── schemas/                 # Data schemas
+```
+
+### Skills vs Agents
+
+| Type | Location | Tool | Purpose |
+|------|----------|------|---------|
+| Skills | `${ext}/skills/` | `activate_skill("name")` | Load instructions into Dame's context |
+| Agents | `${ext}/agents/` | `delegate_to_agent(agent_name, query)` | Spawn independent subagent |
+
+### Enabling (settings.json)
+
+```json
+{
+  "experimental": {
+    "enableAgents": true,
+    "skills": true,
+    "plan": true
+  },
+  "tools": {
+    "enableHooks": true
+  },
+  "hooksConfig": {
+    "enabled": true
+  }
+}
+```
+
+### Code Vulnerability Analysis Flow
+
+1. Dame finds source code (git dump, LFI, etc.)
+2. Dame calls `activate_skill("code-vuln-analysis")`
+3. Skill instructions load, telling Dame to orchestrate 4 sub-agents
+4. Dame uses `delegate_to_agent` to call recon → triage → analysis → validation
+5. Dame receives Vulnerability Brief and executes PoCs

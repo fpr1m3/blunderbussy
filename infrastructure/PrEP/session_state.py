@@ -932,11 +932,43 @@ class SessionStateManager:
         return "\n".join(lines)
 
     def _save_memory_block(self):
-        """Save the memory block to disk."""
+        """Save the memory block to disk and inject into system.md."""
         block = self.generate_memory_block()
         block_path = self.session_dir / "memory_block.md"
         with open(block_path, 'w') as f:
             f.write(block)
+
+        # Also inject into system.md for GEMINI_SYSTEM_MD dynamic context
+        self._inject_memory_into_system_md(block)
+
+    def _inject_memory_into_system_md(self, memory_block: str):
+        """
+        Inject the memory block into system.md template.
+
+        Replaces the <!-- MEMORY_BLOCK --> placeholder with current session state.
+        Gemini CLI reads system.md fresh each turn, so this enables dynamic context.
+        """
+        # GEMINI.md is in the same directory as this module (PrEP/)
+        system_md_path = Path(__file__).parent / "GEMINI.md"
+
+        if not system_md_path.exists():
+            return
+
+        try:
+            content = system_md_path.read_text()
+
+            # Find and replace the memory block marker and any existing content after it
+            marker = "<!-- MEMORY_BLOCK -->"
+            if marker in content:
+                # Split at the marker, keep everything before it plus the marker
+                before_marker = content.split(marker)[0]
+                # Reconstruct with new memory block
+                new_content = before_marker + marker + "\n" + memory_block
+
+                system_md_path.write_text(new_content)
+        except Exception:
+            # Non-fatal: memory injection is optional enhancement
+            pass
 
 
 # =============================================================================
@@ -1033,14 +1065,16 @@ def main():
     if command == "init":
         mgr.save_all()
         print(f"Session initialized for {target}")
-        print(f"  Session ID: {mgr.state.session_id}")
+        if mgr.state:
+            print(f"  Session ID: {mgr.state.session_id}")
         print(f"  Path: {mgr.session_dir}")
 
     elif command == "show":
         print(f"Target: {target}")
-        print(f"Session ID: {mgr.state.session_id}")
-        print(f"Access Level: {mgr.state.current_access_level.value}")
-        print(f"Flags: {mgr.state.flags_captured}")
+        if mgr.state:
+            print(f"Session ID: {mgr.state.session_id}")
+            print(f"Access Level: {mgr.state.current_access_level.value}")
+            print(f"Flags: {mgr.state.flags_captured}")
         print(f"Credentials: {len(mgr.get_all_credentials())}")
         print(f"Hypotheses: {len(mgr.get_active_hypotheses())}")
         print(f"Shells: {len(mgr.get_active_shells())}")
