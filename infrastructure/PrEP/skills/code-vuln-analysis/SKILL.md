@@ -45,6 +45,165 @@ Activate this skill when:
 
 ---
 
+## Artifact Persistence
+
+### Why Artifacts?
+
+Sub-agent YAML output flows through your context window, which is lossy. By writing each stage's output to disk, you get:
+- **Persistent artifacts** for debugging and reproducibility
+- **No context loss** between stages (next agent reads from disk)
+- **Observable stage boundaries** (human or tooling can inspect intermediate outputs)
+
+### Artifact Directory Structure
+
+At pipeline start, create the artifact directory. The target name is available in your context.
+
+```
+./artifacts/{target}/code-analysis/
+├── 01-recon-manifest.yaml         # Recon agent output
+├── 02-triage-chunks.yaml          # Triage agent output
+├── 03-analysis-findings.yaml      # Aggregated analysis findings (all chunks)
+├── 03-analysis-chunk-{id}.yaml    # Per-chunk analysis findings
+├── 04-validation-findings.yaml    # Validated findings
+├── 04-validation-brief.md         # Final Vulnerability Brief
+└── state.yaml                     # Pipeline state tracking
+```
+
+### Setup (FIRST ACTION when skill activates)
+
+Before invoking any agent, create the artifact directory:
+
+```bash
+mkdir -p ./artifacts/{target}/code-analysis
+```
+
+Set a variable for the path and use it throughout the pipeline:
+
+```
+ARTIFACT_DIR=./artifacts/{target}/code-analysis
+```
+
+### Write Protocol (Dame's responsibility)
+
+Sub-agents are READ-ONLY -- they cannot write files. After each `delegate_to_agent()` returns, YOU (Dame) must write the output to disk. The sequence for every phase is:
+
+1. Invoke `delegate_to_agent()` with the artifact directory path in the query
+2. Receive structured YAML output from the agent
+3. **Write the output** to the corresponding artifact file using the `write_file` tool
+4. Update `state.yaml` with phase completion
+5. Proceed to the next phase (the next agent reads the previous artifact from disk)
+
+### Read Protocol (Sub-agent responsibility)
+
+Each sub-agent (except Recon, which is first) should read the previous stage's artifact from disk at the start of its work. This provides grounding independent of what Dame passes in the query string, preventing context loss.
+
+---
+
+## CRITICAL: Orchestration Discipline
+
+### State Persistence Protocol
+
+After EACH phase completes, you MUST persist state before proceeding:
+
+```yaml
+# Write to ./artifacts/{target}/code-analysis/state.yaml
+current_phase: recon|triage|analysis|validation|complete
+phases_completed:
+  - phase: recon
+    turn: 3
+    output_summary: "12 files, 3 dangerous sinks identified"
+  - phase: triage
+    turn: 5
+    output_summary: "2 critical chunks created"
+
+artifact_dir: ./artifacts/{target}/code-analysis
+artifacts_written:
+  - 01-recon-manifest.yaml
+  - 02-triage-chunks.yaml
+
+findings_aggregated:
+  - id: VULN-001
+    phase_discovered: analysis
+    status: pending_validation
+
+files_analyzed: [list of files subagents have examined]
+```
+
+**Why:** Without state persistence, you will lose context and repeat work. The state file is your memory between phases. The artifact directory provides durable storage that survives context window limits.
+
+### Cognitive Drift Prevention (MANDATORY)
+
+Once a subagent returns structured YAML output, the following behaviors are **PROHIBITED**:
+
+| ❌ PROHIBITED | Why |
+|---------------|-----|
+| Manually reading files the subagent analyzed | Wastes turns, subagent already extracted relevant code |
+| Running grep/cat on paths in subagent output | Duplicates completed work |
+| "Verifying" subagent findings by re-reading | Trust the pipeline; validation agent handles verification |
+| Starting manual exploration (git log, find, ls) | This is drift - you're avoiding the next phase |
+| Reading files "for context" after analysis phase | Context was already provided to subagent |
+
+| ✅ REQUIRED | Why |
+|-------------|-----|
+| Proceed directly to next phase | Maintain pipeline momentum |
+| Use subagent YAML output as-is for next phase input | Structured handoff preserves fidelity |
+| Trust file:line references from subagent | Subagent read the actual code |
+| Update state file before invoking next agent | Ensures no lost work |
+
+**Self-Check:** If you find yourself about to run `cat`, `grep`, or read a file that appears in the previous phase's output, STOP. You are drifting. Proceed to the next phase instead.
+
+### Exit Requirements (MANDATORY)
+
+Code analysis is **INCOMPLETE** until ALL of these are true:
+
+```
+[ ] 1. All four phases attempted (or documented skip reason)
+[ ] 2. Validation agent was invoked with aggregated findings
+[ ] 3. Vulnerability Brief was generated (even if "no vulnerabilities found")
+[ ] 4. State file updated to current_phase: complete
+[ ] 5. Brief returned to calling context (Dame's exploitation workflow)
+[ ] 6. All artifact files written to {ARTIFACT_DIR}:
+       - 01-recon-manifest.yaml
+       - 02-triage-chunks.yaml
+       - 03-analysis-findings.yaml (+ per-chunk files)
+       - 04-validation-findings.yaml
+       - 04-validation-brief.md
+       - state.yaml
+```
+
+**If you are about to say "analysis complete" without a Vulnerability Brief, you have failed the task.** Go back and complete the pipeline.
+
+---
+
+## Phase Transition Protocol
+
+When a subagent completes, execute this sequence EXACTLY:
+
+```
+1. RECEIVE subagent YAML output
+2. VALIDATE output has expected structure (manifest/priority_queue/findings)
+3. WRITE output to artifact file (e.g., 01-recon-manifest.yaml)
+4. UPDATE state.yaml with phase completion and artifact path
+5. EXTRACT data needed for next phase
+6. INVOKE next phase agent immediately (include artifact dir path in query)
+7. DO NOT read files, run commands, or "explore" between steps 1-6
+```
+
+**Between-Phase Actions Whitelist:**
+- Writing agent output to artifact file (e.g., `01-recon-manifest.yaml`) ✓
+- Writing to `state.yaml` ✓
+- Parsing YAML output ✓
+- Formatting input for next agent ✓
+
+**Between-Phase Actions Blacklist:**
+- File reads (cat, Read tool) ✗
+- Code searches (grep, Grep tool) ✗
+- Directory listing (ls, find) ✗
+- Version control (git log, git diff) ✗
+- Any "let me check..." reasoning ✗
+
+---
+
 ## Phase 1: Reconnaissance
 
 **Agent:** `code-analysis-recon`
@@ -56,9 +215,19 @@ Activate this skill when:
 ```
 delegate_to_agent(
   agent="code-analysis-recon",
-  query="Map source code structure at {repo_path}. Languages detected: {languages}. Find dangerous sinks, entry points, and dependency graph."
+  query="Map source code structure at {repo_path}. Languages detected: {languages}. Find dangerous sinks, entry points, and dependency graph. Artifact directory: {ARTIFACT_DIR}"
 )
 ```
+
+### After Recon Returns (Dame writes artifact)
+
+When the recon agent returns its YAML manifest, immediately write it to disk:
+
+```
+write_file("{ARTIFACT_DIR}/01-recon-manifest.yaml", <recon agent YAML output>)
+```
+
+Then update `{ARTIFACT_DIR}/state.yaml` with phase completion before proceeding to Triage.
 
 ### Expected Output
 
@@ -107,11 +276,21 @@ Before proceeding to Triage, verify:
 ```
 delegate_to_agent(
   agent="code-analysis-triage",
-  query="Prioritize analysis targets from recon output. Create chunks of 5-12k tokens grouped by data flow."
+  query="Prioritize analysis targets from recon output. Create chunks of 5-12k tokens grouped by data flow. Artifact directory: {ARTIFACT_DIR} — read recon manifest from {ARTIFACT_DIR}/01-recon-manifest.yaml"
 )
 ```
 
-Pass the recon output as context.
+Pass the recon output as context in the query AND tell the agent to read from disk. The disk copy is the authoritative source if context is truncated.
+
+### After Triage Returns (Dame writes artifact)
+
+When the triage agent returns its YAML output, immediately write it to disk:
+
+```
+write_file("{ARTIFACT_DIR}/02-triage-chunks.yaml", <triage agent YAML output>)
+```
+
+Then update `{ARTIFACT_DIR}/state.yaml` with phase completion before proceeding to Analysis.
 
 ### Expected Output
 
@@ -179,11 +358,27 @@ Before proceeding to Analysis, verify:
 ```
 delegate_to_agent(
   agent="code-analysis-analysis",
-  query="Analyze chunk {chunk_id}: {focus}. Files: {files}. Look for: {attack_surface}"
+  query="Analyze chunk {chunk_id}: {focus}. Files: {files}. Look for: {attack_surface}. Artifact directory: {ARTIFACT_DIR} — read triage chunks from {ARTIFACT_DIR}/02-triage-chunks.yaml"
 )
 ```
 
 Include security anti-patterns from `resources/sec-context/anti-patterns.md` in context.
+
+### After Each Chunk Returns (Dame writes artifacts)
+
+After the analysis agent returns findings for a chunk, write them to disk immediately:
+
+```
+write_file("{ARTIFACT_DIR}/03-analysis-chunk-{chunk_id}.yaml", <analysis agent YAML output for this chunk>)
+```
+
+After ALL chunks are processed, aggregate findings across all chunks into a single file:
+
+```
+write_file("{ARTIFACT_DIR}/03-analysis-findings.yaml", <aggregated findings from all chunks>)
+```
+
+The aggregated file should contain all `findings` entries from every chunk, combined into one YAML document. Update `{ARTIFACT_DIR}/state.yaml` after aggregation.
 
 ### Processing Order
 
@@ -244,11 +439,27 @@ After each chunk, evaluate:
 ```
 delegate_to_agent(
   agent="code-analysis-validation",
-  query="Validate these findings. Check for missed sanitization, auth requirements, and exploitability."
+  query="Validate these findings. Check for missed sanitization, auth requirements, and exploitability. Artifact directory: {ARTIFACT_DIR} — read aggregated findings from {ARTIFACT_DIR}/03-analysis-findings.yaml"
 )
 ```
 
-Pass aggregated findings from Analysis phase.
+Pass aggregated findings from Analysis phase in the query AND tell the agent to read from disk. The disk copy is the authoritative source if context is truncated.
+
+### After Validation Returns (Dame writes artifacts)
+
+When the validation agent returns, write TWO artifacts:
+
+1. The validated findings YAML:
+```
+write_file("{ARTIFACT_DIR}/04-validation-findings.yaml", <validation agent YAML output>)
+```
+
+2. The Vulnerability Brief (markdown):
+```
+write_file("{ARTIFACT_DIR}/04-validation-brief.md", <Vulnerability Brief from validation output>)
+```
+
+If the validation agent includes both validated_findings YAML and a Vulnerability Brief in its response, split them into the two separate files. Then update `{ARTIFACT_DIR}/state.yaml` with `current_phase: complete`.
 
 ### Expected Output
 
@@ -318,6 +529,42 @@ After validation, compile results into this format:
 ### Caveats
 - [Any limitations: skipped chunks, obfuscated code, etc.]
 ```
+
+---
+
+## Common Failure Modes (AVOID THESE)
+
+### Failure Mode 1: Post-Subagent Drift
+
+**Symptom:** After Analysis agent returns findings with exploit payloads, you run `git log`, `cat admin.php`, or start "exploring" the codebase manually.
+
+**Why it happens:** Manual exploration feels productive but avoids the harder task of proceeding to Validation.
+
+**Fix:** When you receive subagent output, your ONLY next action is invoking the next phase's agent. No manual file reads.
+
+### Failure Mode 2: Missing Vulnerability Brief
+
+**Symptom:** You report findings informally ("I found an RCE in admin.php") but never generate the structured Vulnerability Brief.
+
+**Why it happens:** The brief feels redundant after detailed analysis, but it's the required deliverable.
+
+**Fix:** The Vulnerability Brief is not optional. Generate it even for "no vulnerabilities found" results.
+
+### Failure Mode 3: Re-Analyzing Analyzed Code
+
+**Symptom:** Subagent analyzed `includes/bid_validator.php`, then you read the same file "to understand it better."
+
+**Why it happens:** Distrust of subagent output, or habit of manual verification.
+
+**Fix:** The subagent's code snippets and line references ARE the understanding. Use them directly.
+
+### Failure Mode 4: Skipping Validation
+
+**Symptom:** Analysis agent produces findings, you report them without invoking Validation agent.
+
+**Why it happens:** Findings look complete, validation seems redundant.
+
+**Fix:** Validation catches false positives and generates PoCs. ALWAYS invoke it.
 
 ---
 

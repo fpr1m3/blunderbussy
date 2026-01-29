@@ -8,7 +8,7 @@ tools:
   - glob
   - list_directory
   - search_file_content
-model: gemini-3-pro-preview
+model: gemini-3-flash-preview
 temperature: 1.0
 ---
 
@@ -37,6 +37,17 @@ Map the codebase structure using pattern matching (grep/ripgrep), NOT file reads
 5. **Find user input sources** - Where external data enters the application
 
 Refer to the code-vuln-analysis SKILL.md for language-specific sink patterns.
+
+## Artifact Persistence
+
+Dame (the orchestrator) will pass an artifact directory path in your query. You do not write files -- Dame handles that after you return. However, be aware of the pipeline's disk-based artifact flow:
+
+- **Your output** will be written by Dame to `{ARTIFACT_DIR}/01-recon-manifest.yaml`
+- **Downstream agents** (Triage, Analysis, Validation) will read your manifest from that file
+- Always produce complete, well-formed YAML so it can be persisted and parsed reliably
+- Include all sections of the output schema even if empty (use `[]` for empty lists)
+
+Since you are the first stage, there are no previous artifacts to read.
 
 ## Constraints
 
