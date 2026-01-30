@@ -1,0 +1,113 @@
+fixture_name: vuln-python-app
+language: python
+description: "Python Flask application with intentional vulnerabilities for pipeline benchmarking"
+total_files: 10
+safe_patterns:
+  - shlex_quote
+  - parameterized_queries
+
+vulnerabilities:
+  - id: GT-PY-001
+    vuln_type: command_injection
+    cwe: CWE-78
+    severity: critical
+    file: src/run_cmd.py
+    line: 12
+    function: run_ping
+    exploitable: true
+    description: "OS command injection via os.system with user input"
+    sink_function: os.system
+    sanitized: false
+    tags: [command_injection, os_system]
+
+  - id: GT-PY-002
+    vuln_type: deserialization
+    cwe: CWE-502
+    severity: critical
+    file: src/deserialize.py
+    line: 15
+    function: load_object
+    exploitable: true
+    description: "Unsafe deserialization via pickle.loads on user data"
+    sink_function: pickle.loads
+    sanitized: false
+    tags: [deserialization, pickle]
+
+  - id: GT-PY-003
+    vuln_type: code_execution
+    cwe: CWE-94
+    severity: critical
+    file: src/dynamic_exec.py
+    line: 10
+    function: run_code
+    exploitable: true
+    description: "Dynamic code execution via exec() with user input"
+    sink_function: exec
+    sanitized: false
+    tags: [code_execution, dynamic]
+
+  - id: GT-PY-004
+    vuln_type: ssti
+    cwe: CWE-1336
+    severity: critical
+    file: src/template.py
+    line: 14
+    function: render_page
+    exploitable: true
+    description: "Server-side template injection via render_template_string"
+    sink_function: render_template_string
+    sanitized: false
+    tags: [ssti, template_injection]
+
+  - id: GT-PY-005
+    vuln_type: sql_injection
+    cwe: CWE-89
+    severity: high
+    file: src/db_query.py
+    line: 18
+    function: get_user
+    exploitable: true
+    description: "SQL injection via f-string interpolation in raw query"
+    sink_function: cursor.execute
+    sanitized: false
+    tags: [sqli, f_string]
+
+  - id: GT-PY-006
+    vuln_type: hardcoded_credentials
+    cwe: CWE-798
+    severity: medium
+    file: src/secrets.py
+    line: 5
+    function: null
+    exploitable: true
+    description: "API secret key hardcoded in source"
+    sink_function: null
+    sanitized: false
+    tags: [credentials, hardcoded, api_key]
+
+  # Sanitized / Safe patterns (should NOT be reported as vulns)
+  - id: GT-PY-SAFE-001
+    vuln_type: command_injection
+    cwe: CWE-78
+    severity: low
+    file: src/safe_cmd.py
+    line: 12
+    function: safe_ping
+    exploitable: false
+    description: "Command execution using shlex.quote (SAFE)"
+    sink_function: subprocess.run
+    sanitized: true
+    tags: [safe, shlex_quote]
+
+  - id: GT-PY-SAFE-002
+    vuln_type: sql_injection
+    cwe: CWE-89
+    severity: low
+    file: src/safe_query.py
+    line: 14
+    function: safe_get_user
+    exploitable: false
+    description: "SQL query using parameterized queries (SAFE)"
+    sink_function: cursor.execute
+    sanitized: true
+    tags: [safe, parameterized]

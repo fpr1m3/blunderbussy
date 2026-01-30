@@ -1,0 +1,113 @@
+fixture_name: vuln-node-app
+language: javascript
+description: "Node.js Express application with intentional vulnerabilities for pipeline benchmarking"
+total_files: 10
+safe_patterns:
+  - escape_html
+  - parameterized_queries
+
+vulnerabilities:
+  - id: GT-NODE-001
+    vuln_type: prototype_pollution
+    cwe: CWE-1321
+    severity: critical
+    file: src/merge.js
+    line: 14
+    function: deepMerge
+    exploitable: true
+    description: "Prototype pollution via recursive merge without __proto__ check"
+    sink_function: "Object assignment"
+    sanitized: false
+    tags: [prototype_pollution, deep_merge]
+
+  - id: GT-NODE-002
+    vuln_type: command_injection
+    cwe: CWE-78
+    severity: critical
+    file: src/exec.js
+    line: 12
+    function: null
+    exploitable: true
+    description: "OS command injection via child_process.exec with user input"
+    sink_function: exec
+    sanitized: false
+    tags: [command_injection, child_process]
+
+  - id: GT-NODE-003
+    vuln_type: xss_reflected
+    cwe: CWE-79
+    severity: high
+    file: src/render.js
+    line: 16
+    function: null
+    exploitable: true
+    description: "Reflected XSS via unsanitized user input in HTML response"
+    sink_function: res.send
+    sanitized: false
+    tags: [xss, reflected, html_injection]
+
+  - id: GT-NODE-004
+    vuln_type: sql_injection
+    cwe: CWE-89
+    severity: critical
+    file: src/query.js
+    line: 15
+    function: null
+    exploitable: true
+    description: "SQL injection via string concatenation in query"
+    sink_function: db.query
+    sanitized: false
+    tags: [sqli, string_concat]
+
+  - id: GT-NODE-005
+    vuln_type: path_traversal
+    cwe: CWE-22
+    severity: high
+    file: src/files.js
+    line: 13
+    function: null
+    exploitable: true
+    description: "Path traversal via fs.readFile with unsanitized user input"
+    sink_function: fs.readFile
+    sanitized: false
+    tags: [path_traversal, file_read]
+
+  - id: GT-NODE-006
+    vuln_type: code_execution
+    cwe: CWE-94
+    severity: critical
+    file: src/compute.js
+    line: 11
+    function: null
+    exploitable: true
+    description: "Dynamic code execution via Function constructor with user input"
+    sink_function: Function
+    sanitized: false
+    tags: [code_execution, dynamic]
+
+  # Sanitized / Safe patterns (should NOT be reported as vulns)
+  - id: GT-NODE-SAFE-001
+    vuln_type: xss_reflected
+    cwe: CWE-79
+    severity: low
+    file: src/safe_render.js
+    line: 12
+    function: null
+    exploitable: false
+    description: "HTML output using escapeHtml helper (SAFE)"
+    sink_function: escapeHtml
+    sanitized: true
+    tags: [safe, escape_html]
+
+  - id: GT-NODE-SAFE-002
+    vuln_type: sql_injection
+    cwe: CWE-89
+    severity: low
+    file: src/safe_query.js
+    line: 12
+    function: null
+    exploitable: false
+    description: "SQL query using parameterized placeholder (SAFE)"
+    sink_function: db.query
+    sanitized: true
+    tags: [safe, parameterized]

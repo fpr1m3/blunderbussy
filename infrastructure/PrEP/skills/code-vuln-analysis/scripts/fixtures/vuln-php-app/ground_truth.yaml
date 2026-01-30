@@ -1,0 +1,113 @@
+fixture_name: vuln-php-app
+language: php
+description: "PHP application with intentional vulnerabilities for pipeline benchmarking"
+total_files: 11
+safe_patterns:
+  - prepared_statements
+  - htmlspecialchars
+
+vulnerabilities:
+  - id: GT-PHP-001
+    vuln_type: local_file_inclusion
+    cwe: CWE-98
+    severity: critical
+    file: src/view.php
+    line: 12
+    function: null
+    exploitable: true
+    description: "Local file inclusion via unsanitized GET parameter"
+    sink_function: include
+    sanitized: false
+    tags: [lfi, file_inclusion]
+
+  - id: GT-PHP-002
+    vuln_type: sql_injection
+    cwe: CWE-89
+    severity: critical
+    file: src/login.php
+    line: 15
+    function: null
+    exploitable: true
+    description: "SQL injection via string concatenation in login query"
+    sink_function: mysql_query
+    sanitized: false
+    tags: [sqli, authentication]
+
+  - id: GT-PHP-003
+    vuln_type: command_injection
+    cwe: CWE-78
+    severity: critical
+    file: src/exec.php
+    line: 10
+    function: null
+    exploitable: true
+    description: "OS command injection via system() with POST parameter"
+    sink_function: system
+    sanitized: false
+    tags: [rce, command_injection]
+
+  - id: GT-PHP-004
+    vuln_type: xss_reflected
+    cwe: CWE-79
+    severity: high
+    file: src/profile.php
+    line: 18
+    function: null
+    exploitable: true
+    description: "Reflected XSS via unescaped echo of GET parameter"
+    sink_function: echo
+    sanitized: false
+    tags: [xss, reflected]
+
+  - id: GT-PHP-005
+    vuln_type: path_traversal
+    cwe: CWE-22
+    severity: high
+    file: src/download.php
+    line: 14
+    function: null
+    exploitable: true
+    description: "Path traversal via file_get_contents with unsanitized GET parameter"
+    sink_function: file_get_contents
+    sanitized: false
+    tags: [path_traversal, file_read]
+
+  - id: GT-PHP-006
+    vuln_type: hardcoded_credentials
+    cwe: CWE-798
+    severity: medium
+    file: src/config.php
+    line: 5
+    function: null
+    exploitable: true
+    description: "Database password hardcoded in source"
+    sink_function: null
+    sanitized: false
+    tags: [credentials, hardcoded]
+
+  # Sanitized / Safe patterns (should NOT be reported as vulns)
+  - id: GT-PHP-SAFE-001
+    vuln_type: sql_injection
+    cwe: CWE-89
+    severity: low
+    file: src/safe_query.php
+    line: 10
+    function: null
+    exploitable: false
+    description: "SQL query using PDO prepared statements (SAFE)"
+    sink_function: prepare
+    sanitized: true
+    tags: [safe, prepared_statements]
+
+  - id: GT-PHP-SAFE-002
+    vuln_type: xss_reflected
+    cwe: CWE-79
+    severity: low
+    file: src/safe_display.php
+    line: 8
+    function: null
+    exploitable: false
+    description: "Output using htmlspecialchars (SAFE)"
+    sink_function: htmlspecialchars
+    sanitized: true
+    tags: [safe, htmlspecialchars]

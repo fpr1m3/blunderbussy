@@ -1,0 +1,78 @@
+findings:
+  - id: VULN-001
+    severity: critical
+    type: prototype_pollution
+    cwe: CWE-1321
+    location:
+      file: src/merge.js
+      line: 14
+    description: "Prototype pollution via deep merge without __proto__ guard"
+    evidence:
+      code: "target[key] = source[key];"
+      trace: "req.body -> deepMerge() -> target[key] assignment"
+    confidence: 0.90
+
+  - id: VULN-002
+    severity: critical
+    type: command_injection
+    cwe: CWE-78
+    location:
+      file: src/exec.js
+      line: 12
+    description: "OS command injection via child_process.exec with unsanitized user input"
+    evidence:
+      code: "exec('ping -c 4 ' + req.query.host, (err, stdout) => {"
+      trace: "req.query.host -> string concat -> exec()"
+    confidence: 0.95
+
+  - id: VULN-003
+    severity: high
+    type: xss_reflected
+    cwe: CWE-79
+    location:
+      file: src/render.js
+      line: 16
+    description: "Reflected XSS via unsanitized user input in HTML response"
+    evidence:
+      code: "res.send('<div>' + req.query.name + '</div>');"
+      trace: "req.query.name -> string concat -> res.send()"
+    confidence: 0.94
+
+  - id: VULN-004
+    severity: critical
+    type: sql_injection
+    cwe: CWE-89
+    location:
+      file: src/query.js
+      line: 15
+    description: "SQL injection via string concatenation in query"
+    evidence:
+      code: "db.query(\"SELECT * FROM users WHERE name = '\" + req.query.name + \"'\", (err, rows) => {"
+      trace: "req.query.name -> string concat -> db.query()"
+    confidence: 0.98
+
+  - id: VULN-005
+    severity: high
+    type: path_traversal
+    cwe: CWE-22
+    location:
+      file: src/files.js
+      line: 13
+    description: "Path traversal via fs.readFile with unsanitized user input"
+    evidence:
+      code: "fs.readFile('uploads/' + req.query.path, 'utf8', (err, data) => {"
+      trace: "req.query.path -> string concat -> fs.readFile()"
+    confidence: 0.96
+
+  - id: VULN-006
+    severity: critical
+    type: code_execution
+    cwe: CWE-94
+    location:
+      file: src/compute.js
+      line: 11
+    description: "Dynamic code execution via Function constructor with user input"
+    evidence:
+      code: "const result = new Function('return ' + req.body.expression)();"
+      trace: "req.body.expression -> string concat -> new Function()"
+    confidence: 0.97

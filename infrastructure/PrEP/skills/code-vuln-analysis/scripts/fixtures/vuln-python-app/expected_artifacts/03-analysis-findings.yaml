@@ -1,0 +1,78 @@
+findings:
+  - id: VULN-001
+    severity: critical
+    type: command_injection
+    cwe: CWE-78
+    location:
+      file: src/run_cmd.py
+      line: 12
+    description: "OS command injection via os.system with unsanitized user input"
+    evidence:
+      code: "os.system(\"ping -c 4 \" + request.args.get('host', ''))"
+      trace: "request.args.get('host') -> string concat -> os.system()"
+    confidence: 0.95
+
+  - id: VULN-002
+    severity: critical
+    type: deserialization
+    cwe: CWE-502
+    location:
+      file: src/deserialize.py
+      line: 15
+    description: "Unsafe deserialization via pickle.loads on user-supplied base64 data"
+    evidence:
+      code: "obj = pickle.loads(base64.b64decode(request.form['data']))"
+      trace: "request.form['data'] -> base64.b64decode() -> pickle.loads()"
+    confidence: 0.98
+
+  - id: VULN-003
+    severity: critical
+    type: code_execution
+    cwe: CWE-94
+    location:
+      file: src/dynamic_exec.py
+      line: 10
+    description: "Dynamic code evaluation with unsanitized user input"
+    evidence:
+      code: "exec(request.args.get('code', ''))"
+      trace: "request.args.get('code') -> exec()"
+    confidence: 0.97
+
+  - id: VULN-004
+    severity: critical
+    type: ssti
+    cwe: CWE-1336
+    location:
+      file: src/template.py
+      line: 14
+    description: "Server-side template injection via render_template_string with user input"
+    evidence:
+      code: "return render_template_string(request.args.get('template', ''))"
+      trace: "request.args.get('template') -> render_template_string()"
+    confidence: 0.96
+
+  - id: VULN-005
+    severity: high
+    type: sql_injection
+    cwe: CWE-89
+    location:
+      file: src/db_query.py
+      line: 18
+    description: "SQL injection via f-string interpolation in raw query"
+    evidence:
+      code: "cursor.execute(f\"SELECT * FROM users WHERE name = '{request.args.get('name', '')}'\")"
+      trace: "request.args.get('name') -> f-string -> cursor.execute()"
+    confidence: 0.98
+
+  - id: VULN-006
+    severity: medium
+    type: hardcoded_credentials
+    cwe: CWE-798
+    location:
+      file: src/secrets.py
+      line: 5
+    description: "API secret key hardcoded in source code"
+    evidence:
+      code: "API_SECRET = \"sk-live-a1b2c3d4e5f6g7h8i9j0\""
+      trace: "literal string -> API_SECRET -> Authorization header"
+    confidence: 0.99

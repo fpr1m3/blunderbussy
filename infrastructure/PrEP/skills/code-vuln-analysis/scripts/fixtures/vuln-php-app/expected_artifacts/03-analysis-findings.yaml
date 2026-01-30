@@ -1,0 +1,78 @@
+findings:
+  - id: VULN-001
+    severity: critical
+    type: local_file_inclusion
+    cwe: CWE-98
+    location:
+      file: src/view.php
+      line: 12
+    description: "LFI via include with GET param"
+    evidence:
+      code: "include($_GET['page']);"
+      trace: "$_GET['page'] -> include()"
+    confidence: 0.95
+
+  - id: VULN-002
+    severity: critical
+    type: sql_injection
+    cwe: CWE-89
+    location:
+      file: src/login.php
+      line: 15
+    description: "SQL injection via string concatenation in authentication query"
+    evidence:
+      code: "$query = \"SELECT * FROM users WHERE username='\" . $_POST['user'] . \"' AND password='\" . $_POST['pass'] . \"'\";"
+      trace: "$_POST['user'] -> string concat -> $query -> mysql_query()"
+    confidence: 0.98
+
+  - id: VULN-003
+    severity: critical
+    type: command_injection
+    cwe: CWE-78
+    location:
+      file: src/exec.php
+      line: 10
+    description: "OS command injection via system() with unsanitized POST parameter"
+    evidence:
+      code: "system(\"ping -c 4 \" . $_POST['host']);"
+      trace: "$_POST['host'] -> string concat -> system()"
+    confidence: 0.97
+
+  - id: VULN-004
+    severity: high
+    type: xss_reflected
+    cwe: CWE-79
+    location:
+      file: src/profile.php
+      line: 18
+    description: "Reflected XSS via unescaped echo of GET parameter"
+    evidence:
+      code: "echo \"Welcome, \" . $_GET['name'];"
+      trace: "$_GET['name'] -> string concat -> echo"
+    confidence: 0.94
+
+  - id: VULN-005
+    severity: high
+    type: path_traversal
+    cwe: CWE-22
+    location:
+      file: src/download.php
+      line: 14
+    description: "Path traversal via file_get_contents with unsanitized filename"
+    evidence:
+      code: "$content = file_get_contents(\"uploads/\" . $_GET['file']);"
+      trace: "$_GET['file'] -> string concat -> file_get_contents()"
+    confidence: 0.96
+
+  - id: VULN-006
+    severity: medium
+    type: hardcoded_credentials
+    cwe: CWE-798
+    location:
+      file: src/config.php
+      line: 5
+    description: "Database password hardcoded in source code"
+    evidence:
+      code: "$db_password = \"SuperSecret123!\";"
+      trace: "literal string -> $db_password -> PDO connection"
+    confidence: 0.99
