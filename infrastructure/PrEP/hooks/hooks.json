@@ -18,6 +18,13 @@
         "hooks": [
           {
             "type": "command",
+            "command": "python3 ${extensionPath}/hooks/file_size_gate.py",
+            "name": "file-size-gate",
+            "description": "Block reads of large files that would overflow context window",
+            "timeout": 5000
+          },
+          {
+            "type": "command",
             "command": "python3 ${extensionPath}/hooks/autorecon_dedup.py",
             "name": "autorecon-dedup",
             "description": "Block redundant scans that AutoRecon already completed",
@@ -46,8 +53,15 @@
           {
             "type": "command",
             "command": "python3 ${extensionPath}/hooks/after_tool.py",
-            "name": "credential-extractor",
-            "description": "Extract credentials from shell command output",
+            "name": "output-processor",
+            "description": "Process tool output: truncate bloat, strip web content, cache queries, extract credentials, update hypotheses",
+            "timeout": 5000
+          },
+          {
+            "type": "command",
+            "command": "python3 ${extensionPath}/hooks/loop_detector.py",
+            "name": "loop-detector",
+            "description": "Detect thought loops via MinHash similarity and escalate through warn/reset/kill stages",
             "timeout": 5000
           }
         ]

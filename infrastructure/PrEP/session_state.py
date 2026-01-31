@@ -203,6 +203,21 @@ class AnalyzedFile(BaseModel):
     skip_reread: bool = True
 
 
+class TurnHash(BaseModel):
+    """A single turn's MinHash fingerprint for loop detection."""
+    minhash: List[int] = Field(default_factory=list)
+    tool_count: int = 0
+    turn_id: int = 0
+
+
+class LoopState(BaseModel):
+    """Loop detector state (loop_state.json)."""
+    turn_hashes: List[TurnHash] = Field(default_factory=list)
+    consecutive_similar: int = 0
+    escalation_level: int = 0
+    total_turns: int = 0
+
+
 # =============================================================================
 # Store Models (top-level YAML files)
 # =============================================================================
@@ -218,6 +233,8 @@ class SessionState(BaseModel):
     flags_captured: Dict[str, str] = Field(default_factory=dict)  # user/root -> flag value
     shells: List[ShellSession] = Field(default_factory=list)
     web_sessions: List[WebSession] = Field(default_factory=list)
+    completed_analysis: List[str] = Field(default_factory=list)  # Distilled findings for context pruning
+    last_auth_timestamp: Optional[str] = None  # Track last authentication time for cookie staleness
 
 
 class CredentialStore(BaseModel):
@@ -864,6 +881,55 @@ class SessionStateManager:
         return None
 
     # =========================================================================
+    # CAS Integration
+    # =========================================================================
+
+    def load_known_hosts_from_cas(self, cas_path: Optional[str] = None) -> List[str]:
+        """
+        Load known hosts from CAS context.yaml for redirect/vhost detection.
+
+        Args:
+            cas_path: Path to CAS context.yaml. If None, tries env var CAS_PATH
+                      or default /artifacts/{target}/context.yaml
+
+        Returns:
+            List of known hostnames
+        """
+        import yaml
+
+        if cas_path is None:
+            cas_path = os.environ.get("CAS_PATH")
+        if cas_path is None:
+            cas_path = str(self.base_path / self.target / "context.yaml")
+
+        cas_file = Path(cas_path)
+        if not cas_file.exists():
+            return []
+
+        try:
+            with open(cas_file, 'r') as f:
+                cas_data = yaml.safe_load(f) or {}
+
+            hosts = []
+            # Extract from hosts list
+            for host in cas_data.get("hosts", []):
+                if isinstance(host, str):
+                    hosts.append(host)
+                elif isinstance(host, dict):
+                    hostname = host.get("hostname") or host.get("name") or host.get("host")
+                    if hostname:
+                        hosts.append(hostname)
+
+            # Also extract from target if it's a hostname
+            target = cas_data.get("target", "")
+            if target and not target.replace(".", "").isdigit():
+                hosts.append(target)
+
+            return list(set(hosts))
+        except Exception:
+            return []
+
+    # =========================================================================
     # Memory Block Generation
     # =========================================================================
 
@@ -894,6 +960,13 @@ class SessionStateManager:
             lines.append("**Active Shells:**")
             for shell in shells[:3]:  # Limit to 3
                 lines.append(f"- {shell.session_type.value} as {shell.user} ({shell.access_level.value})")
+            lines.append("")
+
+        # Completed analysis (context pruning - distilled findings)
+        if self.state and self.state.completed_analysis:
+            lines.append("**Completed Analysis (do not re-read these files):**")
+            for finding in self.state.completed_analysis[-5:]:  # Last 5 findings
+                lines.append(f"- {finding}")
             lines.append("")
 
         # Hypotheses (150 tokens)
