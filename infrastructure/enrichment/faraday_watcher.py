@@ -936,11 +936,16 @@ class AutoReconProcessor:
                     logger.warning(f'Processing timeout for {target}, generating CAS anyway')
 
             # Generate CAS
+            cas_ok = True
             if self.config.generate_cas:
-                self._generate_cas(workspace, target)
+                cas_result = self._generate_cas(workspace, target)
+                if cas_result is None:
+                    cas_ok = False
+                    logger.warning(f'CAS generation failed for {target}, will retry on next poll')
 
-            self._save_processed_target(target)
-            return True
+            if cas_ok or not self.config.generate_cas:
+                self._save_processed_target(target)
+            return cas_ok
 
         except Exception as e:
             logger.error(f'Failed to process target {target}: {e}')

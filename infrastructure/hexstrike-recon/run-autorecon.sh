@@ -130,13 +130,19 @@ mkdir -p "$SCANS_DIR" "$LOGS_DIR"
 # Inject hostname into /etc/hosts (required for hostname resolution)
 log_info "Setting up /etc/hosts: $HOSTNAME -> $TARGET_IP"
 
-# Check if entry already exists
-if grep -q "$TARGET_IP.*$HOSTNAME" /etc/hosts 2>/dev/null; then
-    log_info "Entry already exists in /etc/hosts"
-else
-    echo "$TARGET_IP    $HOSTNAME" >> /etc/hosts
-    log_success "Added to /etc/hosts"
+# Remove ALL existing entries for this hostname to prevent stale IPs
+# (HTB rotates IPs - old entries cause nmap to scan the wrong target)
+# NOTE: sed -i fails on /etc/hosts in containers (Device or resource busy),
+# so we use grep -v with cat redirect instead
+if grep -q "$HOSTNAME" /etc/hosts 2>/dev/null; then
+    grep -v "$HOSTNAME" /etc/hosts > /tmp/hosts.new
+    cat /tmp/hosts.new > /etc/hosts
+    rm -f /tmp/hosts.new
+    log_info "Removed stale /etc/hosts entries for $HOSTNAME"
 fi
+
+echo "$TARGET_IP    $HOSTNAME" >> /etc/hosts
+log_success "Added to /etc/hosts: $TARGET_IP -> $HOSTNAME"
 
 # Create metadata file
 METADATA_FILE="${TARGET_DIR}/autorecon_meta.json"
