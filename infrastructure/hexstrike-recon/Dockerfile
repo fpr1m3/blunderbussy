@@ -63,6 +63,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     hydra \
     john \
     hashcat \
+    seclists \
     # Binary analysis (lighter set)
     binwalk \
     checksec \

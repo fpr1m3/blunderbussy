@@ -1,6 +1,7 @@
 {
   "general": {
-    "previewFeatures": true
+    "previewFeatures": true,
+    "enableAutoUpdate": false
   },
   "context": {
     "includeDirectories": ["/artifacts"]
@@ -28,7 +29,7 @@
     "truncateToolOutputThreshold": 15000,
     "truncateToolOutputLines": 100
   },
-  "hooks": {
+  "hooksConfig": {
     "enabled": true
   }
 }

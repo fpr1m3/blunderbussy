@@ -38,6 +38,7 @@ import sys
 import json
 import os
 import re
+import time
 import hashlib
 from pathlib import Path
 
@@ -54,6 +55,10 @@ SIMILARITY_THRESHOLD = 0.85
 LEVEL_1_TURNS = 3       # Consecutive similar turns for warning
 LEVEL_2_TURNS = 7       # For context reset + PTT blocklist
 LEVEL_3_TURNS = 15      # For session kill
+
+# Time-based detection: if the agent takes longer than this between tool calls,
+# it is likely spinning in thought loops burning tokens without acting.
+TIME_GAP_THRESHOLD = 120  # seconds -- 2 minutes between tool calls is excessive
 
 # State file path template
 STATE_FILE_TEMPLATE = "/artifacts/{target}/session/loop_state.json"
@@ -407,15 +412,37 @@ def get_target_from_env() -> str:
             if part == "artifacts" and i + 1 < len(parts):
                 return parts[i + 1]
 
-    # Fallback: scan for recent session directories
+    # Try .current_target file written by /attack command
+    current_target_file = Path(
+        os.environ.get("ARTIFACTS_PATH", "/artifacts")
+    ) / ".current_target"
+    if current_target_file.exists():
+        try:
+            target = current_target_file.read_text().strip()
+            if target:
+                return target
+        except OSError:
+            pass
+
+    # Fallback: scan for directories with context.yaml (created by CAS before
+    # session dirs exist -- avoids the chicken-and-egg problem)
     artifacts_dir = Path(os.environ.get("ARTIFACTS_PATH", "/artifacts"))
+    if artifacts_dir.exists():
+        cas_dirs = [
+            d for d in artifacts_dir.iterdir()
+            if d.is_dir() and (d / "context.yaml").exists()
+        ]
+        if cas_dirs:
+            cas_dirs.sort(key=lambda d: d.stat().st_mtime, reverse=True)
+            return cas_dirs[0].name
+
+    # Last resort: scan for session directories (may not exist early in run)
     if artifacts_dir.exists():
         session_dirs = [
             d for d in artifacts_dir.iterdir()
             if d.is_dir() and (d / "session").exists()
         ]
         if session_dirs:
-            # Return most recently modified
             session_dirs.sort(key=lambda d: d.stat().st_mtime, reverse=True)
             return session_dirs[0].name
 
@@ -432,6 +459,12 @@ def detect_loop(state: dict, thought_text: str, tool_count: int) -> tuple:
 
     Updates state in place and returns the escalation action to take.
 
+    Detection signals:
+        1. MinHash similarity: near-identical tool inputs across consecutive turns.
+        2. Time gap: excessive time between tool calls (agent thinking in circles).
+        3. Similar tool executions: running nearly identical commands is looping,
+           not progress -- do NOT give credit for breaking the loop.
+
     Args:
         state: Mutable state dictionary (updated in place).
         thought_text: The agent's thought/output text for this turn.
@@ -444,17 +477,19 @@ def detect_loop(state: dict, thought_text: str, tool_count: int) -> tuple:
             2 = hard reset
             3 = session kill
     """
+    now = time.time()
     state["total_turns"] = state.get("total_turns", 0) + 1
 
     # Compute MinHash for this turn's thought text
-    shingles = shingle(thought_text)
-    mh = minhash(shingles)
+    shingles_set = shingle(thought_text)
+    mh = minhash(shingles_set)
 
-    # Build turn record
+    # Build turn record (with timestamp for time-gap detection)
     turn_record = {
         "minhash": mh,
         "tool_count": tool_count,
         "turn_id": state["total_turns"],
+        "timestamp": now,
     }
 
     # Append to rolling window
@@ -472,30 +507,55 @@ def detect_loop(state: dict, thought_text: str, tool_count: int) -> tuple:
         state["escalation_level"] = 0
         return 0, 0
 
-    # Check pairwise similarity with previous turn
-    prev_mh = turn_hashes[-2]["minhash"]
+    # --- Signal 1: MinHash similarity with previous turn ---
+    prev_record = turn_hashes[-2]
+    prev_mh = prev_record["minhash"]
     similarity = jaccard_similarity(prev_mh, mh)
 
     is_similar = similarity >= SIMILARITY_THRESHOLD
-    is_zero_tool = tool_count == 0
+
+    # --- Signal 2: Time gap between tool calls ---
+    prev_timestamp = prev_record.get("timestamp", 0)
+    time_delta = now - prev_timestamp if prev_timestamp > 0 else 0
+    is_long_gap = time_delta >= TIME_GAP_THRESHOLD
 
     log_loop(
         f"Turn {state['total_turns']}: similarity={similarity:.3f}, "
-        f"tool_count={tool_count}, "
-        f"threshold={'EXCEEDED' if is_similar else 'ok'}"
+        f"tool_count={tool_count}, time_delta={time_delta:.1f}s, "
+        f"threshold={'EXCEEDED' if is_similar else 'ok'}, "
+        f"time_gap={'EXCEEDED' if is_long_gap else 'ok'}"
     )
 
-    # Update consecutive counter
-    # A turn counts as "looping" if it is similar to the previous AND has zero tools
-    if is_similar and is_zero_tool:
+    # --- Update consecutive counter ---
+    # A turn counts as "looping" under any of these conditions:
+    #   a) Similar fingerprint + zero tool executions (classic thought loop)
+    #   b) Similar fingerprint + tool execution (running the same command IS the loop)
+    #   c) Long time gap (agent burned tokens thinking without acting)
+    #
+    # A turn BREAKS the loop only if:
+    #   - Dissimilar fingerprint AND no excessive time gap
+    #     (i.e., the agent is actually doing something different)
+
+    if is_similar:
+        # Both similar-with-zero-tools and similar-with-tool-execution are loops.
+        # Running nearly identical curl commands is not "progress" -- it IS the loop.
         state["consecutive_similar"] = state.get("consecutive_similar", 0) + 1
-    elif is_similar:
-        # Similar but with tool execution -- partial credit, increment slower
-        state["consecutive_similar"] = max(
-            0, state.get("consecutive_similar", 0) - 1
+        if tool_count > 0:
+            log_loop(
+                f"Similar tool execution detected (sim={similarity:.3f}) -- "
+                f"counting as loop, not progress"
+            )
+    elif is_long_gap:
+        # Dissimilar content but excessive thinking time -- the agent spent
+        # a long time deliberating, which is a loop signal even if the output
+        # text changed slightly between turns.
+        state["consecutive_similar"] = state.get("consecutive_similar", 0) + 1
+        log_loop(
+            f"Long time gap ({time_delta:.0f}s > {TIME_GAP_THRESHOLD}s) -- "
+            f"counting as loop signal"
         )
     else:
-        # Dissimilar turn -- reset counter
+        # Dissimilar turn with reasonable timing -- genuine progress
         state["consecutive_similar"] = 0
 
     consecutive = state["consecutive_similar"]
@@ -558,22 +618,22 @@ def main():
     # But we differentiate between "real work" tools and passive tools.
     tool_count = 1 if tool_name in EXECUTION_TOOLS else 0
 
-    # Use tool_output as the "thought text" for fingerprinting.
-    # In Gemini CLI, tool_output contains the agent's response/reasoning.
-    # For shell tools, tool_output is command output (less useful for loop
-    # detection), but for delegate_to_agent and others it captures thought.
-    # We also incorporate tool_input for broader fingerprinting.
+    # Primary signal: what the agent is DOING (commands / tool inputs).
+    # The doom loop manifests as near-identical commands with minor variations
+    # (e.g., similar curl URLs). The tool_output (HTTP responses) varies across
+    # calls even when the agent is stuck, so it dilutes the similarity signal.
     thought_text = ""
-    if isinstance(tool_output, str):
-        thought_text += tool_output
     if isinstance(tool_input, dict):
-        # Include relevant input fields for fingerprinting
-        for key in ("command", "query", "prompt", "agent_name"):
+        for key in ("command", "query", "prompt", "agent_name", "description"):
             val = tool_input.get(key, "")
             if val:
                 thought_text += f" {val}"
     elif isinstance(tool_input, str):
         thought_text += f" {tool_input}"
+    # Secondary signal: truncated output (just enough for context, not enough
+    # to dilute the command-similarity signal)
+    if isinstance(tool_output, str):
+        thought_text += f" {tool_output[:500]}"
 
     if not thought_text.strip():
         # No text to fingerprint -- pass through

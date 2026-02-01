@@ -46,7 +46,23 @@ def get_target_from_input(input_data: dict) -> str:
                 return parts[i + 1]
 
     # Try environment
-    return os.environ.get("TARGET", "")
+    target = os.environ.get("TARGET")
+    if target:
+        return target
+
+    # Try .current_target file written by /attack command
+    current_target_file = Path(
+        os.environ.get("ARTIFACTS_PATH", "/artifacts")
+    ) / ".current_target"
+    if current_target_file.exists():
+        try:
+            target = current_target_file.read_text().strip()
+            if target:
+                return target
+        except OSError:
+            pass
+
+    return ""
 
 
 # =============================================================================

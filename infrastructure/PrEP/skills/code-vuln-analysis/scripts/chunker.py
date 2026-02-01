@@ -26,31 +26,38 @@ from pathlib import Path
 import yaml
 
 try:
-    import tiktoken
-    TIKTOKEN_AVAILABLE = True
+    from .tokens import count_tokens, estimate_file_tokens
 except ImportError:
-    TIKTOKEN_AVAILABLE = False
+    from tokens import count_tokens, estimate_file_tokens
 
-from prioritize import (
-    SinkType,
-    InputProximity,
-    AuthLevel,
-    TriageFinding,
-    CodeLocation,
-    score_finding,
-    categorize_priority,
-    SINK_SEVERITY
-)
+try:
+    from .prioritize import (
+        SinkType,
+        InputProximity,
+        AuthLevel,
+        TriageFinding,
+        CodeLocation,
+        score_finding,
+        categorize_priority,
+        SINK_SEVERITY
+    )
+except ImportError:
+    from prioritize import (
+        SinkType,
+        InputProximity,
+        AuthLevel,
+        TriageFinding,
+        CodeLocation,
+        score_finding,
+        categorize_priority,
+        SINK_SEVERITY
+    )
 
 
 # Chunk size constraints from research (CODE_ANALYSIS_AGENT_DESIGN.md)
 MIN_CHUNK_TOKENS = 5000
 MAX_CHUNK_TOKENS = 12000
 OPTIMAL_CHUNK_TOKENS = 10000
-
-# Fallback token estimation when tiktoken unavailable
-CHARS_PER_TOKEN_CODE = 4.0
-CHARS_PER_TOKEN_COMMENT = 3.5
 
 
 @dataclass
@@ -105,49 +112,8 @@ class AnalysisChunk:
             self.token_estimate += tokens
 
 
-def count_tokens(text: str, model: str = "cl100k_base") -> int:
-    """
-    Count tokens in text using tiktoken.
-
-    Falls back to character-based estimation if tiktoken unavailable.
-
-    Args:
-        text: Source code or text to count
-        model: Encoding name (cl100k_base for Claude/GPT-4)
-
-    Returns:
-        Estimated token count
-    """
-    if TIKTOKEN_AVAILABLE:
-        try:
-            enc = tiktoken.get_encoding(model)
-            return len(enc.encode(text))
-        except Exception:
-            pass
-
-    # Fallback: estimate based on character count
-    # Code averages ~4 chars/token, comments ~3.5 chars/token
-    # Use weighted average assuming 20% comments
-    avg_chars_per_token = (CHARS_PER_TOKEN_CODE * 0.8) + (CHARS_PER_TOKEN_COMMENT * 0.2)
-    return int(len(text) / avg_chars_per_token)
-
-
-def estimate_file_tokens(file_path: str) -> int:
-    """
-    Estimate token count for a source file.
-
-    Args:
-        file_path: Path to the file
-
-    Returns:
-        Estimated token count
-    """
-    try:
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            content = f.read()
-        return count_tokens(content)
-    except (OSError, IOError):
-        return 0
+# Token counting functions moved to tokens.py module
+# Import them above: from tokens import count_tokens, estimate_file_tokens
 
 
 def topological_sort(

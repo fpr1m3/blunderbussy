@@ -15,10 +15,11 @@
       }
     },
     "pwncat": {
-      "command": "python3",
+      "command": "/opt/pwncat-server-venv/bin/python",
       "args": ["/ext/opulence/servers/pwncat-server.py"],
       "env": {
-        "PYTHONUNBUFFERED": "1"
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "/ext/opulence"
       }
     }
   }

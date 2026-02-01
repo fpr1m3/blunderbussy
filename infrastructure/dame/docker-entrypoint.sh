@@ -50,6 +50,28 @@ setup_split_tunnel() {
 setup_split_tunnel || echo "[split-tunnel] Warning: Setup failed, continuing without VPN routing"
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Target Resolution
+# ═══════════════════════════════════════════════════════════════════════════
+# TARGET may be passed at container start: podman run -e TARGET=10.0.0.1
+# Or written mid-session by /attack command to /artifacts/.current_target
+# Export it so gemini-cli hooks (spawned as child processes) can read it.
+
+if [ -n "$TARGET" ]; then
+  echo "[target] TARGET set from environment: $TARGET"
+elif [ -f /artifacts/.current_target ]; then
+  TARGET=$(cat /artifacts/.current_target | tr -d '[:space:]')
+  if [ -n "$TARGET" ]; then
+    echo "[target] TARGET loaded from /artifacts/.current_target: $TARGET"
+  fi
+fi
+
+if [ -n "$TARGET" ]; then
+  export TARGET
+else
+  echo "[target] TARGET not set (will be set when /attack is used)"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Gemini CLI Setup
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -73,8 +95,9 @@ fi
 
 # Start tmux session with gemini-cli in yolo mode (auto-approve all actions)
 # GEMINI_SYSTEM_MD enables dynamic context injection via custom system prompt
+# TARGET is passed explicitly so hooks spawned by gemini-cli can read it
 if ! tmux has-session -t dame 2>/dev/null; then
-  tmux new-session -d -s dame 'GEMINI_SYSTEM_MD=/ext/opulence/GEMINI.md gemini --yolo'
+  tmux new-session -d -s dame "TARGET=${TARGET:-} GEMINI_SYSTEM_MD=/ext/opulence/GEMINI.md gemini --yolo"
 fi
 
 # Keep container alive

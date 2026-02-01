@@ -68,6 +68,18 @@ def get_target_from_env() -> str:
             if part == "artifacts" and i + 1 < len(parts):
                 return parts[i + 1]
 
+    # Try .current_target file written by /attack command
+    current_target_file = Path(
+        os.environ.get("ARTIFACTS_PATH", "/artifacts")
+    ) / ".current_target"
+    if current_target_file.exists():
+        try:
+            target = current_target_file.read_text().strip()
+            if target:
+                return target
+        except OSError:
+            pass
+
     artifacts_dir = Path(os.environ.get("ARTIFACTS_PATH", "/artifacts"))
     if artifacts_dir.exists():
         session_dirs = [

@@ -22,13 +22,25 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator
 from mcp.server.fastmcp import FastMCP
 
 # Protocol layer for structured YAML responses
-from infrastructure.PrEP.protocol import (
-    format_success,
-    format_error,
-    SessionNotFoundError,
-    SessionDeadError,
-    ErrorType,
-)
+# Support both container (/ext/opulence) and development (infrastructure.PrEP) paths
+try:
+    # Container path: /ext/opulence mounted, protocol is sibling
+    from protocol import (
+        format_success,
+        format_error,
+        SessionNotFoundError,
+        SessionDeadError,
+        ErrorType,
+    )
+except ImportError:
+    # Development path: running from project root
+    from infrastructure.PrEP.protocol import (
+        format_success,
+        format_error,
+        SessionNotFoundError,
+        SessionDeadError,
+        ErrorType,
+    )
 
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger('pwncat-mcp')

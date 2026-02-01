@@ -51,8 +51,8 @@ services:
       - "5985:5985"
     volumes:
       - faraday-data:/home/faraday/.faraday
-      - ./infrastructure/faraday/config:/home/faraday/.faraday/config
-      - ${ARTIFACTS_PATH:-./artifacts}:/artifacts:ro
+      - ./config:/home/faraday/.faraday/config
+      - artifacts:/artifacts:ro
     networks:
       - faraday-net
       - default
@@ -77,7 +77,8 @@ services:
       CELERY_RESULT_BACKEND: redis://faraday-redis:6379/1
     volumes:
       - faraday-data:/home/faraday/.faraday
-      - ${ARTIFACTS_PATH:-./artifacts}:/artifacts:ro
+      - ./config:/home/faraday/.faraday/config
+      - artifacts:/artifacts:ro
     networks:
       - faraday-net
     command: ["faraday-worker", "--queue", "celery", "--loglevel", "INFO"]

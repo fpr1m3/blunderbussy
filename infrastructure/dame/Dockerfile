@@ -63,14 +63,30 @@ ENV PATH="/root/.local/bin:$PATH"
 # Install pwncat-cs for pwncat MCP server
 # pwncat-cs pins packaging<21 which requires distutils (removed in Python 3.13)
 # Use Python 3.11 explicitly for pwncat-cs until upstream fixes the dep
-RUN uv tool install pwncat-cs --python 3.11
+# Also create venv for pwncat MCP server dependencies (PEP 668 blocks global pip)
+RUN uv tool install pwncat-cs --python 3.11 && \
+    uv venv /opt/pwncat-server-venv --python 3.11 && \
+    uv pip install --python /opt/pwncat-server-venv/bin/python \
+        mcp aiohttp pydantic pyyaml pwncat-cs
 
 # Install git-dumper for exposed .git repository exploitation
 # Referenced by CAS attack guidance for web targets
 RUN uv tool install git-dumper
 
-# Install gemini-cli globally
-RUN npm install -g @google/gemini-cli
+# =============================================================================
+# CODE ANALYSIS DEPENDENCIES
+# =============================================================================
+# Python dependencies for code-vuln-analysis skill
+# - semgrep: Static analysis for vulnerability patterns
+# - tiktoken: Token counting for chunk size estimation
+# - tree-sitter: AST parsing for code structure analysis
+# - chromadb: Vector store for semantic code search (optional RAG)
+RUN uv venv /opt/code-analysis-venv && \
+    uv pip install --python /opt/code-analysis-venv/bin/python \
+        semgrep tiktoken tree-sitter chromadb
+
+# Install gemini-cli globally (pinned to avoid auto-update issues)
+RUN npm install -g @google/gemini-cli@0.26.0
 
 WORKDIR /app
 

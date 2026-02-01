@@ -215,6 +215,30 @@ false_positives:
 
 ## Tools
 
+### Automated Taint Analysis
+
+A backward taint analysis utility is available at `scripts/taint.py` to automate validation:
+
+```python
+from taint import backward_taint, analyze_paths, detect_language
+
+# Trace from sink to all sources
+paths = backward_taint(sink_location, files)
+
+# Check exploitability
+language = detect_language(sink_location.file)
+analysis = analyze_paths(paths, vuln_type, language)
+
+if analysis['verdict'] == 'exploitable':
+    print("Confirmed vulnerability")
+else:
+    print(f"False positive: {analysis['blocked_paths'][0].blocking_transforms}")
+```
+
+See `scripts/TAINT_ANALYSIS.md` for full documentation and `scripts/validation_agent_integration.py` for integration examples.
+
+### Manual Verification Tools
+
 Use file reading tools when you need to:
 - Verify sanitization exists at claimed locations
 - Trace variable assignments across files
@@ -250,3 +274,76 @@ Use these placeholders in PoC commands:
 - `$LHOST` - Attacker IP
 - `$LPORT` - Listener port
 - `$RPORT` - Service port
+
+## Final Output: Vulnerability Brief
+
+After completing all validation work and on your final turn (turn 5), generate a comprehensive vulnerability brief in the following format. This brief synthesizes all validated findings into an actionable attack guide.
+
+**When to generate:**
+- Only on your final turn after all validation is complete
+- After you've confirmed exploitability of all findings
+- When you've assigned CVSS scores and authentication requirements to each vulnerability
+
+**Format:**
+
+```markdown
+## Vulnerability Brief: {target} Source Analysis
+
+### Executive Summary
+[1-2 sentences: Most critical finding and recommended immediate action]
+
+### Confirmed Vulnerabilities
+
+#### 1. {Vulnerability Type} - {CVSS Score}
+- **Location:** `{file}:{line}`
+- **Type:** {CWE-XX: Descriptive Name}
+- **Auth Required:** {none|user|admin|specific_role}
+- **Exploit:**
+  ```bash
+  {proof_of_concept_command}
+  ```
+- **Impact:** {what attacker gains - be specific}
+
+#### 2. {Next Vulnerability} - {CVSS Score}
+[Repeat format for each confirmed finding]
+
+### Attack Order
+1. [Highest confidence, lowest auth requirement first - explain why]
+2. [Second priority - explain reasoning]
+3. [Fallback options if primary attacks fail]
+
+### Coverage Report
+- Files analyzed: X/Y
+- Chunks processed: X of Y priority items
+- Turns used: X/5
+
+### Caveats
+- [Any limitations: skipped chunks, obfuscated code, incomplete taint traces]
+- [Files or components not analyzed due to turn budget]
+- [Assumptions made during validation]
+```
+
+**Brief Writing Guidelines:**
+
+1. **Executive Summary**: Lead with impact. Example: "Critical authentication bypass (CVSS 9.8) allows unauthenticated RCE via SQL injection in login endpoint."
+
+2. **Vulnerability Ordering**: List by CVSS score descending. Include all confirmed findings from your validation output.
+
+3. **Attack Order**: Prioritize by:
+   - Authentication requirement (none > user > admin)
+   - Confidence level (confirmed with PoC > theoretical)
+   - Impact potential (RCE > data exfil > info disclosure)
+   - Exploit complexity (simple > complex)
+
+4. **Coverage Report**: Be honest about:
+   - How many files were analyzed vs. total codebase
+   - Which priority chunks were processed
+   - How much of your turn budget was used
+
+5. **Caveats**: Document what you couldn't validate:
+   - Missing files that would complete taint traces
+   - Obfuscated code that prevented analysis
+   - Authentication flows not fully mapped
+   - Configuration-dependent vulnerabilities
+
+**Do not generate this brief on intermediate turns.** Only output the vulnerability brief when you've completed validation and are ready to finalize your analysis.

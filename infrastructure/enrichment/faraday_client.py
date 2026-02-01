@@ -574,6 +574,9 @@ class FaradayClient:
         """
         Get details of a command/processing job.
 
+        Uses the commands list endpoint and filters by ID since the individual
+        command endpoint (/commands/{id}/) is not available in all Faraday versions.
+
         Args:
             workspace: Workspace name
             command_id: Command ID returned from upload_report()
@@ -586,23 +589,34 @@ class FaradayClient:
                 - command: Command string or "error" on failure
                 - start_date: Processing start timestamp
                 - end_date: Processing end timestamp (None if in progress)
+
+        Raises:
+            ValueError: If command_id not found in workspace
         """
         self._require_auth()
 
-        url = f"{self.config.url}/_api/v3/ws/{workspace}/commands/{command_id}/"
+        # Use list endpoint since individual command endpoint may not exist
+        url = f"{self.config.url}/_api/v3/ws/{workspace}/commands"
         response = self.session.get(url, timeout=self.config.timeout)
         response.raise_for_status()
 
         data = response.json()
+        commands = data.get('commands', [])
 
-        return {
-            'id': data.get('id') or data.get('_id'),
-            'duration': data.get('duration'),
-            'tool': data.get('tool'),
-            'command': data.get('command'),
-            'start_date': data.get('start_date'),
-            'end_date': data.get('end_date')
-        }
+        # Find the command by ID
+        for cmd in commands:
+            cmd_data = cmd.get('value', cmd)
+            if cmd_data.get('_id') == command_id or cmd_data.get('id') == command_id:
+                return {
+                    'id': cmd_data.get('id') or cmd_data.get('_id'),
+                    'duration': cmd_data.get('duration'),
+                    'tool': cmd_data.get('tool'),
+                    'command': cmd_data.get('command'),
+                    'start_date': cmd_data.get('start_date'),
+                    'end_date': cmd_data.get('end_date')
+                }
+
+        raise ValueError(f"Command {command_id} not found in workspace {workspace}")
 
     def is_command_complete(self, workspace: str, command_id: int) -> bool:
         """
@@ -619,7 +633,11 @@ class FaradayClient:
         Returns:
             bool: True if processing is complete and successful
         """
-        cmd = self.get_command(workspace, command_id)
+        try:
+            cmd = self.get_command(workspace, command_id)
+        except ValueError:
+            # Command not found - may not have been created yet
+            return False
 
         # Check for error state
         if cmd.get('command') == 'error':

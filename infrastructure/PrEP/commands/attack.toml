@@ -4,6 +4,14 @@ prompt = """
 
 You are executing an initial access attempt against target: {{args}}
 
+## Phase 0: Register Target
+
+**FIRST ACTION — before anything else:**
+```bash
+echo '{{args}}' > /artifacts/.current_target
+```
+This persists the target IP so hooks (loop detector, session state, etc.) can discover it.
+
 ## Phase 1: Intelligence Gathering
 
 ### Step 1.1: Read the CAS
@@ -28,7 +36,7 @@ Look for additional artifacts:
 - `/artifacts/{{args}}/source_code*` - Any leaked source code
 - `/artifacts/{{args}}/*.tar.gz` - Downloaded archives
 
-If source code exists, delegate analysis to the source_code agent (see GEMINI.md <subagent_delegation>).
+If source code exists, delegate analysis to the code-vuln-analysis agent (see GEMINI.md <subagent_delegation>).
 
 ## Phase 2: Network Setup
 
@@ -87,9 +95,9 @@ qdrant-find "<platform> <service> <technique_name>"
 ### Step 3.3: Delegate Source Code Analysis (if available)
 If source code was found in artifacts or gained via filesystem access:
 ```
-delegate_to_agent("source_code", "Analyze <path> for vulnerabilities. Target: {{args}}, Platform: <os>, Technologies: <from CAS>")
+delegate_to_agent("code-vuln-analysis", "Analyze <path> for vulnerabilities. Target: {{args}}, Platform: <os>, Technologies: <from CAS>")
 ```
-The source_code agent will return a vulnerability brief with:
+The code-vuln-analysis agent will return a vulnerability brief with:
 - Critical findings (file:line references, exploit commands)
 - Attack surface map
 - Hardcoded secrets
