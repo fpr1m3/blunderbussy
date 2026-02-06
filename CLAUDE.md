@@ -62,7 +62,6 @@ The extension is installed during Dame container entrypoint from `infrastructure
 infrastructure/PrEP/
 ├── gemini-extension.json    # Extension manifest (MCP servers, metadata)
 ├── GEMINI.md                # Dame's system prompt
-├── system.md                # System-level instructions
 ├── session_state.py         # Session state management
 ├── session_memory.py        # Memory persistence
 ├── agents/                  # Subagents (delegate_to_agent)

@@ -48,7 +48,7 @@ The enrichment pipeline:
 └──────────────────────┬──────────────────────────────────────┘
                        ↓
 ┌─────────────────────────────────────────────────────────────┐
-│            PTT INITIALIZER (init-ppt.py)                    │
+│            PTT INITIALIZER (init-ptt.py)                    │
 │  Transforms CAS → Pentesting Task Tree                     │
 │  • Extracts hosts, services, vulnerabilities               │
 │  • Generates attack vectors based on service types         │
@@ -171,7 +171,7 @@ attack_guidance:
 
 ---
 
-### init-ppt.py
+### init-ptt.py
 
 **Purpose:** Initialize Pentesting Task Tree from CAS
 
@@ -371,7 +371,7 @@ Test data located in `tests/fixtures/`
 
 **Check:**
 1. CAS exists: `ls /artifacts/{target}/context.yaml`
-2. init-ppt.py present: `podman exec enrichment ls /app/init-ppt.py`
+2. init-ptt.py present: `podman exec enrichment ls /app/init-ptt.py`
 3. ptt.py module: `podman exec enrichment ls /app/ptt.py`
 4. Logs: `podman logs enrichment | grep -i ptt`
 
@@ -427,7 +427,7 @@ infrastructure/enrichment/
 ├── faraday_watcher.py      # Main entry point
 ├── faraday_client.py       # Faraday API client
 ├── format-cas.py           # CAS generator
-├── init-ppt.py             # PTT generator
+├── init-ptt.py             # PTT generator
 ├── update-manifest.py      # Manifest updater
 ├── requirements.txt
 ├── settings.json           # Gemini CLI config
