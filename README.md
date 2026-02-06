@@ -176,9 +176,9 @@ blunderbussy/
 │   │   └── docker-entrypoint.sh  # Split tunnel setup
 │   ├── PrEP/                  # Gemini-CLI extension + MCP servers
 │   │   ├── servers/
-│   │   │   ├── pwncat-server.py  # Pwncat MCP server
-│   │   │   ├── msf-server.py     # MSF MCP server
-│   │   │   ├── sliver-server.py  # Sliver MCP server
+│   │   │   ├── pwncat-server.py  # In-container via gemini-extension.json
+│   │   │   ├── msf-server.py     # Separate container (msf-mcp), via MetaMCP
+│   │   │   ├── sliver-server.py  # Separate container (sliver-mcp), via MetaMCP
 │   │   │   └── msf-bridge/       # Go HTTP-to-MSFRPC bridge
 │   │   ├── agents/           # Sub-agents (code-analysis-*, archivist)
 │   │   ├── skills/           # Skills (code-vuln-analysis, etc.)
@@ -329,7 +329,7 @@ podman build --build-arg TARGET_PLATFORM=windows -t dame:windows \
   -f infrastructure/dame/Dockerfile infrastructure/dame/
 ```
 
-**Core tools (all builds):** nc, nmap, feroxbuster, ffuf, gobuster, whatweb, sqlmap, nikto, enum4linux, smbmap, smbclient, impacket-scripts, crackmapexec, hydra, dnsrecon, nbtscan, git-dumper, pwncat-cs (via uv)
+**Core tools (all builds):** nc, ping, traceroute, wget, socat, rlwrap, git, jq, ftp, telnet, sshpass, dig, proxychains4, html2text, lynx, nbtscan, onesixtyone, snmpwalk, nmap, dnsrecon, gobuster, feroxbuster, ffuf, whatweb, sqlmap, nikto, enum4linux, smbmap, smbclient, impacket-scripts, crackmapexec, hydra, tmux, ripgrep, pwncat-cs (via uv), git-dumper (via uv)
 
 ---
 

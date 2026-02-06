@@ -56,7 +56,7 @@ podman build --build-arg TARGET_PLATFORM=windows -t dame:windows \
   -f infrastructure/dame/Dockerfile infrastructure/dame/
 ```
 
-**Core tools (all builds):** nc, ping, traceroute, wget, socat, rlwrap, git, jq, dig, proxychains4, nbtscan, onesixtyone, snmpwalk, nmap, dnsrecon, gobuster, feroxbuster, ffuf, whatweb, sqlmap, nikto, enum4linux, smbmap, smbclient, impacket-scripts, crackmapexec, hydra, tmux, ripgrep
+**Core tools (all builds):** nc, ping, traceroute, wget, socat, rlwrap, git, jq, ftp, telnet, sshpass, dig, proxychains4, html2text, lynx, nbtscan, onesixtyone, snmpwalk, nmap, dnsrecon, gobuster, feroxbuster, ffuf, whatweb, sqlmap, nikto, enum4linux, smbmap, smbclient, impacket-scripts, crackmapexec, hydra, tmux, ripgrep, pwncat-cs (via uv), git-dumper (via uv)
 
 **Linux-specific:** searchsploit (exploitdb)
 
@@ -189,9 +189,9 @@ infrastructure/PrEP/
 │   ├── command_utils.py       # Shared command parsing utilities
 │   └── loop_detector.py       # AfterTool: MinHash similarity loop detection
 ├── servers/                   # MCP servers
-│   ├── pwncat-server.py       # Post-exploitation (FastMCP, 14 tools)
-│   ├── msf-server.py          # Metasploit Framework (FastMCP, 11 tools)
-│   ├── sliver-server.py       # Sliver C2 (FastMCP, 11 tools)
+│   ├── pwncat-server.py       # In-container via gemini-extension.json (FastMCP, 14 tools)
+│   ├── msf-server.py          # Separate container: msf-mcp, via MetaMCP (FastMCP, 11 tools)
+│   ├── sliver-server.py       # Separate container: sliver-mcp, via MetaMCP (FastMCP, 11 tools)
 │   └── msf-bridge/            # Go HTTP-to-MSFRPC bridge
 ├── schemas/                   # Data schemas
 │   ├── PTT_SCHEMA.md

@@ -320,6 +320,13 @@ GENERATE_PTT=true             # Auto-generate PTT after CAS
 
 # Health
 HEALTHCHECK_PORT=8080
+
+# Logging
+LOG_LEVEL=INFO                # Python log level (DEBUG, INFO, WARNING, ERROR)
+
+# Optional
+NVD_API_KEY=                  # NVD API key for faster CVE lookups (optional)
+GEMINI_FORCE_FILE_STORAGE=true # Force file-based token storage (no keychain in container)
 ```
 
 ### Volume Mounts

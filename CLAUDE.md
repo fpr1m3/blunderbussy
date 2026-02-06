@@ -48,7 +48,7 @@ podman build --build-arg TARGET_PLATFORM=linux -t dame:linux -f infrastructure/d
 podman build --build-arg TARGET_PLATFORM=windows -t dame:windows -f infrastructure/dame/Dockerfile infrastructure/dame/
 ```
 
-Core tools (always installed): nc, ping, traceroute, wget, socat, rlwrap, git, jq, dig, proxychains4, nbtscan, onesixtyone, snmpwalk, nmap, dnsrecon, gobuster, feroxbuster, ffuf, whatweb, sqlmap, nikto, enum4linux, smbmap, smbclient, impacket-scripts, crackmapexec, hydra, tmux, ripgrep
+Core tools (always installed): nc, ping, traceroute, wget, socat, rlwrap, git, jq, ftp, telnet, sshpass, dig, proxychains4, html2text, lynx, nbtscan, onesixtyone, snmpwalk, nmap, dnsrecon, gobuster, feroxbuster, ffuf, whatweb, sqlmap, nikto, enum4linux, smbmap, smbclient, impacket-scripts, crackmapexec, hydra, tmux, ripgrep, pwncat-cs (via uv), git-dumper (via uv)
 
 ## Gemini CLI Extension System (Dame)
 
@@ -96,9 +96,10 @@ infrastructure/PrEP/
 │   ├── command_utils.py       # Shared command parsing utilities
 │   └── loop_detector.py       # AfterTool: MinHash similarity loop detection
 ├── servers/                 # MCP servers
-│   ├── pwncat-server.py
-│   ├── msf-server.py
-│   └── sliver-server.py
+│   ├── pwncat-server.py    # In-container via gemini-extension.json
+│   ├── msf-server.py       # Separate container (msf-mcp), via MetaMCP
+│   ├── sliver-server.py    # Separate container (sliver-mcp), via MetaMCP
+│   └── msf-bridge/         # Go HTTP-to-MSFRPC bridge
 ├── commands/
 │   └── attack.toml          # /attack {target} command
 ├── protocol/                # IPC protocol definitions
