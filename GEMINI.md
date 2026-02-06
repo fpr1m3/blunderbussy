@@ -180,9 +180,14 @@ infrastructure/PrEP/
 │   └── attack.toml            # /attack {target}
 ├── hooks/                     # Tool execution hooks
 │   ├── hooks.json
-│   ├── session_start.py
-│   ├── before_tool.py
-│   └── after_tool.py
+│   ├── session_start.py       # SessionStart: load state + inject memory
+│   ├── before_tool.py         # BeforeTool: query cache dedup
+│   ├── after_tool.py          # AfterTool: output processing + cred extraction
+│   ├── file_size_gate.py      # BeforeTool: block oversized file reads
+│   ├── autorecon_dedup.py     # BeforeTool: block redundant scans
+│   ├── shellcheck_validator.py # BeforeTool: validate shell syntax
+│   ├── command_utils.py       # Shared command parsing utilities
+│   └── loop_detector.py       # AfterTool: MinHash similarity loop detection
 ├── servers/                   # MCP servers
 │   ├── pwncat-server.py       # Post-exploitation (FastMCP, 14 tools)
 │   ├── msf-server.py          # Metasploit Framework (FastMCP, 11 tools)
@@ -191,7 +196,9 @@ infrastructure/PrEP/
 ├── schemas/                   # Data schemas
 │   ├── PTT_SCHEMA.md
 │   └── SESSION_SCHEMA.md
-└── protocol/                  # IPC protocol definitions
+├── protocol/                  # IPC protocol definitions
+├── tests/                     # PrEP-specific tests (pipeline gate, etc.)
+└── ERROR_HANDLING.md          # Error classification reference
 ```
 
 ### Dame's Role
@@ -280,7 +287,7 @@ All design documentation: `$HOME/Notes/Obsidian/10 - PROJECTS/Agent Opulence/`
 - [x] Dame container (Kali + gemini-cli + pwncat-cs)
 - [x] Opulence extension (MCP servers, task tree, error handling)
 - [x] HexStrike recon container (AutoRecon integration)
-- [x] MCP server modernization (FastMCP, Pydantic, ~430 tests)
+- [x] MCP server modernization (FastMCP, Pydantic, ~425 tests)
 - [x] C2 framework integration (MSF + Sliver via gluetun VPN)
 - [x] Test framework (pytest with fixtures)
 - [x] Issue tracking (Beads)

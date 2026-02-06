@@ -228,7 +228,7 @@ services:
     # Stream F - Dame (gemini-cli with tmux session management)
     # ═══════════════════════════════════════════════════════════════════════════
     #
-    # Attach: docker exec -it dame tmux attach -t dame
+    # Attach: podman exec -it dame tmux attach -t dame
     # Detach: Ctrl+A, D
     #
     # Split Tunnel Architecture:

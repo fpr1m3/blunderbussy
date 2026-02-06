@@ -87,15 +87,24 @@ infrastructure/PrEP/
 │   └── vulnerability-scanner/
 ├── hooks/                   # Tool execution hooks
 │   ├── hooks.json
-│   ├── session_start.py
-│   ├── before_tool.py
-│   └── after_tool.py
+│   ├── session_start.py       # SessionStart: load state + inject memory
+│   ├── before_tool.py         # BeforeTool: query cache dedup
+│   ├── after_tool.py          # AfterTool: output processing + cred extraction
+│   ├── file_size_gate.py      # BeforeTool: block oversized file reads
+│   ├── autorecon_dedup.py     # BeforeTool: block redundant scans
+│   ├── shellcheck_validator.py # BeforeTool: validate shell syntax
+│   ├── command_utils.py       # Shared command parsing utilities
+│   └── loop_detector.py       # AfterTool: MinHash similarity loop detection
 ├── servers/                 # MCP servers
 │   ├── pwncat-server.py
 │   ├── msf-server.py
 │   └── sliver-server.py
+├── commands/
+│   └── attack.toml          # /attack {target} command
 ├── protocol/                # IPC protocol definitions
-└── schemas/                 # Data schemas
+├── schemas/                 # Data schemas
+├── tests/                   # PrEP-specific tests (pipeline gate, etc.)
+└── ERROR_HANDLING.md        # Error classification reference
 ```
 
 ### Skills vs Agents
@@ -109,13 +118,27 @@ infrastructure/PrEP/
 
 ```json
 {
+  "general": {
+    "previewFeatures": true
+  },
+  "context": {
+    "includeDirectories": ["/artifacts"]
+  },
   "experimental": {
-    "enableAgents": true,
+    "introspectionAgentSettings": { "enabled": true },
+    "plan": true,
     "skills": true,
-    "plan": true
+    "enableAgents": true,
+    "useOSC52Paste": true
+  },
+  "model": {
+    "name": "gemini-3-flash-preview"
   },
   "tools": {
-    "enableHooks": true
+    "enableHooks": true,
+    "enableToolOutputTruncation": true,
+    "truncateToolOutputThreshold": 15000,
+    "truncateToolOutputLines": 100
   },
   "hooksConfig": {
     "enabled": true

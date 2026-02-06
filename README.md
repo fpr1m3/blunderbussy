@@ -54,7 +54,7 @@ Agent Opulence strictly separates **deterministic scanning** from **strategic de
 │  Dame (AI): Reads CAS, exploits, privesc                    │
 ├─────────────────────────────────────────────────────────────┤
 │                   ENRICHMENT PIPELINE                        │
-│  watcher.py → Parsers → Enrichers → CAS Formatter           │
+│  faraday_watcher.py → Faraday → Enrichers → CAS Formatter   │
 ├─────────────────────────────────────────────────────────────┤
 │                  HEXSTRIKE (Recon Tools)                     │
 │  AutoRecon, nmap, nuclei, feroxbuster, 150+ tools           │
@@ -197,6 +197,7 @@ blunderbussy/
 │       └── loot/             # Flags, creds
 ├── tests/                    # Test suite
 │   ├── fixtures/             # Test data (autorecon, nmap, nuclei, etc.)
+│   ├── hooks/                # Hook unit tests (loop detector, file gate, etc.)
 │   ├── integration/          # Integration tests
 │   ├── mcp/                  # MCP server input validation tests
 │   └── test_protocol/        # Protocol action/response tests
@@ -360,7 +361,7 @@ podman exec -it <name> sh  # Execute in container
 cd ~/Projects/blunderbussy
 uv run pytest tests/mcp/          # MCP server tests
 uv run pytest tests/integration/  # Integration tests
-uv run pytest tests/ -v           # All tests (~430 tests)
+uv run pytest tests/ -v           # All tests (~425 tests)
 ```
 
 ---
@@ -390,7 +391,7 @@ bd sync               # Sync with git
 - [x] HexStrike recon container (AutoRecon integration)
 - [x] Test framework (pytest with fixtures)
 - [x] Issue tracking (Beads)
-- [x] MCP server modernization (FastMCP, Pydantic, ~430 tests)
+- [x] MCP server modernization (FastMCP, Pydantic, ~425 tests)
 - [x] C2 framework integration (MSF + Sliver via gluetun VPN)
 - [ ] E2E testing on additional HTB machines
 - [ ] Multi-target parallelization

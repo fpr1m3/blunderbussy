@@ -428,6 +428,7 @@ infrastructure/enrichment/
 ├── faraday_client.py       # Faraday API client
 ├── format-cas.py           # CAS generator
 ├── init-ptt.py             # PTT generator
+├── regenerate-cas.py       # Regenerate CAS from existing Faraday data
 ├── update-manifest.py      # Manifest updater
 ├── requirements.txt
 ├── settings.json           # Gemini CLI config
