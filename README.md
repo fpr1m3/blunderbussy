@@ -43,61 +43,6 @@ Agent Opulence strictly separates **deterministic scanning** from **strategic de
 
 ---
 
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     DAME CONTAINER                           │
-│  Kali Linux + gemini-cli + pwncat-cs                        │
-│  Dame (AI): Reads CAS, exploits, privesc                    │
-├─────────────────────────────────────────────────────────────┤
-│                   ENRICHMENT PIPELINE                        │
-│  faraday_watcher.py → Faraday → Enrichers → CAS Formatter   │
-├─────────────────────────────────────────────────────────────┤
-│                  HEXSTRIKE (Recon Tools)                     │
-│  AutoRecon, nmap, nuclei, feroxbuster, 150+ tools           │
-├─────────────────────────────────────────────────────────────┤
-│                   C2 FRAMEWORKS (MSF + Sliver)               │
-│  msf (msfrpcd) + msf-bridge + sliver daemon                  │
-├─────────────────────────────────────────────────────────────┤
-│                 NETWORK ISOLATION (GLUETUN)                  │
-│  VPN tunnel + killswitch, all traffic through HTB VPN       │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Main Components
-
-| Component | Container | Purpose |
-|-----------|-----------|---------|
-| `gluetun` | VPN gateway | Mandatory VPN with killswitch, network isolation |
-| `enrichment` | Python 3.11 | Watches raw scans, parses, enriches, outputs CAS |
-| `hexstrike-recon` | 150+ tools | Automated recon (nmap, nuclei, feroxbuster, etc.) |
-| `dame` | Kali + gemini-cli | AI exploitation agent with full offensive toolkit |
-| `qdrant` | Vector DB | Technique library for exploitation knowledge |
-| `pwncat-mcp` | Python | Post-exploitation framework MCP server |
-| `msf` | Metasploit | Metasploit Framework with msfrpcd for exploitation |
-| `msf-bridge` | Go HTTP API | HTTP bridge for MSFRPC communication |
-| `sliver` | Sliver C2 | Sliver implant server for C2 operations |
-
-### Network Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    DAME CONTAINER                            │
-│  Split tunnel: HTB subnets via VPN, else direct internet    │
-│  - 10.10.0.0/16 → gluetun VPN                               │
-│  - 10.129.0.0/16 → gluetun VPN                              │
-│  - Everything else → direct (OAuth, APIs, web)              │
-├─────────────────────────────────────────────────────────────┤
-│                     GLUETUN CONTAINER                        │
-│  VPN tunnel (HTB) + killswitch + DNS leak protection        │
-│  - Only HTB network accessible when VPN connected           │
-│  - Killswitch blocks all traffic if VPN drops               │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
 ## Quick Start
 
 ### Prerequisites
@@ -146,251 +91,45 @@ watch ls artifacts/10.10.10.3/
 # Start Dame container
 podman-compose up -d dame
 
-# Attach to Dame's tmux session
+# Attach to Dame's tmux session (gemini-cli starts automatically)
 podman exec -it dame tmux attach -t dame
 
-# Launch gemini-cli
-gemini
+# First run: gemini-cli will prompt for authentication (OAuth or API key)
+# Follow the on-screen instructions to complete setup
 
-# Engage target
+# Engage target (gemini-cli is already running)
 /attack 10.10.10.3
 ```
 
 ---
 
-## Project Structure
+## Documentation
 
-```
-blunderbussy/
-├── infrastructure/
-│   ├── enrichment/           # Enrichment pipeline
-│   │   ├── faraday_watcher.py    # File watcher + Faraday uploader
-│   │   ├── faraday_client.py     # Faraday REST API client
-│   │   ├── format-cas.py         # CAS YAML formatter
-│   │   ├── init-ptt.py           # PTT initializer (CAS → PTT)
-│   │   └── enrichers/            # Service analysis, web detection
-│   ├── dame/                  # Kali + gemini-cli container
-│   │   ├── Dockerfile        # Multi-platform build (linux/windows)
-│   │   └── docker-entrypoint.sh  # Split tunnel setup
-│   ├── PrEP/                  # Gemini-CLI extension + MCP servers
-│   │   ├── servers/
-│   │   │   ├── pwncat-server.py  # In-container via gemini-extension.json
-│   │   │   ├── msf-server.py     # Separate container (msf-mcp), via MetaMCP
-│   │   │   ├── sliver-server.py  # Separate container (sliver-mcp), via MetaMCP
-│   │   │   └── msf-bridge/       # Go HTTP-to-MSFRPC bridge
-│   │   ├── agents/           # Sub-agents (code-analysis-*, archivist)
-│   │   ├── skills/           # Skills (code-vuln-analysis, etc.)
-│   │   ├── gemini-extension.json
-│   │   ├── GEMINI.md         # Dame's system prompt
-│   │   ├── ptt.py            # Pentesting Task Tree module
-│   │   └── commands/         # /attack command
-│   ├── hexstrike-recon/      # AutoRecon + 150+ security tools
-│   ├── gluetun/              # VPN configuration
-│   └── faraday/              # Faraday vulnerability management
-├── artifacts/                # Runtime (mounted volume)
-│   ├── raw/                  # Raw scan output
-│   └── {target}/             # Per-target directories
-│       ├── context.yaml      # CAS document
-│       ├── ptt.yaml          # Task tree
-│       └── loot/             # Flags, creds
-├── tests/                    # Test suite
-│   ├── fixtures/             # Test data (autorecon, nmap, nuclei, etc.)
-│   ├── hooks/                # Hook unit tests (loop detector, file gate, etc.)
-│   ├── integration/          # Integration tests
-│   ├── mcp/                  # MCP server input validation tests
-│   └── test_protocol/        # Protocol action/response tests
-├── docker-compose.yml        # Stack definition
-├── CLAUDE.md                 # Development instructions
-├── GEMINI.md                 # Implementation guide
-└── AGENTS.md                 # Agent work instructions
-```
-
----
-
-## Enrichment Pipeline
-
-### Faraday Integration (80+ Parsers)
-
-Parsing is handled by Faraday's built-in plugins, supporting 80+ security tool formats including:
-
-| Category | Example Tools |
-|----------|---------------|
-| **Network** | nmap, masscan, dnsrecon, snmpwalk |
-| **Web** | burp, nikto, nuclei, feroxbuster, gobuster, ffuf, whatweb, wpscan |
-| **Vulnerability** | nessus, openvas, qualys, nexpose |
-| **SMB/Enum** | enum4linux, smbmap, crackmapexec |
-
-### Pipeline Flow
-
-```
-Raw scan file detected (inotify)
-    ↓
-faraday_watcher.py uploads to Faraday API
-    ↓
-Faraday parses with 80+ built-in plugins
-    ↓
-Enrichers add context:
-  - Service priority scoring
-  - Web technology detection
-    ↓
-CAS Formatter outputs YAML (with Gemini attack guidance)
-    ↓
-PTT Initializer transforms CAS → PTT (deterministic)
-    ↓
-Result: /artifacts/{target}/context.yaml + ptt.yaml
-```
-
----
-
-## Data Schemas
-
-### CAS (Context-Aware Summary)
-
-```yaml
-# /artifacts/{target}/context.yaml
-meta:
-  target: 10.10.10.3
-  scan_time: 2026-01-20T12:00:00Z
-  tools_run: [nmap, httpx, nuclei, feroxbuster]
-
-summary:
-  open_ports: 5
-  services: [ftp, ssh, http, smb]
-  critical_findings: 2
-
-services:
-  - port: 21
-    service: ftp
-    version: vsftpd 2.3.4
-    vulns:
-      - cve: CVE-2011-2523
-        severity: critical
-        epss: 9.8
-        exploit_available: true
-
-attack_guidance:
-  quick_wins: []        # Default creds, anon access
-  priority_targets: []  # High-value services
-```
-
-### PTT (Pentesting Task Tree)
-
-```yaml
-# /artifacts/{target}/ptt.yaml
-engagement:
-  target: 10.10.10.3
-  hosts:
-    - ip: 10.10.10.3
-      services:
-        - port: 21
-          service: ftp
-          techniques:
-            - name: anonymous_ftp_login
-              status: pending|in_progress|success|failed
-              attempts: 0
-```
-
----
-
-## Security Model
-
-### Three-Layer Protection
-
-1. **Network Isolation (Primary/Hard Boundary)**
-   - All traffic through gluetun VPN
-   - Killswitch blocks non-VPN traffic
-   - Even container crash maintains isolation
-
-2. **Scope Definition (Secondary/Soft)**
-   - `/artifacts/scope.yaml` defines allowed targets
-   - Dame instructed to respect scope in system prompt
-   - Parsers filter out-of-scope results
-
-3. **AI Guardrails (Tertiary)**
-   - Dame's system prompt: "Only operate on targets in CAS"
-   - "No reconnaissance beyond provided CAS"
-   - "Document all attempts and findings"
-
----
-
-## Dame Container Builds
-
-Build with `TARGET_PLATFORM` arg for platform-specific tools:
-
-```bash
-# Linux targets (default) - includes searchsploit
-podman build --build-arg TARGET_PLATFORM=linux -t dame:linux \
-  -f infrastructure/dame/Dockerfile infrastructure/dame/
-
-# Windows/AD targets - includes evil-winrm, bloodhound, ldap-utils
-podman build --build-arg TARGET_PLATFORM=windows -t dame:windows \
-  -f infrastructure/dame/Dockerfile infrastructure/dame/
-```
-
-**Core tools (all builds):** nc, ping, traceroute, wget, socat, rlwrap, git, jq, ftp, telnet, sshpass, dig, proxychains4, html2text, lynx, nbtscan, onesixtyone, snmpwalk, nmap, dnsrecon, gobuster, feroxbuster, ffuf, whatweb, sqlmap, nikto, enum4linux, smbmap, smbclient, impacket-scripts, crackmapexec, hydra, tmux, ripgrep, pwncat-cs (via uv), git-dumper (via uv)
-
----
-
-## Development
-
-### Python Tooling
-
-Use `uv` for Python package management:
-
-```bash
-uv pip install <package>   # Install packages
-uv run pytest              # Run tests
-uv run python script.py    # Run scripts
-```
-
-### Container Tooling
-
-Use `podman` and `podman-compose`:
-
-```bash
-podman-compose up -d       # Start services
-podman-compose ps          # List containers
-podman exec -it <name> sh  # Execute in container
-```
-
-### Running Tests
-
-```bash
-cd $PROJECT_ROOT  # root of blunderbussy repo
-uv run pytest tests/mcp/          # MCP server tests
-uv run pytest tests/integration/  # Integration tests
-uv run pytest tests/ -v           # All tests (~425 tests)
-```
-
----
-
-## Task Tracking
-
-This project uses [**beads**](https://github.com/steveyegge/beads) (`bd`) for issue tracking:
-
-```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --status=in_progress  # Claim work
-bd close <id>         # Complete work
-bd sync               # Sync with git
-```
+| Document | Description |
+|----------|-------------|
+| [Architecture](docs/architecture.md) | Container stack, component table, network topology |
+| [Enrichment Pipeline](docs/enrichment-pipeline.md) | Faraday integration, 80+ parsers, pipeline flow |
+| [Data Schemas](docs/data-schemas.md) | CAS and PTT YAML formats with examples |
+| [Security Model](docs/security-model.md) | Four-layer protection: network, volume, scope, AI guardrails |
+| [Dame Builds](docs/dame-builds.md) | Platform-specific builds and tool inventory |
+| [Project Structure](docs/project-structure.md) | Full directory tree with annotations |
+| [Gemini CLI Agents](docs/gemini-cli-agents.md) | Extension system internals and agent reference |
 
 ---
 
 ## Status
 
-**Current Phase:** Production-ready PoC
+**Current Phase:** Active development — testing against HTB machines of increasing difficulty (currently hill-climbing on a medium-difficulty Linux box)
 
 - [x] Docker environment + network isolation (gluetun VPN)
 - [x] Enrichment pipeline (Faraday 80+ parsers, enrichers, CAS formatter)
 - [x] Dame container (Kali + gemini-cli + pwncat-cs)
 - [x] Opulence extension (MCP servers, task tree, error handling)
 - [x] HexStrike recon container (AutoRecon integration)
-- [x] Test framework (pytest with fixtures)
+- [x] Test framework (pytest with fixtures, ~425 unit tests)
 - [x] Issue tracking (Beads)
-- [x] MCP server modernization (FastMCP, Pydantic, ~425 tests)
-- [x] C2 framework integration (MSF + Sliver via gluetun VPN)
+- [x] MCP server modernization (FastMCP, Pydantic validation)
+- [ ] C2 framework integration (MSF + Sliver defined, not yet tested against HTB)
 - [ ] E2E testing on additional HTB machines
 - [ ] Multi-target parallelization
 
