@@ -343,7 +343,7 @@ volumes:
 ### Unit Tests
 
 ```bash
-cd /home/fprime/Projects/blunderbussy
+cd $PROJECT_ROOT  # root of blunderbussy repo
 
 # Test Faraday client
 uv run pytest infrastructure/enrichment/tests/test_faraday_client.py -v

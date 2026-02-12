@@ -1,7 +1,5 @@
 # Agent Opulence (Blunderbussy)
 
-[![Tests](https://github.com/fprime/blunderbussy/actions/workflows/test.yml/badge.svg)](https://github.com/fprime/blunderbussy/actions/workflows/test.yml)
-
 > **"Dumb Tools Scan, Smart Agents Plan"**
 
 Autonomous offensive security orchestration engine. Automated pipelines handle reconnaissance, AI agents handle exploitation.
@@ -111,7 +109,7 @@ Agent Opulence strictly separates **deterministic scanning** from **strategic de
 ### 1. Start Infrastructure
 
 ```bash
-cd ~/Projects/blunderbussy
+cd $PROJECT_ROOT  # root of blunderbussy repo
 
 # Copy and configure environment
 cp .env.example .env
@@ -358,7 +356,7 @@ podman exec -it <name> sh  # Execute in container
 ### Running Tests
 
 ```bash
-cd ~/Projects/blunderbussy
+cd $PROJECT_ROOT  # root of blunderbussy repo
 uv run pytest tests/mcp/          # MCP server tests
 uv run pytest tests/integration/  # Integration tests
 uv run pytest tests/ -v           # All tests (~425 tests)
@@ -368,7 +366,7 @@ uv run pytest tests/ -v           # All tests (~425 tests)
 
 ## Task Tracking
 
-This project uses **beads** (`bd`) for issue tracking:
+This project uses [**beads**](https://github.com/steveyegge/beads) (`bd`) for issue tracking:
 
 ```bash
 bd ready              # Find available work
@@ -400,4 +398,4 @@ bd sync               # Sync with git
 
 ## License
 
-Private project. Not for distribution.
+This project is licensed under the [GNU General Public License v3.0](LICENSE).

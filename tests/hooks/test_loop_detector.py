@@ -135,21 +135,21 @@ class TestDetectLoop:
         assert level >= 1
         assert consecutive >= LEVEL_1_TURNS
 
-    def test_tool_execution_breaks_loop(self):
-        """Executing a tool with similar text should decrement the counter."""
+    def test_similar_tool_execution_is_still_loop(self):
+        """Running similar tools with similar text is looping, not progress."""
         state = self._fresh_state()
 
         # Build up some consecutive similar turns
         for _ in range(2):
             detect_loop(state, "same thought pattern repeating", 0)
 
-        # Now execute a tool with similar text
+        # Execute a tool with similar text — still a loop
         level, consecutive = detect_loop(
             state, "same thought pattern repeating", 1  # has tool execution
         )
 
-        # Should have decremented, not incremented
-        assert consecutive < 2
+        # Similar tool execution counts as looping (running same command = not progress)
+        assert consecutive >= 2
 
     def test_level2_escalation(self):
         state = self._fresh_state()

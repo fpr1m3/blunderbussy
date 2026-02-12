@@ -14,6 +14,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -44,12 +45,12 @@ class VideoMeta:
 
 class SkillExtractor:
     def __init__(self, output_dir: Path, fabric_pattern: str = "fp_extract_hack_skills",
-                 rate_limit: float = 2.0, fabric_path: str = "/home/fprime/.local/bin/fabric"):
+                 rate_limit: float = 2.0, fabric_path: Optional[str] = None):
         self.output_dir = Path(output_dir)
         self.videos_dir = self.output_dir / "videos"
         self.fabric_pattern = fabric_pattern
         self.rate_limit = rate_limit
-        self.fabric_path = fabric_path
+        self.fabric_path = fabric_path or shutil.which("fabric") or "fabric"
 
         # State files
         self.metadata_file = self.output_dir / "metadata.json"
@@ -402,8 +403,8 @@ Examples:
     parser.add_argument(
         '--fabric-path',
         type=str,
-        default='/home/fprime/.local/bin/fabric',
-        help='Path to fabric binary'
+        default=None,
+        help='Path to fabric binary (default: auto-detect from PATH)'
     )
 
     args = parser.parse_args()

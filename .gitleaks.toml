@@ -1,0 +1,25 @@
+# gitleaks configuration — suppress known false positives
+# Run: podman run --rm -v $PWD:/path:ro docker.io/zricethezav/gitleaks:latest git /path
+
+[extend]
+useDefault = true
+
+# Global allowlist: paths that contain intentional "secrets" for testing/documentation
+[allowlist]
+description = "Intentional test fixtures, documentation examples, and pentest command templates"
+paths = [
+    # Deliberately vulnerable apps for code-vuln-analysis benchmarks
+    '''infrastructure/PrEP/skills/code-vuln-analysis/scripts/fixtures/''',
+    # Expected test artifacts containing example findings
+    '''expected_artifacts/''',
+    # Security anti-pattern documentation with example bad code
+    '''infrastructure/PrEP/skills/code-vuln-analysis/resources/sec-context/''',
+    # Schema docs with placeholder values
+    '''infrastructure/PrEP/schemas/''',
+    # Pentest skills corpus — commands use $TARGET variables, not real creds
+    '''unix_easy_skills_corpus/''',
+    # Test files with intentional fake credentials
+    '''tests/''',
+    # Don't flag yourself
+    '''\.gitleaks\.toml''',
+]

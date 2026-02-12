@@ -166,7 +166,11 @@ def classify_exception(exc: Exception) -> ErrorType:
 
     # Check for subclass matches
     for mapped_type, error_type in EXCEPTION_MAP.items():
-        if isinstance(exc, mapped_type):
-            return error_type
+        try:
+            if isinstance(exc, mapped_type):
+                return error_type
+        except TypeError:
+            # mapped_type may not be a real type (e.g. mocked httpx classes in tests)
+            continue
 
     return ErrorType.UNKNOWN
