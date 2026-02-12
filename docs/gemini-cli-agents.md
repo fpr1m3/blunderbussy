@@ -3,6 +3,8 @@
 Reference documentation for configuring agents and skills in gemini-cli (Dame).
 
 > **Note:** This is an undocumented, experimental feature in gemini-cli. Not in official docs - extracted from source code at `~/Code/gemini-cli/`.
+>
+> For the complete agent file format specification (all fields, validation rules, remote agents), see [Agent File Schema](agent-file-schema.md).
 
 ## Skills vs Agents
 
