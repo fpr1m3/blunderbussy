@@ -45,4 +45,24 @@ artifacts/raw/*
 *.pem
 *.key
 credentials.json
-archive/firecracker-migration/dame-firecracker/ubuntu-22.04.ext4
+credentials.yaml
+config/server.ini
+infrastructure/faraday/config/server.ini
+
+# Sensitive directories (session logs, scan artifacts, issue tracker)
+archive/
+.beads/
+analysis/
+transcripts/
+
+# Claude Code private instructions (subdirectory copies)
+**/CLAUDE.md
+!CLAUDE.md
+
+# Misc dev artifacts
+dame_analysis.md
+hello.md
+RESEARCH_SURVEY.txt
+sample_video_transcript.txt
+skills-pipeline/
+*.srt
