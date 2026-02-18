@@ -28,6 +28,7 @@ markers = [
     "integration: mark test as an integration test (uses real parsers)",
     "slow: mark test as slow (involves network operations or long timeouts)",
     "qdrant: mark test as requiring Qdrant container (session memory tests)",
+    "replay: mark test as hook trace replay (requires frozen fixtures)",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",
