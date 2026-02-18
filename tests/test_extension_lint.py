@@ -141,7 +141,19 @@ class TestAgentReferences:
                 )
 
 
-VALID_HOOK_EVENTS = {"BeforeTool", "AfterTool", "SessionStart"}
+VALID_HOOK_EVENTS = {
+    "SessionStart",
+    "SessionEnd",
+    "BeforeAgent",
+    "AfterAgent",
+    "BeforeModel",
+    "AfterModel",
+    "BeforeToolSelection",
+    "BeforeTool",
+    "AfterTool",
+    "PreCompress",
+    "Notification",
+}
 
 
 class TestHookWiring:
