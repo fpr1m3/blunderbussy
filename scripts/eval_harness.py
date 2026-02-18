@@ -428,9 +428,8 @@ def score_workspace(target_name: str, workspace: Path) -> Path:
     result = score_ptt(gt, ptt)
     result_dict = result.to_dict()
 
-    # Add metadata
+    # target is already in result_dict from to_dict(); add timestamp metadata
     result_dict["meta"] = {
-        "target": target_name,
         "timestamp": datetime.now().isoformat(),
         "workspace": str(workspace),
     }
@@ -585,10 +584,10 @@ def cmd_results(args) -> int:
             try:
                 with open(rf) as fh:
                     data = yaml.safe_load(fh)
-                target = data.get("meta", {}).get("target", rf.stem)
-                summary = data.get("summary", {})
-                pct = summary.get("percentage", 0.0)
-                passed = summary.get("passed", False)
+                target = data.get("target", rf.stem)
+                score_data = data.get("score", {})
+                pct = score_data.get("percentage", 0.0)
+                passed = score_data.get("pass", False)
                 status = f"{Color.GREEN}PASS{Color.RESET}" if passed else f"{Color.RED}FAIL{Color.RESET}"
                 print(f"    {target}: {pct:.1f}% {status}")
 
@@ -602,11 +601,21 @@ def cmd_results(args) -> int:
                         else:
                             icon = f"{Color.RED}\u2717{Color.RESET}"
                         print(f"      {icon} {obj.get('id', '?')}: {obj_status} "
-                              f"({obj.get('points_awarded', 0)}/{obj.get('points_possible', 0)}pts)")
+                              f"({obj.get('points', 0)}/{obj.get('points_possible', 0)}pts)")
             except Exception as exc:
                 print(f"    {rf.name}: ERROR reading — {exc}")
 
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Subcommand: add (stub)
+# ---------------------------------------------------------------------------
+
+def cmd_add(args) -> int:
+    """Scaffold a new target package (stub)."""
+    print("add: not yet implemented — scaffold target manually", file=sys.stderr)
+    return 1
 
 
 # ---------------------------------------------------------------------------
@@ -652,6 +661,11 @@ def main(argv: list[str] | None = None) -> int:
     run_parser.add_argument("--json", action="store_true", help="JSON output")
     run_parser.add_argument("--output", help="Output/archive directory")
 
+    # add
+    add_parser = subparsers.add_parser("add", help="Scaffold a new target package")
+    add_parser.add_argument("image", help="Container image for the target")
+    add_parser.add_argument("--name", required=True, help="Target name")
+
     # results
     results_parser = subparsers.add_parser("results", help="View past run results")
     results_parser.add_argument("--run", help="Filter by run timestamp")
@@ -674,6 +688,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_verify(args)
     elif args.command == "run":
         return cmd_run(args)
+    elif args.command == "add":
+        return cmd_add(args)
     elif args.command == "results":
         return cmd_results(args)
     else:

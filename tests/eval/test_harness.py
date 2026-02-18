@@ -51,8 +51,10 @@ def run_harness(*args: str, expect_rc: int | None = None) -> subprocess.Complete
 # ---------------------------------------------------------------------------
 
 APACHE_GT = {
-    "name": "apache-2.4.49-eval",
-    "target": "10.0.0.1",
+    "target_name": "apache-2.4.49-eval",
+    "target_image": "docker.io/vulhub/httpd:2.4.49",
+    "eval_version": "1.0",
+    "platform": "linux",
     "difficulty": "easy",
     "objectives": [
         {
@@ -81,9 +83,10 @@ APACHE_GT = {
         {
             "id": "fp-cve",
             "description": "False positive CVE",
-            "points": 10,
-            "condition": "cve_not_in",
-            "allowed": ["CVE-2021-41773", "CVE-2021-42013"],
+            "points": -10,
+            "match": {
+                "cve_not_in": ["CVE-2021-41773", "CVE-2021-42013"],
+            },
         },
     ],
 }
@@ -152,8 +155,10 @@ def target_fixtures(tmp_path, monkeypatch):
     tomcat_dir = targets_dir / "tomcat-8.5.19-cve-2017-12615"
     tomcat_dir.mkdir(parents=True)
     tomcat_gt = {
-        "name": "tomcat-8.5.19-eval",
-        "target": "10.0.0.2",
+        "target_name": "tomcat-8.5.19-eval",
+        "target_image": "docker.io/vulhub/tomcat:8.5.19",
+        "eval_version": "1.0",
+        "platform": "linux",
         "difficulty": "easy",
         "objectives": [
             {
@@ -392,9 +397,25 @@ class TestRunWorkspace:
             result = yaml.safe_load(fh)
 
         # vuln-1 should be achieved (20pts), exploit-1 skipped (depends on access_level)
-        assert "summary" in result
-        assert result["summary"]["total_points"] == 20
-        assert result["meta"]["target"] == "apache-2.4.49-cve-2021-41773"
+        assert "score" in result
+        assert result["score"]["points_achieved"] == 20
+        assert result["target"] == "apache-2.4.49-eval"
+
+
+# ---------------------------------------------------------------------------
+# TestHarnessAdd
+# ---------------------------------------------------------------------------
+
+@pytest.mark.eval
+class TestHarnessAdd:
+    """Tests for the 'add' subcommand stub."""
+
+    def test_add_prints_not_implemented(self, capsys):
+        import eval_harness
+        rc = eval_harness.main(["add", "docker.io/vulhub/httpd:2.4.49", "--name", "test-target"])
+        assert rc == 1
+        captured = capsys.readouterr()
+        assert "not yet implemented" in captured.err
 
 
 # ---------------------------------------------------------------------------

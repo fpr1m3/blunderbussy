@@ -27,8 +27,10 @@ from eval_scorer import (
 # ---------------------------------------------------------------------------
 
 MINIMAL_GT = {
-    "name": "test-scenario",
-    "target": "10.0.0.1",
+    "target_name": "test-scenario",
+    "target_image": "docker.io/test/image:latest",
+    "eval_version": "1.0",
+    "platform": "linux",
     "difficulty": "easy",
     "objectives": [
         {
@@ -47,8 +49,10 @@ MINIMAL_GT = {
 }
 
 GT_WITH_DEPENDENCIES = {
-    "name": "dep-scenario",
-    "target": "10.0.0.1",
+    "target_name": "dep-scenario",
+    "target_image": "docker.io/test/dep:latest",
+    "eval_version": "1.0",
+    "platform": "linux",
     "difficulty": "medium",
     "objectives": [
         {
@@ -72,8 +76,10 @@ GT_WITH_DEPENDENCIES = {
 }
 
 GT_WITH_PENALTIES = {
-    "name": "penalty-scenario",
-    "target": "10.0.0.1",
+    "target_name": "penalty-scenario",
+    "target_image": "docker.io/test/penalty:latest",
+    "eval_version": "1.0",
+    "platform": "linux",
     "difficulty": "easy",
     "objectives": [
         {
@@ -89,16 +95,19 @@ GT_WITH_PENALTIES = {
         {
             "id": "fp-cve",
             "description": "False positive CVE usage",
-            "points": 10,
-            "condition": "cve_not_in",
-            "allowed": ["CVE-2021-41773"],
+            "points": -10,
+            "match": {
+                "cve_not_in": ["CVE-2021-41773"],
+            },
         },
     ],
 }
 
 FULL_GT = {
-    "name": "full-scenario",
-    "target": "10.0.0.1",
+    "target_name": "full-scenario",
+    "target_image": "docker.io/test/full:latest",
+    "eval_version": "1.0",
+    "platform": "linux",
     "difficulty": "medium",
     "required_outcomes": {"min_access_level": "user"},
     "objectives": [
@@ -150,9 +159,10 @@ FULL_GT = {
         {
             "id": "fp-cve",
             "description": "False positive CVE",
-            "points": 10,
-            "condition": "cve_not_in",
-            "allowed": ["CVE-2021-41773"],
+            "points": -10,
+            "match": {
+                "cve_not_in": ["CVE-2021-41773"],
+            },
         },
     ],
 }
@@ -271,7 +281,7 @@ class TestLoadGroundTruth:
 
     def test_loads_minimal_valid(self):
         gt = _load_gt_from_dict(MINIMAL_GT)
-        assert gt.name == "test-scenario"
+        assert gt.target_name == "test-scenario"
         assert len(gt.objectives) == 1
         assert gt.objectives[0].id == "vuln-1"
         assert gt.objectives[0].match.service_port == 80
@@ -284,11 +294,10 @@ class TestLoadGroundTruth:
     def test_loads_penalties(self):
         gt = _load_gt_from_dict(GT_WITH_PENALTIES)
         assert len(gt.penalties) == 1
-        assert gt.penalties[0].condition == "cve_not_in"
-        assert "CVE-2021-41773" in gt.penalties[0].allowed
+        assert gt.penalties[0].match.cve_not_in == ["CVE-2021-41773"]
 
     def test_rejects_missing_objectives(self):
-        bad = {"name": "bad", "target": "x", "difficulty": "easy"}
+        bad = {"target_name": "bad", "target_image": "x", "difficulty": "easy"}
         with pytest.raises(ValidationError, match="at least one objective"):
             _load_gt_from_dict(bad)
 
@@ -337,27 +346,27 @@ class TestScoreObjectives:
         achieved = [o for o in result.objective_results if o.status == "achieved"]
         # vuln-1, exploit-1, flag-user, creds-1 should match; privesc-root should miss
         assert len(achieved) == 4
-        achieved_ids = {o.objective_id for o in achieved}
+        achieved_ids = {o.id for o in achieved}
         assert achieved_ids == {"vuln-1", "exploit-1", "flag-user", "creds-1"}
 
     def test_root_flag_missed_when_not_in_ptt(self):
         """privesc-root objective should be missed when host is user-level."""
         gt = _load_gt_from_dict(FULL_GT)
         result = score_ptt(gt, PTT_USER_ACCESS)
-        root_obj = next(o for o in result.objective_results if o.objective_id == "privesc-root")
+        root_obj = next(o for o in result.objective_results if o.id == "privesc-root")
         assert root_obj.status == "missed"
 
     def test_empty_ptt_scores_zero(self):
         """Empty PTT should score zero on all objectives."""
         gt = _load_gt_from_dict(FULL_GT)
         result = score_ptt(gt, PTT_EMPTY)
-        assert result.summary.total_points == 0
+        assert result.summary.points_achieved == 0
 
     def test_dependency_skipped_when_parent_missed(self):
         """If vuln-1 is missed, exploit-1 (depends_on vuln-1) should be skipped."""
         gt = _load_gt_from_dict(GT_WITH_DEPENDENCIES)
         result = score_ptt(gt, PTT_EMPTY)
-        exploit_obj = next(o for o in result.objective_results if o.objective_id == "exploit-1")
+        exploit_obj = next(o for o in result.objective_results if o.id == "exploit-1")
         assert exploit_obj.status == "skipped"
 
     def test_score_calculation(self):
@@ -365,8 +374,8 @@ class TestScoreObjectives:
         gt = _load_gt_from_dict(FULL_GT)
         result = score_ptt(gt, PTT_USER_ACCESS)
         # 4 achieved (vuln-1=20, exploit-1=30, flag-user=20, creds-1=10), privesc-root missed
-        assert result.summary.total_points == 80
-        assert result.summary.max_points == 100
+        assert result.summary.points_achieved == 80
+        assert result.summary.points_possible == 100
 
     def test_pass_requires_min_access_level(self):
         """With required_outcomes.min_access_level=user, empty PTT should fail pass gate."""
@@ -406,7 +415,7 @@ class TestPenaltyDetection:
         # Objective: vuln-1 won't match (CVE mismatch) -> 0 points
         # Penalty: 10 deducted, but floored at 0
         assert result.summary.final_score == 0
-        assert result.summary.penalty_points == 10
+        assert result.summary.points_penalized == 10
 
 
 # ---------------------------------------------------------------------------
@@ -468,8 +477,8 @@ class TestScorerCLI:
 
         assert proc.returncode == 0, f"stderr: {proc.stderr}"
         data = json.loads(proc.stdout)
-        assert data["summary"]["total_points"] == 80
-        assert data["summary"]["max_points"] == 100
+        assert data["score"]["points_achieved"] == 80
+        assert data["score"]["points_possible"] == 100
 
 
 # ---------------------------------------------------------------------------
@@ -487,14 +496,14 @@ class TestRegressionDetection:
                 {"id": "vuln-1", "status": "achieved"},
                 {"id": "exploit-1", "status": "achieved"},
             ],
-            "summary": {"percentage": 80.0},
+            "score": {"percentage": 80.0},
         }
         current = {
             "objectives": [
                 {"id": "vuln-1", "status": "achieved"},
                 {"id": "exploit-1", "status": "missed"},
             ],
-            "summary": {"percentage": 40.0},
+            "score": {"percentage": 40.0},
         }
         reg = detect_regression(current, baseline)
         assert reg["regressed"] is True
@@ -506,13 +515,13 @@ class TestRegressionDetection:
             "objectives": [
                 {"id": "vuln-1", "status": "achieved"},
             ],
-            "summary": {"percentage": 50.0},
+            "score": {"percentage": 50.0},
         }
         current = {
             "objectives": [
                 {"id": "vuln-1", "status": "achieved"},
             ],
-            "summary": {"percentage": 80.0},
+            "score": {"percentage": 80.0},
         }
         reg = detect_regression(current, baseline)
         assert reg["regressed"] is False
@@ -523,13 +532,13 @@ class TestRegressionDetection:
             "objectives": [
                 {"id": "vuln-1", "status": "achieved"},
             ],
-            "summary": {"percentage": 80.0},
+            "score": {"percentage": 80.0},
         }
         current = {
             "objectives": [
                 {"id": "vuln-1", "status": "achieved"},
             ],
-            "summary": {"percentage": 70.0},
+            "score": {"percentage": 70.0},
         }
         reg = detect_regression(current, baseline)
         assert reg["regressed"] is True
@@ -550,7 +559,7 @@ class TestApacheTargetIntegration:
     def test_ground_truth_loads(self):
         gt_path = TARGETS_DIR / "apache-2.4.49-cve-2021-41773" / "ground_truth.yaml"
         gt = load_ground_truth(gt_path)
-        assert gt.name == "apache-2.4.49-cve-2021-41773"
+        assert gt.target_name == "apache-2.4.49-cve-2021-41773"
         assert len(gt.objectives) == 5
         assert gt.difficulty == "easy"
 
@@ -596,7 +605,7 @@ class TestTomcatTargetIntegration:
     def test_ground_truth_loads(self):
         gt_path = TARGETS_DIR / "tomcat-8.5.19-cve-2017-12615" / "ground_truth.yaml"
         gt = load_ground_truth(gt_path)
-        assert gt.name == "tomcat-8.5.19-cve-2017-12615"
+        assert gt.target_name == "tomcat-8.5.19-cve-2017-12615"
         assert len(gt.objectives) == 5
         assert gt.difficulty == "easy"
 

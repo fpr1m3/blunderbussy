@@ -86,9 +86,10 @@ class MatchCriteria:
     access_level_min: Optional[str] = None
     loot_type: Optional[str] = None
     loot_name: Optional[str] = None
-    loot_value: Optional[str] = None
+    flag_value: Optional[str] = None
     has_credentials: Optional[bool] = None
     access_level: Optional[str] = None
+    cve_not_in: Optional[list[str]] = None
 
 
 @dataclass
@@ -108,9 +109,8 @@ class Penalty:
     """A penalty rule definition."""
     id: str
     description: str
-    points: int
-    condition: str  # e.g. "cve_not_in"
-    allowed: list[str] = field(default_factory=list)
+    points: int  # negative value
+    match: MatchCriteria = field(default_factory=MatchCriteria)
 
 
 @dataclass
@@ -129,10 +129,12 @@ class Efficiency:
 @dataclass
 class GroundTruth:
     """Complete ground truth for an evaluation scenario."""
-    name: str
-    target: str
+    target_name: str
+    target_image: str
     difficulty: str
     objectives: list[Objective]
+    eval_version: str = "1.0"
+    platform: str = "linux"
     penalties: list[Penalty] = field(default_factory=list)
     efficiency: Optional[Efficiency] = None
     required_outcomes: Optional[RequiredOutcomes] = None
@@ -147,9 +149,10 @@ def _parse_match_criteria(data: dict) -> MatchCriteria:
         access_level_min=data.get("access_level_min"),
         loot_type=data.get("loot_type"),
         loot_name=data.get("loot_name"),
-        loot_value=data.get("loot_value"),
+        flag_value=data.get("flag_value"),
         has_credentials=data.get("has_credentials"),
         access_level=data.get("access_level"),
+        cve_not_in=data.get("cve_not_in"),
     )
 
 
@@ -166,8 +169,10 @@ def load_ground_truth(path: str | Path) -> GroundTruth:
         raise ValidationError("Ground truth must be a YAML mapping")
 
     # Required top-level keys
-    name = data.get("name", "unnamed")
-    target = data.get("target", "unknown")
+    target_name = data.get("target_name", "unnamed")
+    target_image = data.get("target_image", "unknown")
+    eval_version = data.get("eval_version", "1.0")
+    platform = data.get("platform", "linux")
     difficulty = data.get("difficulty", "medium")
 
     if difficulty not in VALID_DIFFICULTIES:
@@ -222,12 +227,12 @@ def load_ground_truth(path: str | Path) -> GroundTruth:
     # Penalties (optional)
     penalties: list[Penalty] = []
     for pen_data in data.get("penalties", []):
+        match_data = pen_data.get("match", {})
         penalties.append(Penalty(
             id=pen_data.get("id", ""),
             description=pen_data.get("description", ""),
             points=int(pen_data.get("points", 0)),
-            condition=pen_data.get("condition", ""),
-            allowed=pen_data.get("allowed", []),
+            match=_parse_match_criteria(match_data),
         ))
 
     # Efficiency (optional)
@@ -248,8 +253,10 @@ def load_ground_truth(path: str | Path) -> GroundTruth:
         )
 
     return GroundTruth(
-        name=name,
-        target=target,
+        target_name=target_name,
+        target_image=target_image,
+        eval_version=eval_version,
+        platform=platform,
         difficulty=difficulty,
         objectives=objectives,
         penalties=penalties,
@@ -265,12 +272,12 @@ def load_ground_truth(path: str | Path) -> GroundTruth:
 @dataclass
 class ObjectiveResult:
     """Result for a single objective evaluation."""
-    objective_id: str
+    id: str
     category: str
     status: str  # "achieved", "missed", "skipped"
-    points_awarded: int
+    points: int
     points_possible: int
-    reason: str = ""
+    evidence: str = ""
 
 
 @dataclass
@@ -295,9 +302,9 @@ class EfficiencyResult:
 @dataclass
 class ScoreSummary:
     """Aggregate score breakdown."""
-    total_points: int = 0
-    max_points: int = 0
-    penalty_points: int = 0
+    points_achieved: int = 0
+    points_possible: int = 0
+    points_penalized: int = 0
     final_score: int = 0
     percentage: float = 0.0
     passed: bool = False
@@ -306,6 +313,7 @@ class ScoreSummary:
 @dataclass
 class EvalResult:
     """Complete evaluation result."""
+    target: str = ""
     objective_results: list[ObjectiveResult] = field(default_factory=list)
     penalty_results: list[PenaltyResult] = field(default_factory=list)
     efficiency: EfficiencyResult = field(default_factory=EfficiencyResult)
@@ -314,14 +322,15 @@ class EvalResult:
     def to_dict(self) -> dict:
         """Convert to JSON-serializable dict."""
         return {
+            "target": self.target,
             "objectives": [
                 {
-                    "id": o.objective_id,
+                    "id": o.id,
                     "category": o.category,
                     "status": o.status,
-                    "points_awarded": o.points_awarded,
+                    "points": o.points,
                     "points_possible": o.points_possible,
-                    "reason": o.reason,
+                    "evidence": o.evidence,
                 }
                 for o in self.objective_results
             ],
@@ -341,13 +350,13 @@ class EvalResult:
                 "success_rate": self.efficiency.success_rate,
                 "redundant_attempts": self.efficiency.redundant_attempts,
             },
-            "summary": {
-                "total_points": self.summary.total_points,
-                "max_points": self.summary.max_points,
-                "penalty_points": self.summary.penalty_points,
+            "score": {
+                "points_achieved": self.summary.points_achieved,
+                "points_possible": self.summary.points_possible,
+                "points_penalized": self.summary.points_penalized,
                 "final_score": self.summary.final_score,
                 "percentage": self.summary.percentage,
-                "passed": self.summary.passed,
+                "pass": self.summary.passed,
             },
         }
 
@@ -453,7 +462,7 @@ def _match_objective(obj: Objective, ptt: dict) -> tuple[bool, str]:
         for loot in _get_all_loot(ptt):
             type_ok = mc.loot_type is None or loot.get("type") == mc.loot_type
             name_ok = mc.loot_name is None or loot.get("name") == mc.loot_name
-            value_ok = mc.loot_value is None or loot.get("value") == mc.loot_value
+            value_ok = mc.flag_value is None or loot.get("value") == mc.flag_value
             if type_ok and name_ok and value_ok:
                 return True, f"Matched loot '{loot.get('name', '?')}'"
         return False, "No matching loot found"
@@ -486,12 +495,12 @@ def _score_objectives(gt: GroundTruth, ptt: dict) -> list[ObjectiveResult]:
         # Check dependency
         if obj.depends_on and obj.depends_on not in achieved_ids:
             results.append(ObjectiveResult(
-                objective_id=obj.id,
+                id=obj.id,
                 category=obj.category,
                 status="skipped",
-                points_awarded=0,
+                points=0,
                 points_possible=obj.points,
-                reason=f"Dependency '{obj.depends_on}' not achieved",
+                evidence=f"Dependency '{obj.depends_on}' not achieved",
             ))
             continue
 
@@ -499,21 +508,21 @@ def _score_objectives(gt: GroundTruth, ptt: dict) -> list[ObjectiveResult]:
         if matched:
             achieved_ids.add(obj.id)
             results.append(ObjectiveResult(
-                objective_id=obj.id,
+                id=obj.id,
                 category=obj.category,
                 status="achieved",
-                points_awarded=obj.points,
+                points=obj.points,
                 points_possible=obj.points,
-                reason=reason,
+                evidence=reason,
             ))
         else:
             results.append(ObjectiveResult(
-                objective_id=obj.id,
+                id=obj.id,
                 category=obj.category,
                 status="missed",
-                points_awarded=0,
+                points=0,
                 points_possible=obj.points,
-                reason=reason,
+                evidence=reason,
             ))
 
     return results
@@ -528,13 +537,14 @@ def _detect_penalties(gt: GroundTruth, ptt: dict) -> list[PenaltyResult]:
     results: list[PenaltyResult] = []
 
     for penalty in gt.penalties:
-        if penalty.condition == "cve_not_in":
+        if penalty.match.cve_not_in is not None:
             # Check if any technique references a CVE not in the allowed list
+            allowed = penalty.match.cve_not_in
             triggered = False
             detail_parts = []
             for _host, _service, _vector, technique in _walk_techniques(ptt):
                 tech_cve = technique.get("cve")
-                if tech_cve and tech_cve not in penalty.allowed:
+                if tech_cve and tech_cve not in allowed:
                     triggered = True
                     detail_parts.append(
                         f"{tech_cve} (technique '{technique.get('name', '?')}')"
@@ -543,11 +553,11 @@ def _detect_penalties(gt: GroundTruth, ptt: dict) -> list[PenaltyResult]:
             results.append(PenaltyResult(
                 penalty_id=penalty.id,
                 triggered=triggered,
-                points_deducted=penalty.points if triggered else 0,
+                points_deducted=abs(penalty.points) if triggered else 0,
                 detail=f"Disallowed CVEs: {', '.join(detail_parts)}" if triggered else "No violations",
             ))
         else:
-            logger.warning("Unknown penalty condition: %s", penalty.condition)
+            logger.warning("Unknown penalty match criteria for penalty: %s", penalty.id)
 
     return results
 
@@ -610,11 +620,11 @@ def score_ptt(gt: GroundTruth, ptt: dict) -> EvalResult:
     efficiency = _compute_efficiency(ptt)
 
     # Aggregate
-    total_points = sum(o.points_awarded for o in obj_results)
-    max_points = sum(o.points_possible for o in obj_results)
-    penalty_points = sum(p.points_deducted for p in pen_results)
-    final_score = max(0, total_points - penalty_points)
-    percentage = (final_score / max_points * 100) if max_points > 0 else 0.0
+    points_achieved = sum(o.points for o in obj_results)
+    points_possible = sum(o.points_possible for o in obj_results)
+    points_penalized = sum(p.points_deducted for p in pen_results)
+    final_score = max(0, points_achieved - points_penalized)
+    percentage = (final_score / points_possible * 100) if points_possible > 0 else 0.0
 
     # Pass gate: required outcomes
     passed = True
@@ -625,15 +635,16 @@ def score_ptt(gt: GroundTruth, ptt: dict) -> EvalResult:
             passed = False
 
     summary = ScoreSummary(
-        total_points=total_points,
-        max_points=max_points,
-        penalty_points=penalty_points,
+        points_achieved=points_achieved,
+        points_possible=points_possible,
+        points_penalized=points_penalized,
         final_score=final_score,
         percentage=percentage,
         passed=passed,
     )
 
     return EvalResult(
+        target=gt.target_name,
         objective_results=obj_results,
         penalty_results=pen_results,
         efficiency=efficiency,
@@ -665,8 +676,8 @@ def detect_regression(current_dict: dict, baseline_dict: dict) -> dict:
             if current_status != "achieved":
                 lost.append(obj_id)
 
-    baseline_pct = baseline_dict.get("summary", {}).get("percentage", 0.0)
-    current_pct = current_dict.get("summary", {}).get("percentage", 0.0)
+    baseline_pct = baseline_dict.get("score", {}).get("percentage", 0.0)
+    current_pct = current_dict.get("score", {}).get("percentage", 0.0)
     score_delta = current_pct - baseline_pct
 
     regressed = len(lost) > 0 or score_delta < -5.0
@@ -708,8 +719,8 @@ def _format_summary(result: EvalResult, gt_name: str = "") -> str:
         else:
             icon = f"{Color.RED}\u2717{Color.RESET}"
         lines.append(
-            f"    {icon} {obj.objective_id} [{obj.category}] "
-            f"{obj.points_awarded}/{obj.points_possible}pts — {obj.reason}"
+            f"    {icon} {obj.id} [{obj.category}] "
+            f"{obj.points}/{obj.points_possible}pts — {obj.evidence}"
         )
 
     # Penalties
@@ -745,10 +756,10 @@ def _format_summary(result: EvalResult, gt_name: str = "") -> str:
         score_color = Color.RED
 
     lines.append(f"\n  {Color.BOLD}Score:{Color.RESET}")
-    lines.append(f"    Points: {s.total_points}/{s.max_points}")
-    if s.penalty_points > 0:
-        lines.append(f"    Penalties: -{s.penalty_points}")
-    lines.append(f"    Final: {score_color}{s.final_score}/{s.max_points} "
+    lines.append(f"    Points: {s.points_achieved}/{s.points_possible}")
+    if s.points_penalized > 0:
+        lines.append(f"    Penalties: -{s.points_penalized}")
+    lines.append(f"    Final: {score_color}{s.final_score}/{s.points_possible} "
                  f"({pct:.1f}%){Color.RESET}")
     lines.append(f"    Pass: {Color.GREEN if s.passed else Color.RED}"
                  f"{'YES' if s.passed else 'NO'}{Color.RESET}")
@@ -833,7 +844,7 @@ def main(argv: list[str] | None = None) -> int:
             output_data["regression"] = regression
         text = json.dumps(output_data, indent=2)
     else:
-        text = _format_summary(result, gt.name)
+        text = _format_summary(result, gt.target_name)
         if regression and regression["regressed"]:
             text += f"\n{Color.RED}REGRESSION DETECTED: {regression['details']}{Color.RESET}\n"
 
