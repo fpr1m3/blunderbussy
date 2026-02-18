@@ -1,0 +1,82 @@
+ptt_version: '1.0'
+generated_at: '2026-01-31T18:30:34.268367'
+engagement:
+  id: 52175653-0564-46dd-b5d6-14b1cc72798b
+  target: 10.129.242.203
+  session_id: 10.129.242.203_20260126_040634
+  status: pending
+  platform: unknown
+  findings:
+    credentials: []
+    access_gained: []
+    loot: []
+  iteration_stats:
+    total_attempts: 0
+    successful_techniques: 0
+    failed_techniques: 0
+    skipped_techniques: 0
+  hosts:
+  - id: 186c88ed-8a01-4f11-a23f-06de07ba95f1
+    ip: 10.129.242.203
+    hostname: ''
+    os: unknown
+    status: pending
+    priority: 5
+    findings:
+      users_discovered: []
+      credentials: []
+      access_level: none
+    services:
+    - id: 725e16b0-e79c-4ade-84e3-ab840c3bf5f8
+      port: 80
+      proto: tcp
+      service: http
+      version: Apache httpd 2.4.52
+      status: pending
+      priority_score: 5.0
+      epss_score: 0.0
+      known_vulns: []
+      cves: []
+      attempts: 0
+      max_attempts: 5
+      vectors:
+      - id: 393c9898-e92c-433b-8282-bcfd5971f5d1
+        name: quick_win_enumerate
+        category: quick_win
+        status: pending
+        priority: 1
+        techniques_total: 0
+        techniques_completed: 0
+        techniques: []
+      - id: f3600759-9538-4d61-a136-b01c79d79198
+        name: quick_win_dump
+        category: quick_win
+        status: pending
+        priority: 1
+        techniques_total: 0
+        techniques_completed: 0
+        techniques: []
+    - id: 71a46aed-9778-4230-b701-2d67791243b9
+      port: 22
+      proto: tcp
+      service: ssh
+      version: OpenSSH 8.9p1 Ubuntu 3ubuntu0.13
+      status: pending
+      priority_score: 5.0
+      epss_score: 0.0
+      known_vulns: []
+      cves: []
+      attempts: 0
+      max_attempts: 5
+      vectors: []
+  - id: 9eb2c933-27fa-4448-a02d-9d60e93f74b5
+    ip: 10.129.3.245
+    hostname: ''
+    os: unknown
+    status: pending
+    priority: 5
+    findings:
+      users_discovered: []
+      credentials: []
+      access_level: none
+    services: []

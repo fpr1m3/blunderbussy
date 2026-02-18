@@ -1,0 +1,29 @@
+ptt_version: '1.0'
+generated_at: '2026-01-27T18:38:55.428847'
+engagement:
+  id: 67b45293-383b-44a3-baa7-a595b43a5470
+  target: 10.129.242.203.stale-wrong-ip
+  session_id: 10.129.242.203.stale-wrong-ip_20260127_183806
+  status: pending
+  platform: unknown
+  findings:
+    credentials: []
+    access_gained: []
+    loot: []
+  iteration_stats:
+    total_attempts: 0
+    successful_techniques: 0
+    failed_techniques: 0
+    skipped_techniques: 0
+  hosts:
+  - id: 03b7101e-9d1f-4517-bb39-f6e05c1f9784
+    ip: 10.129.3.245
+    hostname: ''
+    os: unknown
+    status: pending
+    priority: 5
+    findings:
+      users_discovered: []
+      credentials: []
+      access_level: none
+    services: []

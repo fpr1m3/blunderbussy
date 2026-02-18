@@ -1,0 +1,18 @@
+ptt_version: '1.0'
+generated_at: '2026-01-25T01:27:20.100734'
+engagement:
+  id: cdd8ffb9-ca1d-4aed-92c7-f4bbbec25bb3
+  target: 10.129.3.123
+  session_id: 10.129.3.123_20260125_012635
+  status: pending
+  platform: unknown
+  findings:
+    credentials: []
+    access_gained: []
+    loot: []
+  iteration_stats:
+    total_attempts: 0
+    successful_techniques: 0
+    failed_techniques: 0
+    skipped_techniques: 0
+  hosts: []

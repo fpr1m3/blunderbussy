@@ -1,0 +1,131 @@
+cas_version: '1.2'
+generated_at: '2026-01-31T23:23:29.854740+00:00'
+target:
+  identifier: 10.129.7.111
+  session_id: 10.129.7.111_20260131_232256
+  scan_types:
+  - faraday
+  source: faraday:ws_10_129_7_111
+summary:
+  hosts_discovered: 1
+  services_found: 102
+  vulnerabilities_found: 38
+  critical_findings: 0
+  web_services_found: 3
+  attack_surface: high
+  scan_timestamp: '2026-01-31T23:22:55.107740+00:00'
+severity_breakdown:
+  critical: 0
+  high: 0
+  medium: 0
+  low: 0
+  informational: 29
+key_findings: []
+attack_guidance:
+  priority_targets:
+  - host: 10.129.7.111
+    port: 80
+    service: http
+    version: Apache httpd 2.4.52
+    score: 9.5
+    reason: Exposed .git repository found allowing source code reconstruction and
+      credential extraction
+    vulns:
+    - Exposed .git
+    - Potential SQLi
+    quick_win: true
+  - host: 10.129.7.111
+    port: 22
+    service: ssh
+    version: OpenSSH 8.9p1
+    score: 4.5
+    reason: Password authentication enabled; potential entry point if credentials
+      found in web source
+    vulns: []
+    quick_win: false
+  quick_wins:
+  - target: 10.129.7.111:80
+    action: Dump exposed git repository using git-dumper
+    difficulty: trivial
+    expected_outcome: Source code recovery, config files, hardcoded credentials
+  recommended_commands:
+  - command: git-dumper http://10.129.7.111/.git/ ./gavel_source
+    purpose: Download and reconstruct the exposed git repository
+    target: 10.129.7.111:80
+    priority: 1
+    category: web_attack
+  - command: feroxbuster -u http://10.129.7.111 -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt
+    purpose: Enumerate web directories for other hidden paths
+    target: 10.129.7.111:80
+    priority: 2
+    category: enumeration
+  - command: searchsploit apache 2.4.52
+    purpose: Check for known vulnerabilities in Apache 2.4.52
+    target: 10.129.7.111:80
+    priority: 3
+    category: exploit_research
+  - command: hydra -L /usr/share/seclists/Usernames/top-usernames-shortlist.txt -P
+      /usr/share/seclists/Passwords/Common-Credentials/10-million-password-list-top-1000.txt
+      ssh://10.129.7.111
+    purpose: Bruteforce SSH with common credentials
+    target: 10.129.7.111:22
+    priority: 4
+    category: credential_attack
+  - command: wpscan --url http://10.129.7.111 --enumerate u
+    purpose: Check for WordPress (hash found in output) and enumerate users
+    target: 10.129.7.111:80
+    priority: 5
+    category: web_attack
+  _source: gemini
+hosts:
+- ip: 10.129.7.111
+  hostnames:
+  - gavel.htb
+  os: unknown
+  mac: null
+  ports:
+  - port: 22
+    protocol: tcp
+    service: ssh
+    version: OpenSSH 8.9p1 Ubuntu 3ubuntu0.13
+    state: open
+  - port: 80
+    protocol: tcp
+    service: http
+    version: Apache httpd 2.4.52
+    state: open
+  vuln_count: 0
+  priority_score: 3.5
+vulnerabilities: []
+web_services:
+- url: http://10.129.7.111:80
+  host: 10.129.7.111
+  port: 80
+  protocol: http
+  server: Apache httpd 2.4.52
+  title: ''
+  technologies: []
+  status_code: null
+- url: http://10.129.7.111:80
+  host: 10.129.7.111
+  port: 80
+  protocol: http
+  server: ''
+  title: ''
+  technologies: []
+  status_code: null
+- url: https://10.129.7.111:443
+  host: 10.129.7.111
+  port: 443
+  protocol: https
+  server: ''
+  title: ''
+  technologies: []
+  status_code: null
+faraday_meta:
+  workspace: ws_10_129_7_111
+  imported_at: '2026-01-31T23:22:56.240974+00:00'
+low_priority_vulns_ref:
+  file: last_resort.yaml
+  count: 29
+  note: Low priority findings externalized to reduce token usage

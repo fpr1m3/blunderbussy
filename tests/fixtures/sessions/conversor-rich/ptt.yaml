@@ -1,0 +1,265 @@
+ptt_version: '1.0'
+generated_at: '2026-01-20T19:32:07.582087'
+engagement:
+  id: d5f4027b-522b-4864-89a8-45f9ad58a67d
+  target: 10.129.4.182
+  session_id: 10.129.4.182_20260120_014058
+  status: pending
+  platform: linux
+  findings:
+    credentials: []
+    access_gained: []
+    loot: []
+  iteration_stats:
+    total_attempts: 0
+    successful_techniques: 0
+    failed_techniques: 0
+    skipped_techniques: 0
+  hosts:
+  - id: e71713ab-1917-43ae-a41d-138700e43321
+    ip: 10.129.4.182
+    hostname: conversor.htb
+    os: Linux 4.15 - 5.19
+    status: pending
+    priority: 7
+    findings:
+      users_discovered: []
+      credentials: []
+      access_level: none
+    services:
+    - id: 361d60c4-3d04-4fb2-bf34-f90027fddc6c
+      port: 22
+      proto: tcp
+      service: ssh
+      version: OpenSSH 8.9p1 Ubuntu 3ubuntu0.13
+      status: pending
+      priority_score: 7.0
+      epss_score: 0.0
+      known_vulns: []
+      cves: []
+      attempts: 0
+      max_attempts: 5
+      vectors:
+      - id: 8b04084d-3498-4c31-b2f2-6ff1b5a6aa9f
+        name: quick_win_medusa
+        category: quick_win
+        status: pending
+        priority: 1
+        techniques_total: 0
+        techniques_completed: 0
+        techniques: []
+      - id: d34860b6-8515-4d9a-9e50-343be9c31711
+        name: quick_win_hydra
+        category: quick_win
+        status: pending
+        priority: 1
+        techniques_total: 0
+        techniques_completed: 0
+        techniques: []
+      - id: e17018b8-8d16-4232-babf-6123f235a632
+        name: private_key_disclosure
+        category: misconfig
+        status: pending
+        priority: 2
+        techniques_total: 0
+        techniques_completed: 0
+        techniques: []
+      - id: 43195129-72fe-45ee-a936-e05eb25a2544
+        name: username_enum
+        category: brute_force
+        status: pending
+        priority: 3
+        techniques_total: 2
+        techniques_completed: 0
+        techniques:
+        - id: 6289825d-3f3e-4fa4-a064-96cb4e4559e8
+          name: hydra - Bruteforce logins
+          source: cas_recommendation
+          skill_ref: ''
+          status: pending
+          command: hydra -L "/usr/share/seclists/Usernames/top-usernames-shortlist.txt"
+            -P "/usr/share/seclists/Passwords/darkweb2017-top100.txt" -e nsr -s 22
+            -o "/artifacts/results/10.129.4.182/scans/tcp_22_ssh_hydra.txt" ssh://conversor.htb
+          tool: hydra
+          attempts: 0
+          max_attempts: 3
+          last_attempt: ''
+          findings: []
+          error_history: []
+          research_queries: []
+          research_results: []
+        - id: 8073654d-0c56-438c-b9aa-03aa53812fb5
+          name: medusa - Bruteforce logins
+          source: cas_recommendation
+          skill_ref: ''
+          status: pending
+          command: medusa -U "/usr/share/seclists/Usernames/top-usernames-shortlist.txt"
+            -P "/usr/share/seclists/Passwords/darkweb2017-top100.txt" -e ns -n 22
+            -O "/artifacts/results/10.129.4.182/scans/tcp_22_ssh_medusa.txt" -M ssh
+            -h conversor.htb
+          tool: medusa
+          attempts: 0
+          max_attempts: 3
+          last_attempt: ''
+          findings: []
+          error_history: []
+          research_queries: []
+          research_results: []
+      - id: a52e7638-78f9-46db-8017-cdec4f76643c
+        name: version_specific_exploits
+        category: known_vuln
+        status: pending
+        priority: 4
+        techniques_total: 0
+        techniques_completed: 0
+        techniques: []
+    - id: 9d0c2b48-9af4-41b1-9dfa-f9647fd45d4d
+      port: 80
+      proto: tcp
+      service: http
+      version: Apache httpd 2.4.52
+      status: pending
+      priority_score: 6.0
+      epss_score: 0.0
+      known_vulns: []
+      cves: []
+      attempts: 0
+      max_attempts: 5
+      vectors:
+      - id: 88665792-2767-4315-b448-53867525c4bc
+        name: directory_traversal
+        category: custom
+        status: pending
+        priority: 2
+        techniques_total: 0
+        techniques_completed: 0
+        techniques: []
+      - id: 1b5648cd-a82c-4b8c-9bb5-8bd4005f65fc
+        name: misconfig
+        category: misconfig
+        status: pending
+        priority: 3
+        techniques_total: 2
+        techniques_completed: 0
+        techniques:
+        - id: 0fb2d9d8-6702-4fac-9321-b451234455e8
+          name: wpscan - WordPress Security Scanner (useful if WordPress is found)
+          source: cas_recommendation
+          skill_ref: ''
+          status: pending
+          command: wpscan --url http://conversor.htb:80/ --no-update -e vp,vt,tt,cb,dbe,u,m
+            --plugins-detection aggressive --plugins-version-detection aggressive
+            -f cli-no-color 2>&1 | tee "/artifacts/results/10.129.4.182/scans/tcp_80_http_wpscan.txt"
+          tool: wpscan
+          attempts: 0
+          max_attempts: 3
+          last_attempt: ''
+          findings: []
+          error_history: []
+          research_queries: []
+          research_results: []
+        - id: c71c30ce-e7be-4558-94cd-d44270cf3b9c
+          name: feroxbuster - Multi-threaded recursive directory/file enumeration
+            for web servers using various wordlists
+          source: cas_recommendation
+          skill_ref: ''
+          status: pending
+          command: feroxbuster -u http://conversor.htb:80 -t 10 -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt
+            -x "txt,html,php,asp,aspx,jsp" -v -k -n -e -r -o /artifacts/results/10.129.4.182/scans/tcp_80_http_feroxbuster_dirbuster.txt
+          tool: feroxbuster
+          attempts: 0
+          max_attempts: 3
+          last_attempt: ''
+          findings: []
+          error_history: []
+          research_queries: []
+          research_results: []
+      - id: ba6dc6dd-8180-4502-8d0f-bb14216f18ad
+        name: cgi_vuln
+        category: known_vuln
+        status: pending
+        priority: 4
+        techniques_total: 0
+        techniques_completed: 0
+        techniques: []
+      - id: e8be6038-a708-43aa-babf-46ed55a7195c
+        name: brute_force_attacks
+        category: brute_force
+        status: pending
+        priority: 3
+        techniques_total: 4
+        techniques_completed: 0
+        techniques:
+        - id: 7736529a-3155-4efa-8466-15eb459bed8e
+          name: hydra - Credential bruteforcing commands (don't run these without
+            modifying them)
+          source: cas_recommendation
+          skill_ref: ''
+          status: pending
+          command: hydra -L "/usr/share/seclists/Usernames/top-usernames-shortlist.txt"
+            -P "/usr/share/seclists/Passwords/darkweb2017-top100.txt" -e nsr -s 80
+            -o "/artifacts/results/10.129.4.182/scans/tcp_80_http_auth_hydra.txt"
+            http-get://conversor.htb/path/to/auth/area
+          tool: hydra
+          attempts: 0
+          max_attempts: 3
+          last_attempt: ''
+          findings: []
+          error_history: []
+          research_queries: []
+          research_results: []
+        - id: a68a9ff0-434a-4996-ac36-6b19a94f4d17
+          name: medusa - Credential bruteforcing commands (don't run these without
+            modifying them)
+          source: cas_recommendation
+          skill_ref: ''
+          status: pending
+          command: medusa -U "/usr/share/seclists/Usernames/top-usernames-shortlist.txt"
+            -P "/usr/share/seclists/Passwords/darkweb2017-top100.txt" -e ns -n 80
+            -O "/artifacts/results/10.129.4.182/scans/tcp_80_http_auth_medusa.txt"
+            -M http -h conversor.htb -m DIR:/path/to/auth/area
+          tool: medusa
+          attempts: 0
+          max_attempts: 3
+          last_attempt: ''
+          findings: []
+          error_history: []
+          research_queries: []
+          research_results: []
+        - id: 45ca57d3-7e18-4ce1-860e-444d92b60dfc
+          name: hydra - Credential bruteforcing commands (don't run these without
+            modifying them)
+          source: cas_recommendation
+          skill_ref: ''
+          status: pending
+          command: hydra -L "/usr/share/seclists/Usernames/top-usernames-shortlist.txt"
+            -P "/usr/share/seclists/Passwords/darkweb2017-top100.txt" -e nsr -s 80
+            -o "/artifacts/results/10.129.4.182/scans/tcp_80_http_form_hydra.txt"
+            http-post-form://conversor.htb/path/to/login.php:"username=^USER^&password=^PASS^":"invalid-login-message"
+          tool: hydra
+          attempts: 0
+          max_attempts: 3
+          last_attempt: ''
+          findings: []
+          error_history: []
+          research_queries: []
+          research_results: []
+        - id: 59e39b72-0117-4d2d-8335-1653cd20df14
+          name: medusa - Credential bruteforcing commands (don't run these without
+            modifying them)
+          source: cas_recommendation
+          skill_ref: ''
+          status: pending
+          command: medusa -U "/usr/share/seclists/Usernames/top-usernames-shortlist.txt"
+            -P "/usr/share/seclists/Passwords/darkweb2017-top100.txt" -e ns -n 80
+            -O "/artifacts/results/10.129.4.182/scans/tcp_80_http_form_medusa.txt"
+            -M web-form -h conversor.htb -m FORM:/path/to/login.php -m FORM-DATA:"post?username=&password="
+            -m DENY-SIGNAL:"invalid login message"
+          tool: medusa
+          attempts: 0
+          max_attempts: 3
+          last_attempt: ''
+          findings: []
+          error_history: []
+          research_queries: []
+          research_results: []

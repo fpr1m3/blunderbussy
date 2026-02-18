@@ -1,0 +1,156 @@
+cas_version: '1.2'
+generated_at: '2026-01-31T18:30:34.112790+00:00'
+target:
+  identifier: 10.129.242.203
+  session_id: 10.129.242.203_20260126_040634
+  scan_types:
+  - faraday
+  source: faraday:ws_10_129_242_203
+summary:
+  hosts_discovered: 2
+  vulnerabilities_found: 39
+  web_services_found: 3
+  subdomains_found: 0
+  directories_found: 0
+  smb_shares_found: 0
+  smb_users_found: 0
+  critical_findings: 0
+  low_priority_vulns_count: 39
+  exploitable_cves: 0
+severity_breakdown:
+  critical: 0
+  high: 0
+  medium: 0
+  low: 0
+  informational: 30
+key_findings: []
+attack_guidance:
+  priority_targets:
+  - host: 10.129.242.203
+    port: 80
+    service: http
+    version: Apache httpd 2.4.52
+    score: 10.0
+    reason: Critical information disclosure via exposed .git repository
+    vulns:
+    - Exposed .git
+    - Potential SQLi
+    quick_win: true
+  - host: 10.129.242.203
+    port: 22
+    service: ssh
+    version: OpenSSH 8.9p1 Ubuntu 3ubuntu0.13
+    score: 4.0
+    reason: Standard access point; highly relevant if credentials are recovered from
+      web
+    vulns: []
+    quick_win: false
+  quick_wins:
+  - target: 10.129.242.203:80
+    action: Dump source code via exposed .git
+    difficulty: trivial
+    expected_outcome: Full source code, config files, and credentials
+  - target: 10.129.242.203:80
+    action: Enumerate login and register pages
+    difficulty: low
+    expected_outcome: User enumeration or authentication bypass opportunities
+  recommended_commands:
+  - command: git-dumper http://10.129.242.203/.git/ ./gavel_source
+    purpose: Download the complete git repository
+    target: 10.129.242.203:80
+    priority: 1
+    category: web_attack
+  - command: feroxbuster -u http://10.129.242.203 -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt
+    purpose: Enumerate web endpoints and directories
+    target: 10.129.242.203:80
+    priority: 2
+    category: enumeration
+  - command: searchsploit apache 2.4.52
+    purpose: Check for known Apache vulnerabilities
+    target: 10.129.242.203:80
+    priority: 3
+    category: exploit_research
+  - command: searchsploit openssh 8.9
+    purpose: Check for OpenSSH vulnerabilities
+    target: 10.129.242.203:22
+    priority: 4
+    category: exploit_research
+  - command: nuclei -u http://10.129.242.203 -t cves/
+    purpose: Scan for CVEs using Nuclei
+    target: 10.129.242.203:80
+    priority: 5
+    category: web_attack
+  - command: wpscan --url http://10.129.242.203 --enumerate u
+    purpose: Check for WordPress (though unlikely given layout)
+    target: 10.129.242.203:80
+    priority: 6
+    category: web_attack
+  _source: gemini
+hosts:
+- ip: 10.129.242.203
+  hostnames:
+  - gavel.htb
+  os: unknown
+  mac: null
+  ports:
+  - port: 80
+    protocol: tcp
+    service: http
+    version: Apache httpd 2.4.52
+    state: open
+  - port: 22
+    protocol: tcp
+    service: ssh
+    version: OpenSSH 8.9p1 Ubuntu 3ubuntu0.13
+    state: open
+  vuln_count: 0
+  priority_score: 3.5
+- ip: 10.129.3.245
+  hostnames:
+  - gavel.htb
+  os: unknown
+  mac: null
+  ports: []
+  vuln_count: 0
+  priority_score: 0.0
+vulnerabilities: []
+web_services:
+- url: http://10.129.242.203:80
+  host: 10.129.242.203
+  port: 80
+  protocol: http
+  server: ''
+  title: ''
+  technologies: []
+  status_code: null
+- url: http://10.129.242.203:80
+  host: 10.129.242.203
+  port: 80
+  protocol: http
+  server: Apache httpd 2.4.52
+  title: ''
+  technologies: []
+  status_code: null
+- url: https://10.129.242.203:443
+  host: 10.129.242.203
+  port: 443
+  protocol: https
+  server: ''
+  title: ''
+  technologies: []
+  status_code: null
+faraday_meta:
+  workspace: ws_10_129_242_203
+  imported_at: '2026-01-26T04:06:34.408779+00:00'
+low_priority_vulns_ref:
+  file: last_resort.yaml
+  count: 39
+  note: Low priority findings externalized to reduce token usage
+subdomains: []
+directories: []
+nikto_findings: []
+smb_shares: []
+ssh_info: []
+technologies: []
+enrichment_metadata: {}
+raw_artifacts: []

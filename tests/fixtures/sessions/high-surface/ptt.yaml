@@ -1,0 +1,63 @@
+ptt_version: '1.0'
+generated_at: '2026-01-31T23:23:29.961419'
+engagement:
+  id: 3f45165e-0ec9-4284-9508-39115d10f3e9
+  target: 10.129.7.111
+  session_id: 10.129.7.111_20260131_232256
+  status: pending
+  platform: unknown
+  findings:
+    credentials: []
+    access_gained: []
+    loot: []
+  iteration_stats:
+    total_attempts: 0
+    successful_techniques: 0
+    failed_techniques: 0
+    skipped_techniques: 0
+  hosts:
+  - id: f82cbe37-d499-4078-8f6d-3adc2dbca0f0
+    ip: 10.129.7.111
+    hostname: ''
+    os: unknown
+    status: pending
+    priority: 5
+    findings:
+      users_discovered: []
+      credentials: []
+      access_level: none
+    services:
+    - id: 790f4676-0ccd-49b0-80fa-56a96f28c709
+      port: 22
+      proto: tcp
+      service: ssh
+      version: OpenSSH 8.9p1 Ubuntu 3ubuntu0.13
+      status: pending
+      priority_score: 5.0
+      epss_score: 0.0
+      known_vulns: []
+      cves: []
+      attempts: 0
+      max_attempts: 5
+      vectors: []
+    - id: 7b5d7640-4700-4407-bb1d-3db0c4404963
+      port: 80
+      proto: tcp
+      service: http
+      version: Apache httpd 2.4.52
+      status: pending
+      priority_score: 5.0
+      epss_score: 0.0
+      known_vulns: []
+      cves: []
+      attempts: 0
+      max_attempts: 5
+      vectors:
+      - id: e3cb5f30-c4b0-48af-89fb-7b8c838651b6
+        name: quick_win_dump
+        category: quick_win
+        status: pending
+        priority: 1
+        techniques_total: 0
+        techniques_completed: 0
+        techniques: []

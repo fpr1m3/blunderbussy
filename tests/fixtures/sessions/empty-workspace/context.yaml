@@ -1,0 +1,35 @@
+cas_version: '1.2'
+generated_at: '2026-01-25T01:27:20.021268+00:00'
+target:
+  identifier: 10.129.3.123
+  session_id: 10.129.3.123_20260125_012635
+  scan_types:
+  - faraday
+  source: faraday:ws_10_129_3_123
+summary:
+  hosts_discovered: 0
+  services_found: 0
+  vulnerabilities_found: 0
+  critical_findings: 0
+  web_services_found: 0
+  attack_surface: low
+  scan_timestamp: '2026-01-25T01:26:35.045192+00:00'
+severity_breakdown:
+  critical: 0
+  high: 0
+  medium: 0
+  low: 0
+  informational: 0
+key_findings: []
+attack_guidance:
+  priority_targets: []
+  quick_wins: []
+  recommended_commands: []
+  _source: heuristic
+  _note: AI guidance unavailable - basic severity ranking only
+hosts: []
+vulnerabilities: []
+web_services: []
+faraday_meta:
+  workspace: ws_10_129_3_123
+  imported_at: '2026-01-25T01:26:35.648968'

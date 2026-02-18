@@ -1,0 +1,287 @@
+cas_version: '1.1'
+generated_at: '2026-01-20T20:46:00.410025'
+target:
+  identifier: 10.129.4.182
+  session_id: 10.129.4.182_20260120_014058
+  scan_types:
+  - whatweb
+  - nikto
+  - nmap
+  - feroxbuster
+  - manual_commands
+summary:
+  hosts_discovered: 1
+  vulnerabilities_found: 6
+  web_services_found: 0
+  subdomains_found: 0
+  directories_found: 11
+  smb_shares_found: 0
+  smb_users_found: 0
+  critical_findings: 1
+  exploitable_cves: 0
+key_findings:
+- type: vulnerability
+  severity: high
+  summary: The X-Content-Type-Options header is not set. This could allow the user
+    agent to render the conte...
+  cves: []
+attack_guidance:
+  priority_targets:
+  - target: 10.129.4.182
+    priority: 7
+    reason: High-value service
+  quick_wins:
+  - SSH found - look for key leaks via LFI, .git, backups
+  - Run web vulnerability scan (nuclei, nikto)
+  recommended_next:
+  - Review high-priority services for exploitation
+  - Run targeted nuclei scans on discovered services
+  tools_to_run: []
+hosts:
+- ip: 10.129.4.182
+  hostname: conversor.htb
+  status: up
+  os:
+    name: Linux 4.15 - 5.19
+    accuracy: 100
+  ports:
+  - port: 22
+    proto: tcp
+    service: ssh
+    version: OpenSSH 8.9p1 Ubuntu 3ubuntu0.13
+    state: open
+    priority: 7
+    vulns: []
+    vectors:
+    - private_key_disclosure
+    - username_enum
+    - version_specific_exploits
+  - port: 80
+    proto: tcp
+    service: http
+    version: Apache httpd 2.4.52
+    state: open
+    priority: 6
+    vulns: []
+    vectors:
+    - directory_traversal
+    - misconfig
+    - cgi_vuln
+  priority: 7
+  vulns: []
+vulnerabilities:
+- id: null
+  name: 'The anti-clickjacking X-Frame-Options header is not present. See: https://dev...'
+  severity: info
+  host: 10.129.4.182
+  matched_at: '/:'
+  cves: []
+  cvss: 0
+  exploitable: false
+  source: nikto
+- id: null
+  name: The X-Content-Type-Options header is not set. This could allow the user agent...
+  severity: high
+  host: 10.129.4.182
+  matched_at: '/:'
+  cves: []
+  cvss: 0
+  exploitable: false
+  source: nikto
+- id: null
+  name: 'Root page / redirects to: /login'
+  severity: info
+  host: 10.129.4.182
+  matched_at: null
+  cves: []
+  cvss: 0
+  exploitable: false
+  source: nikto
+- id: null
+  name: 'OPTIONS: Allowed HTTP Methods: OPTIONS, HEAD, GET .'
+  severity: info
+  host: 10.129.4.182
+  matched_at: null
+  cves: []
+  cvss: 0
+  exploitable: false
+  source: nikto
+- id: null
+  name: 'ERROR: Error limit (20) reached for host, giving up. Last error: opening
+    stre...'
+  severity: info
+  host: 10.129.4.182
+  matched_at: null
+  cves: []
+  cvss: 0
+  exploitable: false
+  source: nikto
+- id: null
+  name: 'Scan terminated: 18 error(s) and 4 item(s) reported on remote host'
+  severity: info
+  host: 10.129.4.182
+  matched_at: null
+  cves: []
+  cvss: 0
+  exploitable: false
+  source: nikto
+web_services: []
+subdomains: []
+directories:
+- path: /register
+  status: 200
+  size: 726
+  redirect: null
+  interesting: true
+- path: /static/style.css
+  status: 200
+  size: 5938
+  redirect: null
+  interesting: false
+- path: /login
+  status: 200
+  size: 722
+  redirect: null
+  interesting: true
+- path: /about
+  status: 200
+  size: 2842
+  redirect: null
+  interesting: false
+- path: /static/images/fismathack.png
+  status: 200
+  size: 178136
+  redirect: null
+  interesting: false
+- path: /static/images/david.png
+  status: 200
+  size: 4058063
+  redirect: null
+  interesting: false
+- path: /static/images/arturo.png
+  status: 200
+  size: 3066135
+  redirect: null
+  interesting: false
+- path: /static/source_code.tar.gz
+  status: 200
+  size: 7371827
+  redirect: null
+  interesting: true
+- path: /javascript/
+  status: 403
+  size: 278
+  redirect: null
+  interesting: false
+- path: /server-status
+  status: 403
+  size: 278
+  redirect: null
+  interesting: false
+- path: /convert
+  status: 405
+  size: 153
+  redirect: null
+  interesting: false
+nikto_findings: []
+smb_shares: []
+smb_enum: {}
+autorecon_meta:
+  scan_types:
+  - nikto
+  - feroxbuster
+  - whatweb
+  - nmap
+  total_scan_files: 4
+  source: autorecon
+enrichment_metadata:
+  cve_enrichment:
+    enriched_at: '2026-01-20T20:46:00.355658'
+    total_cves: 0
+    exploitable: 0
+    critical: 0
+    in_kev: 0
+  service_enrichment: {}
+  web_enrichment: {}
+raw_artifacts:
+- /artifacts/results/10.129.4.182/scans
+- artifacts/results/10.129.4.182/scans
+low_priority_vulns:
+- id: null
+  name: 'The anti-clickjacking X-Frame-Options header is not present. See: https://dev...'
+  severity: info
+  host: 10.129.4.182
+  matched_at: '/:'
+  cves: []
+  cvss: 0
+  exploitable: false
+  source: nikto
+- id: null
+  name: 'Root page / redirects to: /login'
+  severity: info
+  host: 10.129.4.182
+  matched_at: null
+  cves: []
+  cvss: 0
+  exploitable: false
+  source: nikto
+- id: null
+  name: 'OPTIONS: Allowed HTTP Methods: OPTIONS, HEAD, GET .'
+  severity: info
+  host: 10.129.4.182
+  matched_at: null
+  cves: []
+  cvss: 0
+  exploitable: false
+  source: nikto
+- id: null
+  name: 'ERROR: Error limit (20) reached for host, giving up. Last error: opening
+    stre...'
+  severity: info
+  host: 10.129.4.182
+  matched_at: null
+  cves: []
+  cvss: 0
+  exploitable: false
+  source: nikto
+- id: null
+  name: 'Scan terminated: 18 error(s) and 4 item(s) reported on remote host'
+  severity: info
+  host: 10.129.4.182
+  matched_at: null
+  cves: []
+  cvss: 0
+  exploitable: false
+  source: nikto
+ssh_info:
+- host: 10.129.4.182
+  port: 22
+  auth_methods:
+  - publickey
+  - password
+  host_keys:
+  - bits: 256
+    fingerprint: 01:74:26:39:47:bc:6a:e2:cb:12:8b:71:84:9c:f8:5a
+    type: ECDSA
+  - type: ecdsa-sha2-nistp256
+    key: AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlz...
+  - bits: 256
+    fingerprint: 3a:16:90:dc:74:d8:e3:c4:51:36:e2:08:06:26:17:ee
+    type: ED25519
+  banner: SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.13
+technologies:
+- name: Apache
+  version: 2.4.52
+  category: ''
+- name: HTML5
+  version: null
+  category: ''
+- name: HTTPServer
+  version: null
+  category: ''
+- name: RedirectLocation
+  version: null
+  category: ''
+- name: PasswordField
+  version: null
+  category: ''

@@ -1,0 +1,80 @@
+ptt_version: '1.0'
+generated_at: '2026-01-21T17:35:00.000000'
+engagement:
+  id: 2a54b1e3-c006-443d-9978-0b9facfc229e
+  target: 10.129.1.128
+  session_id: 10.129.1.128_20260121_164805
+  status: completed
+  platform: linux
+  findings:
+    credentials:
+    - user: ike
+      pass: freakingrockstarontheroad
+      service: ssh
+      source: IKE PSK cracking (via research)
+    access_gained:
+    - user: ike
+      level: user
+      method: ssh
+    - user: root
+      level: root
+      method: sudo bypass (CVE-2025-32463)
+    loot:
+    - type: flag
+      name: user_flag
+      value: REDACTED-FOR-FIXTURE
+      location: /home/ike/user.txt
+    - type: flag
+      name: root_flag
+      value: REDACTED-FOR-FIXTURE
+      location: /root/root.txt
+  iteration_stats:
+    total_attempts: 2
+    successful_techniques: 2
+    failed_techniques: 0
+    skipped_techniques: 0
+  hosts:
+  - id: b0aeaa03-1fd2-4719-961d-2ca6cc6336a9
+    ip: 10.129.1.128
+    hostname: expressway.htb
+    os: Linux 4.15 - 5.19
+    status: compromised
+    priority: 7
+    findings:
+      users_discovered: [ike, root]
+      credentials:
+      - user: ike
+        pass: freakingrockstarontheroad
+      access_level: root
+    services:
+    - id: c70fc5ad-e05f-4bf5-83b0-a84c42e886ec
+      port: 22
+      proto: tcp
+      service: ssh
+      version: OpenSSH 10.0p2 Debian 8
+      status: exploited
+      priority_score: 7.0
+      epss_score: 0.0
+      known_vulns: []
+      cves: []
+      attempts: 1
+      max_attempts: 5
+      vectors:
+      - id: ac733e25-994c-4be3-adf0-597061ea998d
+        name: ike_psk_cracking
+        category: exploitation
+        status: completed
+        priority: 1
+        techniques:
+        - name: IKE Aggressive Mode PSK Cracking
+          status: success
+          findings: [ike:freakingrockstarontheroad]
+      - id: 7e68fbd2-4bf8-4d4c-a181-10099b134179
+        name: privesc
+        category: privesc
+        status: completed
+        priority: 1
+        techniques:
+        - name: Sudo Bypass (CVE-2025-32463)
+          status: success
+          findings: [root access obtained]

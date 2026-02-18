@@ -1,0 +1,111 @@
+cas_version: '1.1'
+generated_at: '2026-01-21T16:48:05.560779'
+target:
+  identifier: 10.129.1.128
+  session_id: 10.129.1.128_20260121_164805
+  scan_types: &id001
+  - manual_commands
+  - nmap
+  - nmap_ssh
+summary:
+  hosts_discovered: 1
+  vulnerabilities_found: 0
+  web_services_found: 0
+  subdomains_found: 0
+  directories_found: 0
+  smb_shares_found: 0
+  smb_users_found: 0
+  critical_findings: 0
+  low_priority_vulns_count: 0
+  exploitable_cves: 0
+key_findings: []
+attack_guidance:
+  priority_targets:
+  - target: 10.129.1.128
+    priority: 7
+    reason: High-value service
+  quick_wins:
+  - hydra Bruteforce logins on ssh:22
+  - medusa Bruteforce logins on ssh:22
+  - SSH found - look for key leaks via LFI, .git, backups
+  recommended_next:
+  - Review high-priority services for exploitation
+  - Run targeted nuclei scans on discovered services
+  recommended_commands:
+  - service: ssh
+    port: 22
+    tool: hydra
+    category: Bruteforce logins
+    command: hydra -L "/usr/share/seclists/Usernames/top-usernames-shortlist.txt"
+      -P "/usr/share/seclists/Passwords/Common-Credentials/10-million-password-list-top-1000.txt"
+      -e nsr -s 22 -o "/artifacts/results/10.129.1.128/scans/tcp_22_ssh_hydra.txt"
+      ssh://expressway.htb
+    priority: 2
+  - service: ssh
+    port: 22
+    tool: medusa
+    category: Bruteforce logins
+    command: medusa -U "/usr/share/seclists/Usernames/top-usernames-shortlist.txt"
+      -P "/usr/share/seclists/Passwords/Common-Credentials/10-million-password-list-top-1000.txt"
+      -e ns -n 22 -O "/artifacts/results/10.129.1.128/scans/tcp_22_ssh_medusa.txt"
+      -M ssh -h expressway.htb
+    priority: 2
+  tools_to_run: []
+hosts:
+- ip: 10.129.1.128
+  hostname: expressway.htb
+  status: up
+  os:
+    name: Linux 4.15 - 5.19
+    accuracy: 98
+  ports:
+  - port: 22
+    proto: tcp
+    service: ssh
+    version: OpenSSH 10.0p2 Debian 8
+    state: open
+    priority: 7
+    vulns: []
+    vectors:
+    - private_key_disclosure
+    - username_enum
+    - version_specific_exploits
+  priority: 7
+  vulns: []
+vulnerabilities: []
+web_services: []
+subdomains: []
+directories: []
+nikto_findings: []
+smb_shares: []
+smb_enum: {}
+ssh_info:
+- host: 10.129.1.128
+  port: 22
+  auth_methods:
+  - publickey
+  - password
+  host_keys: []
+  banner: SSH-2.0-OpenSSH_10.0p2 Debian-8
+technologies: []
+autorecon_meta:
+  scan_types: *id001
+  total_scan_files: 3
+  source: autorecon
+enrichment_metadata:
+  cve_enrichment: {}
+  service_enrichment:
+    enriched_at: '2026-01-21T16:48:05.523248'
+    services_found:
+      ssh: 1
+    high_priority_targets:
+    - ip: 10.129.1.128
+      hostname: expressway.htb
+      priority: 7
+      vulns: []
+    total_services_with_default_creds: 0
+    total_known_vulns: 0
+  web_enrichment: {}
+raw_artifacts:
+- /artifacts/results/10.129.1.128/scans
+low_priority_vulns: []

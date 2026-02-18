@@ -1,0 +1,2 @@
+{"timestamp": "2026-01-31T22:04:41.465387", "action_type": "session_start", "session_id": "sess-0a565f298ee2", "target": "10.129.242.203", "access_level": "none", "flags_captured": [], "shell_count": 0, "credential_count": 0, "hypothesis_count": 0}
+{"timestamp": "2026-01-31T23:11:23.578715", "action_type": "session_start", "session_id": "sess-0a565f298ee2", "target": "10.129.242.203", "access_level": "none", "flags_captured": [], "shell_count": 0, "credential_count": 0, "hypothesis_count": 0}
