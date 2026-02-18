@@ -350,6 +350,29 @@ services:
         depends_on:
             - gluetun
 
+    # ==========================================================================
+    # Test Profile — Local vulnerable target for E2E testing without VPN
+    # Usage: podman-compose --profile test up -d mock-target
+    # ==========================================================================
+    mock-target:
+        image: docker.io/vulhub/httpd:2.4.49
+        profiles: ["test"]
+        container_name: mock-target
+        networks:
+            - test-net
+
+    hexstrike-test:
+        extends:
+            service: hexstrike-recon
+        profiles: ["test"]
+        container_name: hexstrike-test
+        environment:
+            - TARGET=mock-target
+        networks:
+            - test-net
+        depends_on:
+            - mock-target
+
 volumes:
     # Shared artifacts volume for scan data and CAS documents
     artifacts:
@@ -376,3 +399,6 @@ volumes:
 networks:
     default:
         name: opulence_network
+    test-net:
+        name: test-net
+        driver: bridge
