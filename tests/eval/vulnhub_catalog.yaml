@@ -1,0 +1,56 @@
+catalog:
+  - image: "docker.io/vulhub/httpd:2.4.49"
+    cves: ["CVE-2021-41773", "CVE-2021-42013"]
+    category: apache
+    services: [http]
+    difficulty_estimate: easy
+    notes: "Path traversal + RCE via mod_cgi. Reliable."
+
+  - image: "docker.io/vulhub/httpd:2.4.50"
+    cves: ["CVE-2021-42013"]
+    category: apache
+    services: [http]
+    difficulty_estimate: easy
+    notes: "Bypass of 2.4.49 fix. Similar attack path."
+
+  - image: "docker.io/vulhub/tomcat:8.5.19"
+    cves: ["CVE-2017-12615"]
+    category: tomcat
+    services: [http]
+    difficulty_estimate: easy
+    notes: "PUT method file upload. JSP webshell."
+
+  - image: "docker.io/vulhub/weblogic:10.3.6.0"
+    cves: ["CVE-2017-10271"]
+    category: weblogic
+    services: [http]
+    difficulty_estimate: medium
+    notes: "XMLDecoder deserialization RCE."
+
+  - image: "docker.io/vulhub/postgres:11.2"
+    cves: ["CVE-2019-9193"]
+    category: database
+    services: [postgres]
+    difficulty_estimate: easy
+    notes: "Authenticated RCE via COPY FROM PROGRAM."
+
+  - image: "docker.io/vulhub/samba:4.6.3"
+    cves: ["CVE-2017-7494"]
+    category: samba
+    services: [smb]
+    difficulty_estimate: medium
+    notes: "SambaCry. Writable share + .so upload."
+
+  - image: "docker.io/vulhub/openssh:7.7"
+    cves: ["CVE-2018-15473"]
+    category: ssh
+    services: [ssh]
+    difficulty_estimate: hard
+    notes: "Username enumeration only. No RCE."
+
+  - image: "docker.io/vulhub/phpmyadmin:4.8.1"
+    cves: ["CVE-2018-12613"]
+    category: php
+    services: [http]
+    difficulty_estimate: medium
+    notes: "LFI via phpMyAdmin. Session file inclusion for RCE."

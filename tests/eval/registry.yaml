@@ -1,0 +1,15 @@
+eval_registry_version: "1.0"
+targets:
+  - name: "apache-2.4.49-cve-2021-41773"
+    image: "docker.io/vulhub/httpd:2.4.49"
+    difficulty: easy
+    attack_surface: [http]
+    primary_cve: "CVE-2021-41773"
+    tags: [path-traversal, rce, linux]
+
+  - name: "tomcat-8.5.19-cve-2017-12615"
+    image: "docker.io/vulhub/tomcat:8.5.19"
+    difficulty: easy
+    attack_surface: [http]
+    primary_cve: "CVE-2017-12615"
+    tags: [file-upload, rce, linux]
