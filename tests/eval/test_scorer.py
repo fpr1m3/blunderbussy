@@ -534,3 +534,102 @@ class TestRegressionDetection:
         reg = detect_regression(current, baseline)
         assert reg["regressed"] is True
         assert reg["score_delta"] == -10.0
+
+
+# ---------------------------------------------------------------------------
+# Target Package Integration Tests (Tasks 7 & 8)
+# ---------------------------------------------------------------------------
+
+TARGETS_DIR = Path(__file__).parent / "targets"
+
+
+@pytest.mark.eval
+class TestApacheTargetIntegration:
+    """Integration tests for Apache 2.4.49 target package."""
+
+    def test_ground_truth_loads(self):
+        gt_path = TARGETS_DIR / "apache-2.4.49-cve-2021-41773" / "ground_truth.yaml"
+        gt = load_ground_truth(gt_path)
+        assert gt.name == "apache-2.4.49-cve-2021-41773"
+        assert len(gt.objectives) == 5
+        assert gt.difficulty == "easy"
+
+    def test_perfect_run_scores_100(self):
+        gt_path = TARGETS_DIR / "apache-2.4.49-cve-2021-41773" / "ground_truth.yaml"
+        gt = load_ground_truth(gt_path)
+        perfect_ptt = {
+            "engagement": {
+                "status": "completed",
+                "hosts": [{
+                    "ip": "10.0.0.1",
+                    "access_level": "root",
+                    "services": [{
+                        "port": 80, "protocol": "tcp", "name": "http",
+                        "vectors": [{
+                            "name": "Path Traversal",
+                            "techniques": [{
+                                "name": "CVE-2021-41773 Path Traversal",
+                                "status": "success",
+                                "cve": "CVE-2021-41773",
+                            }],
+                        }],
+                    }],
+                    "findings": {
+                        "loot": [
+                            {"type": "flag", "name": "user_flag", "value": "EVAL{apache-2449-user-flag}"},
+                            {"type": "flag", "name": "root_flag", "value": "EVAL{apache-2449-root-flag}"},
+                        ],
+                        "credentials": [{"username": "daemon", "secret": "daemon"}],
+                    },
+                }],
+            }
+        }
+        result = score_ptt(gt, perfect_ptt)
+        assert result.summary.final_score == 100
+        assert result.summary.passed is True
+
+
+@pytest.mark.eval
+class TestTomcatTargetIntegration:
+    """Integration tests for Tomcat 8.5.19 target package."""
+
+    def test_ground_truth_loads(self):
+        gt_path = TARGETS_DIR / "tomcat-8.5.19-cve-2017-12615" / "ground_truth.yaml"
+        gt = load_ground_truth(gt_path)
+        assert gt.name == "tomcat-8.5.19-cve-2017-12615"
+        assert len(gt.objectives) == 5
+        assert gt.difficulty == "easy"
+
+    def test_perfect_run_scores_100(self):
+        gt_path = TARGETS_DIR / "tomcat-8.5.19-cve-2017-12615" / "ground_truth.yaml"
+        gt = load_ground_truth(gt_path)
+        perfect_ptt = {
+            "engagement": {
+                "status": "completed",
+                "hosts": [{
+                    "ip": "10.0.0.1",
+                    "access_level": "root",
+                    "services": [{
+                        "port": 8080, "protocol": "tcp", "name": "http",
+                        "vectors": [{
+                            "name": "PUT Upload",
+                            "techniques": [{
+                                "name": "CVE-2017-12615 PUT Method Upload",
+                                "status": "success",
+                                "cve": "CVE-2017-12615",
+                            }],
+                        }],
+                    }],
+                    "findings": {
+                        "loot": [
+                            {"type": "flag", "name": "user_flag", "value": "EVAL{tomcat-8519-user-flag}"},
+                            {"type": "flag", "name": "root_flag", "value": "EVAL{tomcat-8519-root-flag}"},
+                        ],
+                        "credentials": [{"username": "tomcat", "secret": "tomcat"}],
+                    },
+                }],
+            }
+        }
+        result = score_ptt(gt, perfect_ptt)
+        assert result.summary.final_score == 100
+        assert result.summary.passed is True
