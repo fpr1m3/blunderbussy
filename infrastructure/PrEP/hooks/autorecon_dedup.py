@@ -27,10 +27,8 @@ import shlex
 from pathlib import Path
 from typing import Optional, Tuple
 
-try:
-    import yaml
-except ImportError:
-    yaml = None
+# yaml is imported lazily in load_cas() to avoid cold-start overhead
+_yaml = None
 
 
 # =============================================================================
@@ -144,8 +142,13 @@ def get_target_from_env() -> str:
 
 def load_cas(target: str) -> Optional[dict]:
     """Load CAS for target."""
-    if not yaml:
-        return None
+    global _yaml
+    if _yaml is None:
+        try:
+            import yaml
+            _yaml = yaml
+        except ImportError:
+            return None
 
     artifacts_path = os.environ.get("ARTIFACTS_PATH", "/artifacts")
     cas_path = Path(artifacts_path) / target / "context.yaml"
@@ -155,7 +158,7 @@ def load_cas(target: str) -> Optional[dict]:
 
     try:
         with open(cas_path) as f:
-            return yaml.safe_load(f)
+            return _yaml.safe_load(f)
     except Exception:
         return None
 

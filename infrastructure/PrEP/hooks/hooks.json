@@ -21,28 +21,28 @@
             "command": "python3 ${extensionPath}/hooks/file_size_gate.py",
             "name": "file-size-gate",
             "description": "Block reads of large files that would overflow context window",
-            "timeout": 5000
+            "timeout": 8000
           },
           {
             "type": "command",
             "command": "python3 ${extensionPath}/hooks/autorecon_dedup.py",
             "name": "autorecon-dedup",
             "description": "Block redundant scans that AutoRecon already completed",
-            "timeout": 5000
+            "timeout": 8000
           },
           {
             "type": "command",
             "command": "python3 ${extensionPath}/hooks/before_tool.py",
             "name": "query-cache-check",
             "description": "Check query cache for deduplication",
-            "timeout": 5000
+            "timeout": 8000
           },
           {
             "type": "command",
             "command": "python3 ${extensionPath}/hooks/shellcheck_validator.py",
             "name": "shellcheck-validator",
             "description": "Validate shell command syntax before execution",
-            "timeout": 5000
+            "timeout": 8000
           }
         ]
       }
@@ -55,14 +55,14 @@
             "command": "python3 ${extensionPath}/hooks/after_tool.py",
             "name": "output-processor",
             "description": "Process tool output: truncate bloat, strip web content, cache queries, extract credentials, update hypotheses",
-            "timeout": 5000
+            "timeout": 8000
           },
           {
             "type": "command",
             "command": "python3 ${extensionPath}/hooks/loop_detector.py",
             "name": "loop-detector",
             "description": "Detect thought loops via MinHash similarity and escalate through warn/reset/kill stages",
-            "timeout": 5000
+            "timeout": 8000
           }
         ]
       }

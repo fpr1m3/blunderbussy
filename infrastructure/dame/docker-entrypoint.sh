@@ -79,6 +79,12 @@ fi
 mkdir -p /root/.gemini/extensions
 cp -f /etc/gemini/settings.json /root/.gemini/settings.json
 
+# If GEMINI_API_KEY is set, switch auth from OAuth to API key mode
+if [ -n "$GEMINI_API_KEY" ]; then
+  echo "[auth] GEMINI_API_KEY detected, switching to gemini-api-key auth"
+  sed -i 's/"selectedType": "oauth-personal"/"selectedType": "gemini-api-key"/' /root/.gemini/settings.json
+fi
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Extension Linking
 # ═══════════════════════════════════════════════════════════════════════════
@@ -93,12 +99,27 @@ fi
 # Persists in dame-gemini volume after first auth
 # GEMINI_FORCE_FILE_STORAGE=true bypasses keychain
 
-# Start tmux session with gemini-cli in yolo mode (auto-approve all actions)
-# GEMINI_SYSTEM_MD enables dynamic context injection via custom system prompt
-# TARGET is passed explicitly so hooks spawned by gemini-cli can read it
-if ! tmux has-session -t dame 2>/dev/null; then
-  tmux new-session -d -s dame "TARGET=${TARGET:-} GEMINI_SYSTEM_MD=/ext/opulence/GEMINI.md gemini --yolo"
-fi
+# ═══════════════════════════════════════════════════════════════════════════
+# Launch Mode
+# ═══════════════════════════════════════════════════════════════════════════
+# If CMD args are passed (e.g. from eval harness), run gemini directly
+# in headless mode. Otherwise, start interactive tmux session.
 
-# Keep container alive
-exec tail -f /dev/null
+if [ $# -gt 0 ]; then
+  # Headless mode: exec the provided command (e.g. gemini --yolo ...)
+  echo "[dame] Headless mode: $*"
+  export GEMINI_SYSTEM_MD=/ext/opulence/GEMINI.md
+  # Run from /artifacts so gemini-cli's file sandbox allows reading CAS/PTT
+  cd /artifacts 2>/dev/null || true
+  exec "$@"
+else
+  # Interactive mode: tmux session with gemini-cli
+  # GEMINI_SYSTEM_MD enables dynamic context injection via custom system prompt
+  # TARGET is passed explicitly so hooks spawned by gemini-cli can read it
+  if ! tmux has-session -t dame 2>/dev/null; then
+    tmux new-session -d -s dame "TARGET=${TARGET:-} GEMINI_SYSTEM_MD=/ext/opulence/GEMINI.md gemini --yolo"
+  fi
+
+  # Keep container alive
+  exec tail -f /dev/null
+fi

@@ -4,6 +4,7 @@ Tests for the Dame evaluation harness CLI.
 Covers list, search, verify, run workspace helpers, and results subcommands.
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -20,7 +21,27 @@ PROJECT_ROOT = Path(__file__).parents[2]
 # ---------------------------------------------------------------------------
 
 sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
-from eval_harness import setup_workspace, score_workspace  # noqa: E402
+from eval_harness import (  # noqa: E402
+    setup_workspace,
+    score_workspace,
+    make_slug,
+    fetch_nvd_cve,
+    resolve_service_ports,
+    generate_vuln_id_suffix,
+    build_ground_truth,
+    build_cas_context,
+    build_cas_ptt,
+    build_compose,
+    build_plant_flags_sh,
+    build_readme,
+    check_dame_image,
+    get_container_ip,
+    prepare_dame_artifacts,
+    invoke_dame,
+    collect_dame_results,
+    get_compose_container_name,
+    WELL_KNOWN_SERVICE_DEFAULTS,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -403,19 +424,413 @@ class TestRunWorkspace:
 
 
 # ---------------------------------------------------------------------------
-# TestHarnessAdd
+# TestMakeSlug
+# ---------------------------------------------------------------------------
+
+@pytest.mark.eval
+class TestMakeSlug:
+    """Tests for the make_slug utility."""
+
+    def test_standard_name(self):
+        assert make_slug("apache-2.4.49-cve-2021-41773") == "apache-2449"
+
+    def test_multi_dot_version(self):
+        assert make_slug("weblogic-10.3.6.0-cve-2017-10271") == "weblogic-10360"
+
+    def test_no_cve_in_name(self):
+        assert make_slug("custom-target-123") == "custom-target-123"
+
+
+# ---------------------------------------------------------------------------
+# TestFetchNvdCve
+# ---------------------------------------------------------------------------
+
+@pytest.mark.eval
+class TestFetchNvdCve:
+    """Tests for NVD CVE fetching (mocked network)."""
+
+    def test_returns_skeleton_on_network_error(self, monkeypatch):
+        """When NVD is unreachable, return skeleton data."""
+        import urllib.request
+        def mock_urlopen(*a, **kw):
+            raise urllib.error.URLError("mock network error")
+        monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+
+        result = fetch_nvd_cve("CVE-2021-41773")
+        assert result["id"] == "CVE-2021-41773"
+        assert result["severity"] == "unknown"
+        assert "NVD" in result["description"]
+
+    def test_parses_severity_from_response(self, monkeypatch):
+        """When NVD returns valid data, parse severity and description."""
+        import io
+        import urllib.request
+
+        mock_response = json.dumps({
+            "vulnerabilities": [{
+                "cve": {
+                    "descriptions": [
+                        {"lang": "en", "value": "A path traversal flaw in Apache httpd"},
+                    ],
+                    "metrics": {
+                        "cvssMetricV31": [{
+                            "cvssData": {
+                                "baseSeverity": "HIGH",
+                                "baseScore": 7.5,
+                            }
+                        }]
+                    }
+                }
+            }]
+        }).encode()
+
+        class MockResponse:
+            def read(self):
+                return mock_response
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                pass
+
+        monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **kw: MockResponse())
+
+        result = fetch_nvd_cve("CVE-2021-41773")
+        assert result["severity"] == "high"
+        assert result["score"] == 7.5
+        assert "path traversal" in result["description"].lower()
+
+    def test_v30_fallback(self, monkeypatch):
+        """Falls back to V30 metrics when V31 is absent."""
+        import urllib.request
+
+        mock_response = json.dumps({
+            "vulnerabilities": [{
+                "cve": {
+                    "descriptions": [{"lang": "en", "value": "Test vuln"}],
+                    "metrics": {
+                        "cvssMetricV30": [{
+                            "cvssData": {
+                                "baseSeverity": "MEDIUM",
+                                "baseScore": 5.0,
+                            }
+                        }]
+                    }
+                }
+            }]
+        }).encode()
+
+        class MockResponse:
+            def read(self):
+                return mock_response
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                pass
+
+        monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **kw: MockResponse())
+
+        result = fetch_nvd_cve("CVE-2021-99999")
+        assert result["severity"] == "medium"
+        assert result["score"] == 5.0
+
+
+# ---------------------------------------------------------------------------
+# TestResolveServicePorts
+# ---------------------------------------------------------------------------
+
+@pytest.mark.eval
+class TestResolveServicePorts:
+    """Tests for port resolution logic."""
+
+    def test_catalog_ports_field_takes_priority(self):
+        entry = {"ports": [{"container": 7001, "name": "http"}], "services": ["http"]}
+        result = resolve_service_ports(entry)
+        assert result[0]["container"] == 7001
+
+    def test_service_defaults_when_no_ports_field(self):
+        entry = {"services": ["postgres"]}
+        result = resolve_service_ports(entry)
+        assert result[0]["container"] == 5432
+        assert result[0]["name"] == "postgres"
+
+    def test_cli_port_override(self):
+        result = resolve_service_ports(None, cli_port=9090)
+        assert result[0]["container"] == 9090
+
+    def test_default_port_80(self):
+        result = resolve_service_ports(None)
+        assert result[0]["container"] == 80
+        assert result[0]["name"] == "http"
+
+    def test_multiple_services(self):
+        entry = {"services": ["http", "ssh"]}
+        result = resolve_service_ports(entry)
+        assert len(result) == 2
+        assert result[0]["container"] == 80
+        assert result[1]["container"] == 22
+
+
+# ---------------------------------------------------------------------------
+# TestGenerateVulnIdSuffix
+# ---------------------------------------------------------------------------
+
+@pytest.mark.eval
+class TestGenerateVulnIdSuffix:
+    """Tests for vulnerability ID suffix generation."""
+
+    def test_traversal_keyword(self):
+        assert generate_vuln_id_suffix("CVE-2021-41773", "Path traversal in Apache") == "traversal"
+
+    def test_deserialization_keyword(self):
+        assert generate_vuln_id_suffix("CVE-2017-10271", "XMLDecoder deserialization RCE") == "deserialization"
+
+    def test_fallback_to_cve_digits(self):
+        assert generate_vuln_id_suffix("CVE-2099-99999", "Something completely unknown") == "99999"
+
+
+# ---------------------------------------------------------------------------
+# TestBuildGroundTruth
+# ---------------------------------------------------------------------------
+
+@pytest.mark.eval
+class TestBuildGroundTruth:
+    """Tests for ground truth template building."""
+
+    def test_five_objectives_totalling_100(self):
+        gt = build_ground_truth(
+            name="test-1.0-cve-2021-12345",
+            image="docker.io/vulhub/test:1.0",
+            slug="test-10",
+            cves=["CVE-2021-12345"],
+            cve_data={"CVE-2021-12345": {"description": "path traversal", "severity": "high"}},
+            services=[{"container": 80, "name": "http"}],
+            difficulty="easy",
+        )
+        assert len(gt["objectives"]) == 5
+        total = sum(o["points"] for o in gt["objectives"])
+        assert total == 100
+
+    def test_flag_values_use_slug(self):
+        gt = build_ground_truth(
+            name="test-1.0-cve-2021-12345",
+            image="docker.io/vulhub/test:1.0",
+            slug="test-10",
+            cves=["CVE-2021-12345"],
+            cve_data={},
+            services=[{"container": 80, "name": "http"}],
+            difficulty="easy",
+        )
+        flag_objs = [o for o in gt["objectives"] if "flag_value" in o.get("match", {})]
+        flag_values = [o["match"]["flag_value"] for o in flag_objs]
+        assert "EVAL{test-10-user-flag}" in flag_values
+        assert "EVAL{test-10-root-flag}" in flag_values
+
+    def test_dependency_chain(self):
+        gt = build_ground_truth(
+            name="test-1.0-cve-2021-12345",
+            image="docker.io/vulhub/test:1.0",
+            slug="test-10",
+            cves=["CVE-2021-12345"],
+            cve_data={},
+            services=[{"container": 80, "name": "http"}],
+            difficulty="easy",
+        )
+        # exploitation depends on vuln-discovery, root-flag depends on exploitation
+        exploit_obj = [o for o in gt["objectives"] if o["id"] == "initial-access-rce"][0]
+        root_obj = [o for o in gt["objectives"] if o["id"] == "flag-root"][0]
+        assert exploit_obj.get("depends_on", "").startswith("vuln-discovery-")
+        assert root_obj["depends_on"] == "initial-access-rce"
+
+    def test_penalty_whitelists_all_cves(self):
+        gt = build_ground_truth(
+            name="test-1.0-cve-2021-12345",
+            image="docker.io/vulhub/test:1.0",
+            slug="test-10",
+            cves=["CVE-2021-12345", "CVE-2021-67890"],
+            cve_data={},
+            services=[{"container": 80, "name": "http"}],
+            difficulty="easy",
+        )
+        penalty = gt["penalties"][0]
+        assert "CVE-2021-12345" in penalty["match"]["cve_not_in"]
+        assert "CVE-2021-67890" in penalty["match"]["cve_not_in"]
+
+
+# ---------------------------------------------------------------------------
+# TestHarnessAdd (integration — monkeypatched paths)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.eval
 class TestHarnessAdd:
-    """Tests for the 'add' subcommand stub."""
+    """Integration tests for the 'add' subcommand."""
 
-    def test_add_prints_not_implemented(self, capsys):
+    def test_add_creates_all_six_files(self, target_fixtures, capsys):
         import eval_harness
-        rc = eval_harness.main(["add", "docker.io/vulhub/httpd:2.4.49", "--name", "test-target"])
-        assert rc == 1
+        targets_dir = target_fixtures["targets_dir"]
+
+        rc = eval_harness.main([
+            "add", "docker.io/vulhub/samba:4.6.3",
+            "--name", "samba-4.6.3-cve-2017-7494",
+        ])
+        assert rc == 0
+
+        target_dir = targets_dir / "samba-4.6.3-cve-2017-7494"
+        assert (target_dir / "ground_truth.yaml").exists()
+        assert (target_dir / "compose.yaml").exists()
+        assert (target_dir / "cas" / "context.yaml").exists()
+        assert (target_dir / "cas" / "ptt.yaml").exists()
+        assert (target_dir / "setup" / "plant_flags.sh").exists()
+        assert (target_dir / "README.md").exists()
+
+        # plant_flags.sh should be executable
+        assert os.access(target_dir / "setup" / "plant_flags.sh", os.X_OK)
+
+    def test_dry_run_writes_nothing(self, target_fixtures, capsys):
+        import eval_harness
+        targets_dir = target_fixtures["targets_dir"]
+
+        rc = eval_harness.main([
+            "add", "docker.io/vulhub/samba:4.6.3",
+            "--name", "samba-dry-test",
+            "--dry-run",
+        ])
+        assert rc == 0
+
+        target_dir = targets_dir / "samba-dry-test"
+        assert not target_dir.exists()
+
         captured = capsys.readouterr()
-        assert "not yet implemented" in captured.err
+        assert "dry-run" in captured.out.lower()
+
+    def test_appends_to_registry(self, target_fixtures):
+        import eval_harness
+
+        rc = eval_harness.main([
+            "add", "docker.io/vulhub/samba:4.6.3",
+            "--name", "samba-4.6.3-cve-2017-7494",
+        ])
+        assert rc == 0
+
+        registry = eval_harness.load_registry()
+        names = [t["name"] for t in registry]
+        assert "samba-4.6.3-cve-2017-7494" in names
+
+    def test_rejects_duplicate_without_force(self, target_fixtures, capsys):
+        import eval_harness
+        targets_dir = target_fixtures["targets_dir"]
+
+        # First add
+        rc = eval_harness.main([
+            "add", "docker.io/vulhub/samba:4.6.3",
+            "--name", "samba-dup-test",
+        ])
+        assert rc == 0
+
+        # Second add without --force
+        rc = eval_harness.main([
+            "add", "docker.io/vulhub/samba:4.6.3",
+            "--name", "samba-dup-test",
+        ])
+        assert rc == 1
+
+        captured = capsys.readouterr()
+        assert "already exists" in captured.err.lower()
+
+    def test_force_overwrites_existing(self, target_fixtures):
+        import eval_harness
+
+        rc = eval_harness.main([
+            "add", "docker.io/vulhub/samba:4.6.3",
+            "--name", "samba-force-test",
+        ])
+        assert rc == 0
+
+        rc = eval_harness.main([
+            "add", "docker.io/vulhub/samba:4.6.3",
+            "--name", "samba-force-test",
+            "--force",
+        ])
+        assert rc == 0
+
+    def test_verify_passes_after_scaffold(self, target_fixtures, capsys):
+        """The key acceptance test: scaffolded target passes verify."""
+        import eval_harness
+
+        rc = eval_harness.main([
+            "add", "docker.io/vulhub/samba:4.6.3",
+            "--name", "samba-4.6.3-cve-2017-7494",
+        ])
+        assert rc == 0
+
+        rc = eval_harness.main([
+            "verify", "--target", "samba-4.6.3-cve-2017-7494",
+        ])
+        assert rc == 0
+        captured = capsys.readouterr()
+        assert "All checks passed" in captured.out
+
+    def test_auto_assigns_non_colliding_port(self, target_fixtures):
+        import eval_harness
+
+        # Add two targets — second should get a different port
+        eval_harness.main([
+            "add", "docker.io/vulhub/samba:4.6.3",
+            "--name", "port-test-1",
+        ])
+        eval_harness.main([
+            "add", "docker.io/vulhub/openssh:7.7",
+            "--name", "port-test-2",
+        ])
+
+        targets_dir = target_fixtures["targets_dir"]
+        ports = set()
+        for name in ("port-test-1", "port-test-2"):
+            compose_path = targets_dir / name / "compose.yaml"
+            with open(compose_path) as fh:
+                data = yaml.safe_load(fh)
+            for svc in data["services"].values():
+                for pm in svc["ports"]:
+                    host_port = int(str(pm).split(":")[0])
+                    ports.add(host_port)
+
+        # All host ports should be unique
+        assert len(ports) >= 2
+
+    def test_extracts_cves_from_name(self, target_fixtures, capsys):
+        """When image isn't in catalog, CVEs are extracted from the target name."""
+        import eval_harness
+
+        rc = eval_harness.main([
+            "add", "docker.io/vulhub/unknown:1.0",
+            "--name", "unknown-1.0-cve-2099-99999",
+        ])
+        assert rc == 0
+
+        targets_dir = target_fixtures["targets_dir"]
+        with open(targets_dir / "unknown-1.0-cve-2099-99999" / "ground_truth.yaml") as fh:
+            gt = yaml.safe_load(fh)
+
+        # CVE should be extracted from name
+        cve_obj = gt["objectives"][0]
+        assert cve_obj["match"]["cve"] == "CVE-2099-99999"
+
+    def test_catalog_ports_used_for_weblogic(self, target_fixtures):
+        """WebLogic should use port 7001 from catalog ports field."""
+        import eval_harness
+
+        rc = eval_harness.main([
+            "add", "docker.io/vulhub/weblogic:10.3.6.0",
+            "--name", "weblogic-10.3.6-cve-2017-10271",
+        ])
+        assert rc == 0
+
+        targets_dir = target_fixtures["targets_dir"]
+        with open(targets_dir / "weblogic-10.3.6-cve-2017-10271" / "compose.yaml") as fh:
+            data = yaml.safe_load(fh)
+
+        # Container port should be 7001, not 80
+        port_mapping = data["services"]["eval-target"]["ports"][0]
+        assert ":7001" in str(port_mapping)
 
 
 # ---------------------------------------------------------------------------
@@ -433,3 +848,186 @@ class TestHarnessResults:
         assert rc == 0
         captured = capsys.readouterr()
         assert "No evaluation runs found" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# TestDameIntegration — Dame invocation helpers (mocked subprocess)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.eval
+class TestDameIntegration:
+    """Tests for Dame integration functions."""
+
+    def test_check_dame_image_exists(self, monkeypatch):
+        """When podman image exists returns 0, check_dame_image returns True."""
+        monkeypatch.setattr(
+            subprocess, "run",
+            lambda *a, **kw: subprocess.CompletedProcess(a[0], 0, "", ""),
+        )
+        assert check_dame_image() is True
+
+    def test_check_dame_image_missing(self, monkeypatch, capsys):
+        """When image doesn't exist, prints build instructions and returns False."""
+        monkeypatch.setattr(
+            subprocess, "run",
+            lambda *a, **kw: subprocess.CompletedProcess(a[0], 1, "", ""),
+        )
+        assert check_dame_image() is False
+        captured = capsys.readouterr()
+        assert "dame:linux" in captured.err
+        assert "podman build" in captured.err
+
+    def test_get_container_ip(self, monkeypatch):
+        """Parses podman inspect JSON to extract IP and network name."""
+        inspect_json = json.dumps([{
+            "NetworkSettings": {
+                "Networks": {
+                    "eval-net_default": {
+                        "IPAddress": "10.89.0.5",
+                    }
+                }
+            }
+        }])
+        monkeypatch.setattr(
+            subprocess, "run",
+            lambda *a, **kw: subprocess.CompletedProcess(a[0], 0, inspect_json, ""),
+        )
+        result = get_container_ip("eval-apache-2449")
+        assert result == ("10.89.0.5", "eval-net_default")
+
+    def test_get_container_ip_not_running(self, monkeypatch):
+        """Returns None when container is not running."""
+        monkeypatch.setattr(
+            subprocess, "run",
+            lambda *a, **kw: subprocess.CompletedProcess(a[0], 1, "", "no such container"),
+        )
+        result = get_container_ip("nonexistent")
+        assert result is None
+
+    def test_prepare_dame_artifacts(self, tmp_path):
+        """Creates target IP subdirectory with CAS context and PTT."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        cas_dir = workspace / "cas"
+        cas_dir.mkdir()
+
+        # Create source files
+        (cas_dir / "context.yaml").write_text("target: {ip: 10.0.0.1}\n")
+        (workspace / "ptt.yaml").write_text("engagement: {status: pending}\n")
+
+        artifacts = prepare_dame_artifacts(workspace, "10.89.0.5")
+
+        assert artifacts == workspace / "10.89.0.5"
+        assert (artifacts / "context.yaml").exists()
+        assert (artifacts / "ptt.yaml").exists()
+        assert "pending" in (artifacts / "ptt.yaml").read_text()
+
+    def test_collect_dame_results(self, tmp_path):
+        """Copies Dame's modified PTT back to workspace root."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        (workspace / "ptt.yaml").write_text("original template\n")
+
+        # Simulate Dame writing modified PTT
+        dame_dir = workspace / "10.89.0.5"
+        dame_dir.mkdir()
+        (dame_dir / "ptt.yaml").write_text("engagement: {status: in_progress}\n")
+
+        assert collect_dame_results(workspace, "10.89.0.5") is True
+        assert "in_progress" in (workspace / "ptt.yaml").read_text()
+
+    def test_collect_dame_results_missing(self, tmp_path):
+        """Returns False when Dame didn't produce a PTT."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+
+        assert collect_dame_results(workspace, "10.89.0.5") is False
+
+    def test_invoke_dame_success(self, monkeypatch, tmp_path):
+        """Verifies podman run command args and log file creation."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        dame_dir = workspace / "10.89.0.5"
+        dame_dir.mkdir()
+        (dame_dir / "ptt.yaml").write_text("modified ptt\n")
+
+        # Create minimal prep dir for eval extension copy
+        prep_dir = tmp_path / "prep"
+        prep_dir.mkdir()
+        (prep_dir / "gemini-extension.json").write_text('{"mcpServers": {}}')
+        (prep_dir / "gemini-extension-eval.json").write_text('{"mcpServers": {}}')
+
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key-123")
+
+        captured_cmd = []
+        def mock_run(cmd, **kwargs):
+            captured_cmd.extend(cmd)
+            return subprocess.CompletedProcess(cmd, 0, "dame output", "")
+
+        monkeypatch.setattr(subprocess, "run", mock_run)
+
+        result = invoke_dame(
+            "10.89.0.5", workspace, "eval-net", 300,
+            prep_dir=prep_dir,
+        )
+        assert result is True
+
+        # Verify key command arguments
+        assert "podman" in captured_cmd
+        assert "--network" in captured_cmd
+        assert "eval-net" in captured_cmd
+        assert "dame:linux" in captured_cmd
+        assert "/attack 10.89.0.5" in captured_cmd
+
+        # Verify log file written
+        assert (workspace / "dame.log").exists()
+        log_content = (workspace / "dame.log").read_text()
+        assert "dame output" in log_content
+
+    def test_invoke_dame_timeout(self, monkeypatch, tmp_path):
+        """Returns based on PTT existence when Dame times out."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key-123")
+
+        def mock_run(cmd, **kwargs):
+            raise subprocess.TimeoutExpired(cmd, 5)
+
+        monkeypatch.setattr(subprocess, "run", mock_run)
+
+        # No PTT written before timeout
+        result = invoke_dame("10.89.0.5", workspace, "eval-net", 5)
+        assert result is False
+
+    def test_invoke_dame_missing_api_key(self, monkeypatch, tmp_path, capsys):
+        """Returns False and prints error when GEMINI_API_KEY not set."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+        result = invoke_dame("10.89.0.5", workspace, "eval-net", 300)
+        assert result is False
+        captured = capsys.readouterr()
+        assert "GEMINI_API_KEY" in captured.err
+
+    def test_get_compose_container_name(self, tmp_path):
+        """Extracts container_name from compose.yaml."""
+        compose = tmp_path / "compose.yaml"
+        compose.write_text(yaml.dump({
+            "services": {
+                "eval-target": {
+                    "image": "docker.io/vulhub/httpd:2.4.49",
+                    "container_name": "eval-apache-2449",
+                }
+            }
+        }))
+        assert get_compose_container_name(compose) == "eval-apache-2449"
+
+    def test_get_compose_container_name_missing(self, tmp_path):
+        """Returns None when compose has no container_name."""
+        compose = tmp_path / "compose.yaml"
+        compose.write_text(yaml.dump({
+            "services": {"web": {"image": "nginx"}}
+        }))
+        assert get_compose_container_name(compose) is None

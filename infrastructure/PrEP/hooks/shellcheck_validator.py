@@ -16,7 +16,6 @@ Output (stdout): JSON response using Gemini CLI HookOutput format:
 import sys
 import json
 import subprocess
-import tempfile
 import re
 from pathlib import Path
 
@@ -30,7 +29,7 @@ SHELL_TOOLS = {
 }
 
 MAX_ERRORS = 5
-SHELLCHECK_TIMEOUT = 5  # seconds
+SHELLCHECK_TIMEOUT = 3  # seconds (keep well under gemini-cli's 5s hook timeout)
 
 # =============================================================================
 # Dangerous Command Patterns (Context Explosion Prevention)
@@ -122,11 +121,16 @@ def run_shellcheck(command: str) -> tuple[bool, str]:
     """
     Run shellcheck on a command.
 
+    Imports subprocess/tempfile lazily to avoid cold-start overhead when
+    the dangerous-pattern check already blocks the command.
+
     Returns:
         (is_valid, message) - True if valid or shellcheck unavailable
     """
     if not command or not command.strip():
         return True, ""
+
+    import tempfile
 
     # Write command to temp file with shebang
     with tempfile.NamedTemporaryFile(

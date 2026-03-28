@@ -239,7 +239,7 @@ targets:
 
 ### VulHub Catalog
 
-`tests/eval/vulnhub_catalog.yaml` is a curated list of VulHub images verified to work with podman. Used by the `search` and `add` CLI commands:
+`tests/eval/vulnhub_catalog.yaml` is a curated list of 28 VulHub images verified to work with podman. Used by the `search` and `add` CLI commands. The catalog covers services including HTTP, Redis, DNS, SSH, SMB, OpenWire, ZeroMQ, and Zabbix trapper. Example entries:
 
 ```yaml
 catalog:
@@ -300,16 +300,15 @@ catalog:
     notes: "LFI via phpMyAdmin. Session file inclusion for RCE."
 ```
 
-### Starting Target Library
+### Target Library
 
-Phase 1 ships with 2 targets to prove the framework:
+Phase 1 shipped with 2 targets. The library has since been expanded to 23 targets across 3 difficulty tiers, covering 9+ service types and 14+ attack types. See the [eval framework guide](../eval-framework-guide.md) for the full target table.
 
-| Target | VulHub Image | Difficulty | Tests |
-|--------|-------------|------------|-------|
-| Apache 2.4.49 path traversal | `vulhub/httpd:2.4.49` | Easy | Path traversal → RCE via CGI |
-| Tomcat PUT upload | `vulhub/tomcat:8.5.19` | Easy | PUT method file upload → JSP webshell |
+**Difficulty distribution:** 9 easy, 11 medium, 3 hard
 
-Both are well-documented CVEs with reliable exploits. Starting with easy targets validates the framework before adding harder scenarios.
+**Service coverage:** HTTP, Redis, DNS, SSH, SMB, OpenWire, ZeroMQ, Elasticsearch, Zabbix trapper
+
+**Multi-container targets:** php-fpm-rce (2), confluence-ognl-injection (2), kibana-prototype-pollution (2), zabbix-trapper-rce (4)
 
 ### Network Topology During Eval
 
@@ -323,7 +322,25 @@ eval-net (bridge)
 
 No gluetun, no VPN, no split-tunnel. Dame talks directly to the eval target on the bridge network.
 
-## Eval Harness CLI
+## Eval Runner (Wave-Based)
+
+**File:** `scripts/eval_runner.py`
+
+The wave runner orchestrates multi-target evaluation runs for iterative hill-climbing. It groups targets into waves (defined in `tests/eval/waves.yaml`), aggregates results by objective category, manages baselines for regression detection, and recommends what to fix next.
+
+See `docs/plans/2026-03-26-eval-hill-climb-plan.md` for the full hill-climb methodology and wave definitions.
+
+```bash
+uv run scripts/eval_runner.py waves                    # list defined waves
+uv run scripts/eval_runner.py run wave1 --dry-run      # validate pipeline
+uv run scripts/eval_runner.py run wave1                # live run
+uv run scripts/eval_runner.py run wave1 --baseline     # compare against baseline
+uv run scripts/eval_runner.py baseline wave1           # save baseline
+uv run scripts/eval_runner.py compare wave1            # regression check
+uv run scripts/eval_runner.py summary <run-dir>        # view past results
+```
+
+## Eval Harness CLI (Single Target)
 
 **File:** `scripts/eval_harness.py`
 
@@ -341,7 +358,7 @@ uv run scripts/eval_harness.py list --target apache-2.4.49-cve-2021-41773 --verb
 Output:
 
 ```
-Eval Target Library (2 targets)
+Eval Target Library (23 targets)
 ─────────────────────────────────────────────────────────────
 NAME                              DIFF   SURFACE     PRIMARY CVE
 apache-2.4.49-cve-2021-41773     easy   http        CVE-2021-41773
@@ -643,8 +660,8 @@ Reports mean/min/max/stddev across N runs per config to handle LLM non-determini
 ### Phase 1: Core Framework
 
 - Ground truth schema + validation
-- 2 targets: Apache 2.4.49, Tomcat 8.5.19 (with pre-baked CAS/PTT, planted flags)
-- VulHub catalog (8 curated entries)
+- 23 targets across easy/medium/hard tiers (with pre-baked CAS/PTT, planted flags)
+- VulHub catalog (28 curated entries)
 - Target registry
 - Scorer (3-pass: objectives, penalties, efficiency)
 - Harness CLI: `list`, `search`, `add`, `run`, `verify`, `results`

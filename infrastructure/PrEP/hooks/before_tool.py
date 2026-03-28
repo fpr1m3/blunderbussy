@@ -24,14 +24,29 @@ from pathlib import Path
 # Add parent directory for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from session_state import SessionStateManager
+# Lazy imports — session_state uses pydantic which takes 1-3s cold start.
+# Only import when actually needed (cookie check with curl -b, or query dedup).
+_session_state_mgr_class = None
+_command_utils = None
 
-# Import command splitting utility
-try:
-    from command_utils import extract_commands
-    HAS_COMMAND_UTILS = True
-except ImportError:
-    HAS_COMMAND_UTILS = False
+
+def _get_session_state_manager():
+    global _session_state_mgr_class
+    if _session_state_mgr_class is None:
+        from session_state import SessionStateManager
+        _session_state_mgr_class = SessionStateManager
+    return _session_state_mgr_class
+
+
+def _get_extract_commands():
+    global _command_utils
+    if _command_utils is None:
+        try:
+            from command_utils import extract_commands
+            _command_utils = extract_commands
+        except ImportError:
+            _command_utils = False
+    return _command_utils if _command_utils else None
 
 
 def log_debug(msg: str):
@@ -123,7 +138,7 @@ def check_cookie_staleness(command: str, target: str) -> str | None:
 
     try:
         base_path = os.environ.get("ARTIFACTS_PATH", "/artifacts")
-        mgr = SessionStateManager.from_target(target, base_path=base_path)
+        mgr = _get_session_state_manager().from_target(target, base_path=base_path)
 
         if not mgr.state or not mgr.state.last_auth_timestamp:
             return None
@@ -160,14 +175,28 @@ def main():
     target = get_target_from_env()
 
     # ======================================================================
+    # Early exit: skip heavy processing for tools that don't need it
+    # ======================================================================
+    SHELL_TOOLS = {"Shell", "bash", "pwncat__command", "execute_command"}
+    if tool_name not in SHELL_TOOLS and tool_name not in QUERY_TOOLS:
+        print(json.dumps({"continue": True}))
+        return
+
+    # ======================================================================
     # Cookie Staleness Check (fires on shell tools with curl -b)
     # ======================================================================
-    if tool_name in {"Shell", "bash", "pwncat__command", "execute_command"}:
+    if tool_name in SHELL_TOOLS:
         command = tool_input.get("command", tool_input.get("cmd", ""))
+        # Cheap substring pre-filter before any heavy imports
+        if not command or not target or ("curl" not in command.lower()) or (" -b " not in command and " --cookie " not in command):
+            print(json.dumps({"continue": True}))
+            return
+
         if command and target:
             # Use command splitter if available
+            extract_commands = _get_extract_commands()
             commands_to_check = [command]
-            if HAS_COMMAND_UTILS:
+            if extract_commands:
                 commands_to_check = extract_commands(command)
 
             for cmd in commands_to_check:
@@ -205,7 +234,7 @@ def main():
     # Check cache
     try:
         base_path = os.environ.get("ARTIFACTS_PATH", "/artifacts")
-        mgr = SessionStateManager.from_target(target, base_path=base_path)
+        mgr = _get_session_state_manager().from_target(target, base_path=base_path)
 
         log_debug(f"Checking cache for {tool_name}: '{query[:50]}{'...' if len(query) > 50 else ''}'")
         cached = mgr.check_query_cache(query, tool_name)
