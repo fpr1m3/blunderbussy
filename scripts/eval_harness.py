@@ -518,6 +518,12 @@ def cmd_run(args) -> int:
         else:
             print("  [2/6] No compose.yaml found, skipping container start.")
 
+        # Phase 2b: Run setup scripts (install + plant flags)
+        if container_started:
+            container_name = get_compose_container_name(compose_path)
+            if container_name:
+                run_setup_scripts(target_name, container_name)
+
         # Phase 3: Dame invocation
         dame_succeeded = False
         qdrant_up = False
@@ -1181,6 +1187,36 @@ def ensure_qdrant_running() -> bool:
     except subprocess.TimeoutExpired:
         print("  WARNING: Qdrant startup timed out.", file=sys.stderr)
         return False
+
+
+def run_setup_scripts(target_name: str, container_name: str) -> None:
+    """Run install.sh and plant_flags.sh inside the target container."""
+    setup_dir = TARGETS_DIR / target_name / "setup"
+
+    for script_name in ["install.sh", "plant_flags.sh"]:
+        script_path = setup_dir / script_name
+        if not script_path.exists():
+            continue
+
+        logger.debug("Running %s in %s", script_name, container_name)
+        try:
+            # Copy script into container then execute
+            dest = f"/tmp/{script_name}"
+            subprocess.run(
+                ["podman", "cp", str(script_path), f"{container_name}:{dest}"],
+                capture_output=True, text=True, timeout=30,
+            )
+            proc = subprocess.run(
+                ["podman", "exec", container_name, "sh", dest],
+                capture_output=True, text=True, timeout=120,
+            )
+            if proc.returncode == 0:
+                print(f"         Setup: {script_name} OK")
+            else:
+                print(f"         Setup: {script_name} failed (exit {proc.returncode})")
+                logger.warning("%s stderr: %s", script_name, proc.stderr[:300])
+        except subprocess.TimeoutExpired:
+            print(f"         Setup: {script_name} timed out")
 
 
 def check_dame_oauth_volume(volume: str = "dame-gemini") -> bool:
