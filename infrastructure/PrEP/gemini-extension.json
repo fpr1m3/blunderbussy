@@ -4,7 +4,7 @@
   "description": "Dame's offensive security extension - skill retrieval, engagement tools, and session state management",
   "mcpServers": {
     "grimoire": {
-      "command": "python3",
+      "command": "/opt/fastembed-venv/bin/python",
       "args": ["/ext/opulence/servers/qdrant-wrapper.py"],
       "env": {
         "QDRANT_URL": "http://qdrant:6333",

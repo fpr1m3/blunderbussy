@@ -4,7 +4,7 @@
   "description": "Dame's offensive security extension (eval mode - no pwncat/reverse shells)",
   "mcpServers": {
     "grimoire": {
-      "command": "python3",
+      "command": "/opt/fastembed-venv/bin/python",
       "args": ["/ext/opulence/servers/qdrant-wrapper.py"],
       "env": {
         "QDRANT_URL": "http://qdrant:6333",
@@ -16,7 +16,7 @@
       "command": "python3",
       "args": ["/ext/opulence/servers/findings-server.py"],
       "env": {
-        "FINDINGS_DIR": "/artifacts"
+        "FINDINGS_DIR": "/app"
       }
     }
   }

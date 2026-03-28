@@ -90,8 +90,9 @@ RUN uv venv /opt/code-analysis-venv && \
 # =============================================================================
 # fastembed: Lightweight ONNX-based embeddings for qdrant-wrapper semantic search
 # Model baked in at build time to avoid download latency in ephemeral containers
-RUN uv pip install --system fastembed && \
-    python3 -c "from fastembed import TextEmbedding; TextEmbedding('sentence-transformers/all-MiniLM-L6-v2')"
+RUN uv venv /opt/fastembed-venv && \
+    uv pip install --python /opt/fastembed-venv/bin/python fastembed && \
+    /opt/fastembed-venv/bin/python -c "from fastembed import TextEmbedding; TextEmbedding('sentence-transformers/all-MiniLM-L6-v2')"
 
 # Install gemini-cli globally (pinned to avoid auto-update issues)
 RUN npm install -g @google/gemini-cli@0.26.0
