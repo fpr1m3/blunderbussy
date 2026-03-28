@@ -197,9 +197,9 @@ def _append_finding(finding: dict) -> None:
 
 def _validate(tool_name: str, args: dict) -> str | None:
     """Return an error message string if validation fails, else None."""
-    # Check required fields
+    # Check required fields (reject absent, None, and empty string)
     for field in REQUIRED_FIELDS.get(tool_name, []):
-        if field not in args or args[field] is None:
+        if field not in args or args[field] is None or args[field] == "":
             return f"Missing required field: '{field}'"
 
     # Check enum values
@@ -209,6 +209,14 @@ def _validate(tool_name: str, args: dict) -> str | None:
                 f"Invalid value for '{field}': '{args[field]}'. "
                 f"Must be one of: {', '.join(allowed)}"
             )
+
+    # Check service_port is integer
+    if "service_port" in args:
+        if not isinstance(args["service_port"], int):
+            try:
+                args["service_port"] = int(args["service_port"])
+            except (ValueError, TypeError):
+                return "Invalid value for 'service_port': must be an integer"
 
     return None
 

@@ -381,7 +381,7 @@ class TestSubmitCredential:
         """All valid credential_type values are accepted."""
         env = _make_env(tmp_path)
         for ctype in ["password", "hash", "key", "token"]:
-            _send_jsonrpc(
+            responses = _send_jsonrpc(
                 [
                     {
                         "method": "tools/call",
@@ -398,6 +398,7 @@ class TestSubmitCredential:
                 ],
                 env,
             )
+            assert responses[0]["result"]["isError"] is False
 
     def test_submit_credential_invalid_type(self, tmp_path):
         env = _make_env(tmp_path)
@@ -469,6 +470,8 @@ class TestSubmitVulnerability:
         assert "Log4Shell RCE" in text
         assert "8080" in text
         assert "CVE-2021-44228" in text
+        # Vulnerability response should NOT include skill nudge
+        assert "activate_skill" not in text
 
         findings = json.loads(_findings_file(tmp_path).read_text())
         assert len(findings) == 1
@@ -544,6 +547,7 @@ class TestSubmitVulnerability:
         )
         result = responses[0]["result"]
         assert result["isError"] is True
+        assert "service_port" in result["content"][0]["text"]
 
 
 class TestMultipleFindingsAppend:
