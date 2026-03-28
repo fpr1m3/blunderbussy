@@ -519,8 +519,8 @@ def cmd_run(args) -> int:
         dame_succeeded = False
         if not container_started:
             print("  [3/6] Dame invocation: SKIPPED (container not running)")
-        elif not os.environ.get("GEMINI_API_KEY"):
-            print("  [3/6] Dame invocation: SKIPPED (GEMINI_API_KEY not set)")
+        elif not check_dame_oauth_volume():
+            print("  [3/6] Dame invocation: SKIPPED (dame-gemini volume not found, run Dame via compose first to auth)")
         elif not check_dame_image():
             print("  [3/6] Dame invocation: SKIPPED (dame:linux image not found)")
         else:
@@ -1137,6 +1137,26 @@ def write_target_files(target_dir: Path, files: dict[str, any], dry_run: bool = 
 PREP_DIR = Path(__file__).parent.parent / "infrastructure" / "PrEP"
 
 
+def check_dame_oauth_volume(volume: str = "dame-gemini") -> bool:
+    """Check if the dame-gemini volume exists (contains OAuth tokens from manual sign-in)."""
+    try:
+        proc = subprocess.run(
+            ["podman", "volume", "inspect", volume],
+            capture_output=True, text=True, timeout=10,
+        )
+        if proc.returncode == 0:
+            return True
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    print(f"  ERROR: Volume '{volume}' not found.", file=sys.stderr)
+    print("  Start Dame via docker-compose and sign in to create OAuth tokens:", file=sys.stderr)
+    print("    podman-compose up -d dame", file=sys.stderr)
+    print("    podman exec -it dame bash  # then run 'gemini' to authenticate", file=sys.stderr)
+    return False
+
+
+
 def check_dame_image(image: str = "dame:linux") -> bool:
     """Check if the Dame container image exists. Prints build instructions if not."""
     try:
@@ -1213,11 +1233,6 @@ def invoke_dame(
     if prep_dir is None:
         prep_dir = PREP_DIR
 
-    api_key = os.environ.get("GEMINI_API_KEY", "")
-    if not api_key:
-        print("  ERROR: GEMINI_API_KEY environment variable not set.", file=sys.stderr)
-        return False
-
     # Prepare eval-mode extension dir (pwncat removed)
     eval_ext_dir = workspace / "_ext"
     if eval_ext_dir.exists():
@@ -1229,13 +1244,15 @@ def invoke_dame(
         shutil.copy2(eval_manifest, eval_ext_dir / "gemini-extension.json")
         logger.debug("Using eval extension manifest (pwncat disabled)")
 
+    # Mount the persistent dame-gemini volume for OAuth credentials
+    # (sign in once via docker-compose Dame, tokens persist in the volume)
     cmd = [
         "podman", "run", "--rm",
         "--network", network,
         "-v", f"{workspace}:/artifacts",
         "-v", f"{eval_ext_dir}:/ext/opulence:ro",
+        "-v", "dame-gemini:/root/.gemini",
         "-e", f"TARGET={target_ip}",
-        "-e", f"GEMINI_API_KEY={api_key}",
         "-e", "GEMINI_FORCE_FILE_STORAGE=true",
         "dame:linux",
         "gemini", "--yolo",
