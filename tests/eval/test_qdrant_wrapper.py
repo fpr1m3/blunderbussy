@@ -107,3 +107,43 @@ class TestHandleFind:
 
         text = result["content"][0]["text"]
         assert "No techniques found" in text
+
+
+def _qdrant_reachable() -> bool:
+    """Check if Qdrant is reachable on localhost for integration tests."""
+    try:
+        req = urllib.request.Request("http://localhost:6333/healthz", method="GET")
+        with urllib.request.urlopen(req, timeout=2):
+            return True
+    except Exception:
+        return False
+
+
+def _fastembed_available() -> bool:
+    """Check if fastembed is installed."""
+    try:
+        import fastembed  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+@pytest.mark.skipif(
+    not _qdrant_reachable() or not _fastembed_available(),
+    reason="Qdrant not running or fastembed not installed",
+)
+class TestQdrantIntegration:
+    """Integration tests requiring a running Qdrant instance with fastembed."""
+
+    def test_search_returns_relevant_results(self):
+        """Searching for 'smb anonymous share' returns technique cards."""
+        qdrant_wrapper._available = None  # Reset cache
+        qdrant_wrapper.QDRANT_URL = "http://localhost:6333"
+
+        result = qdrant_wrapper.handle_find("smb anonymous share enumeration")
+        text = result["content"][0]["text"]
+
+        # Should return technique cards, not unavailable/error message
+        assert "QDRANT UNAVAILABLE" not in text
+        assert "EMBEDDING MODEL UNAVAILABLE" not in text
+        assert "##" in text  # Has at least one technique card header
