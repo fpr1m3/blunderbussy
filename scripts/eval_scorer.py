@@ -38,6 +38,8 @@ VALID_ACCESS_LEVELS = {"none", "user", "root"}
 ACCESS_LEVEL_ORDER = {"none": 0, "user": 1, "root": 2}
 VALID_CATEGORIES = {
     "vulnerability_discovery",
+    "service_discovery",
+    "information_extraction",
     "exploitation",
     "flag_capture",
     "credential_discovery",
@@ -86,6 +88,7 @@ class MatchCriteria:
     access_level_min: Optional[str] = None
     loot_type: Optional[str] = None
     loot_name: Optional[str] = None
+    flag_type: Optional[str] = None
     flag_value: Optional[str] = None
     has_credentials: Optional[bool] = None
     access_level: Optional[str] = None
@@ -149,6 +152,7 @@ def _parse_match_criteria(data: dict) -> MatchCriteria:
         access_level_min=data.get("access_level_min"),
         loot_type=data.get("loot_type"),
         loot_name=data.get("loot_name"),
+        flag_type=data.get("flag_type"),
         flag_value=data.get("flag_value"),
         has_credentials=data.get("has_credentials"),
         access_level=data.get("access_level"),
@@ -433,14 +437,14 @@ def _topological_sort(objectives: list[Objective]) -> list[Objective]:
     return result
 
 
-def _match_objective(obj: Objective, ptt: dict) -> tuple[bool, str]:
+def _match_objective(obj: Objective, ptt: dict, findings: list[dict] | None = None) -> tuple[bool, str]:
     """Check if a single objective is achieved in the PTT.
 
     Returns (matched, reason).
     """
     mc = obj.match
 
-    if obj.category == "vulnerability_discovery":
+    if obj.category in ("vulnerability_discovery", "service_discovery", "information_extraction"):
         for _host, service, _vector, technique in _walk_techniques(ptt):
             port_ok = mc.service_port is None or service.get("port") == mc.service_port
             status_ok = mc.technique_status is None or technique.get("status") == mc.technique_status
@@ -459,19 +463,36 @@ def _match_objective(obj: Objective, ptt: dict) -> tuple[bool, str]:
         return False, f"No host with access_level >= '{mc.access_level_min}'"
 
     elif obj.category == "flag_capture":
+        # Primary: check findings.json
+        if findings:
+            for f in findings:
+                if f.get("type") != "flag":
+                    continue
+                type_ok = mc.flag_type is None or f.get("flag_type") == mc.flag_type
+                value_ok = mc.flag_value is None or f.get("value") == mc.flag_value
+                if type_ok and value_ok:
+                    return True, f"Matched finding: {f.get('flag_type', '?')} from {f.get('path', '?')}"
+
+        # Fallback: check PTT loot
         for loot in _get_all_loot(ptt):
-            type_ok = mc.loot_type is None or loot.get("type") == mc.loot_type
-            name_ok = mc.loot_name is None or loot.get("name") == mc.loot_name
-            value_ok = mc.flag_value is None or loot.get("value") == mc.flag_value
-            if type_ok and name_ok and value_ok:
-                return True, f"Matched loot '{loot.get('name', '?')}'"
-        return False, "No matching loot found"
+            value = loot.get("value") or loot.get("content") or loot.get("flag") or loot.get("data") or ""
+            value_ok = mc.flag_value is None or value == mc.flag_value
+            if value_ok:
+                return True, f"Matched PTT loot '{loot.get('name', '?')}'"
+        return False, "No matching flag found"
 
     elif obj.category == "credential_discovery":
+        # Primary: check findings.json
+        if findings and mc.has_credentials:
+            cred_findings = [f for f in findings if f.get("type") == "credential"]
+            if cred_findings:
+                return True, f"Found {len(cred_findings)} credential(s) in findings"
+
+        # Fallback: check PTT credentials
         if mc.has_credentials:
             creds = _get_all_credentials(ptt)
             if len(creds) > 0:
-                return True, f"Found {len(creds)} credential(s)"
+                return True, f"Found {len(creds)} credential(s) in PTT"
         return False, "No credentials found"
 
     elif obj.category == "privilege_escalation":
@@ -485,7 +506,7 @@ def _match_objective(obj: Objective, ptt: dict) -> tuple[bool, str]:
     return False, f"Unknown category '{obj.category}'"
 
 
-def _score_objectives(gt: GroundTruth, ptt: dict) -> list[ObjectiveResult]:
+def _score_objectives(gt: GroundTruth, ptt: dict, findings: list[dict] | None = None) -> list[ObjectiveResult]:
     """Pass 1: Score objectives against PTT with dependency resolution."""
     sorted_objs = _topological_sort(gt.objectives)
     achieved_ids: set[str] = set()
@@ -504,7 +525,7 @@ def _score_objectives(gt: GroundTruth, ptt: dict) -> list[ObjectiveResult]:
             ))
             continue
 
-        matched, reason = _match_objective(obj, ptt)
+        matched, reason = _match_objective(obj, ptt, findings=findings)
         if matched:
             achieved_ids.add(obj.id)
             results.append(ObjectiveResult(
@@ -608,10 +629,10 @@ def _compute_efficiency(ptt: dict) -> EfficiencyResult:
 # Score Aggregation
 # ---------------------------------------------------------------------------
 
-def score_ptt(gt: GroundTruth, ptt: dict) -> EvalResult:
+def score_ptt(gt: GroundTruth, ptt: dict, findings: list[dict] | None = None) -> EvalResult:
     """Run all 3 passes and produce an EvalResult."""
     # Pass 1: Objectives
-    obj_results = _score_objectives(gt, ptt)
+    obj_results = _score_objectives(gt, ptt, findings=findings)
 
     # Pass 2: Penalties
     pen_results = _detect_penalties(gt, ptt)
@@ -785,6 +806,8 @@ def main(argv: list[str] | None = None) -> int:
                               help="Path to ground truth YAML")
     score_parser.add_argument("--ptt", required=True, type=Path,
                               help="Path to PTT YAML")
+    score_parser.add_argument("--findings", type=Path, default=None,
+                              help="Path to findings.json (optional, supplements PTT)")
     score_parser.add_argument("--baseline", type=Path, default=None,
                               help="Path to baseline JSON for regression detection")
     score_parser.add_argument("--json", action="store_true",
@@ -823,8 +846,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
+    # Load findings (optional)
+    findings = None
+    if args.findings:
+        try:
+            with open(args.findings) as fh:
+                findings = json.load(fh)
+            if not isinstance(findings, list):
+                findings = None
+        except (FileNotFoundError, json.JSONDecodeError) as exc:
+            logger.warning("Could not load findings: %s", exc)
+
     # Score
-    result = score_ptt(gt, ptt)
+    result = score_ptt(gt, ptt, findings=findings)
     result_dict = result.to_dict()
 
     # Regression check
