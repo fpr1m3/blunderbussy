@@ -522,7 +522,7 @@ def cmd_run(args) -> int:
         if container_started:
             container_name = get_compose_container_name(compose_path)
             if container_name:
-                run_setup_scripts(target_name, container_name)
+                run_setup_scripts(target_name, container_name, compose_path)
 
         # Phase 3: Dame invocation
         dame_succeeded = False
@@ -1189,34 +1189,50 @@ def ensure_qdrant_running() -> bool:
         return False
 
 
-def run_setup_scripts(target_name: str, container_name: str) -> None:
-    """Run install.sh and plant_flags.sh inside the target container."""
+def _exec_setup_script(container_name: str, script_path: Path) -> bool:
+    """Copy a script into a container and execute as root. Returns True on success."""
+    script_name = script_path.name
+    logger.debug("Running %s in %s", script_name, container_name)
+    try:
+        dest = f"/tmp/{script_name}"
+        subprocess.run(
+            ["podman", "cp", str(script_path), f"{container_name}:{dest}"],
+            capture_output=True, text=True, timeout=30,
+        )
+        proc = subprocess.run(
+            ["podman", "exec", "--user", "root", container_name, "sh", dest],
+            capture_output=True, text=True, timeout=120,
+        )
+        if proc.returncode == 0:
+            print(f"         Setup: {script_name} OK")
+            return True
+        else:
+            print(f"         Setup: {script_name} failed (exit {proc.returncode})")
+            logger.warning("%s stderr: %s", script_name, proc.stderr[:300])
+            return False
+    except subprocess.TimeoutExpired:
+        print(f"         Setup: {script_name} timed out")
+        return False
+
+
+def run_setup_scripts(target_name: str, container_name: str, compose_path: Path) -> None:
+    """Run install.sh and plant_flags.sh inside the target container.
+
+    If install.sh exists, runs it then restarts the container (some targets
+    need service config changes that require a restart). plant_flags.sh runs
+    after the restart.
+    """
     setup_dir = TARGETS_DIR / target_name / "setup"
 
-    for script_name in ["install.sh", "plant_flags.sh"]:
-        script_path = setup_dir / script_name
-        if not script_path.exists():
-            continue
+    # Phase 1: install.sh (may change service config — script handles its own restarts)
+    install_script = setup_dir / "install.sh"
+    if install_script.exists():
+        _exec_setup_script(container_name, install_script)
 
-        logger.debug("Running %s in %s", script_name, container_name)
-        try:
-            # Copy script into container then execute
-            dest = f"/tmp/{script_name}"
-            subprocess.run(
-                ["podman", "cp", str(script_path), f"{container_name}:{dest}"],
-                capture_output=True, text=True, timeout=30,
-            )
-            proc = subprocess.run(
-                ["podman", "exec", "--user", "root", container_name, "sh", dest],
-                capture_output=True, text=True, timeout=120,
-            )
-            if proc.returncode == 0:
-                print(f"         Setup: {script_name} OK")
-            else:
-                print(f"         Setup: {script_name} failed (exit {proc.returncode})")
-                logger.warning("%s stderr: %s", script_name, proc.stderr[:300])
-        except subprocess.TimeoutExpired:
-            print(f"         Setup: {script_name} timed out")
+    # Phase 2: plant_flags.sh (after restart so flags survive)
+    flags_script = setup_dir / "plant_flags.sh"
+    if flags_script.exists():
+        _exec_setup_script(container_name, flags_script)
 
 
 def check_dame_oauth_volume(volume: str = "dame-gemini") -> bool:
@@ -1298,10 +1314,12 @@ def prepare_dame_artifacts(workspace: Path, target_ip: str) -> Path:
         cas_content = cas_content.replace("EVAL_TARGET_IP", target_ip)
         (artifacts_dir / "context.yaml").write_text(cas_content)
 
-    # Copy PTT template
+    # Copy PTT template, replacing placeholder IP with real target IP
     ptt_src = workspace / "ptt.yaml"
     if ptt_src.exists():
-        shutil.copy2(ptt_src, artifacts_dir / "ptt.yaml")
+        ptt_content = ptt_src.read_text()
+        ptt_content = ptt_content.replace("EVAL_TARGET_IP", target_ip)
+        (artifacts_dir / "ptt.yaml").write_text(ptt_content)
 
     logger.debug("Prepared Dame artifacts in %s", artifacts_dir)
     return artifacts_dir

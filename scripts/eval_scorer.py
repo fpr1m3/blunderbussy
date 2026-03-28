@@ -447,7 +447,13 @@ def _match_objective(obj: Objective, ptt: dict, findings: list[dict] | None = No
     if obj.category in ("vulnerability_discovery", "service_discovery", "information_extraction"):
         for _host, service, _vector, technique in _walk_techniques(ptt):
             port_ok = mc.service_port is None or service.get("port") == mc.service_port
-            status_ok = mc.technique_status is None or technique.get("status") == mc.technique_status
+            # Accept "exploited" as equivalent to "success" (Dame uses either)
+            tech_status = technique.get("status", "")
+            _SUCCESS = {"success", "exploited"}
+            if mc.technique_status in _SUCCESS:
+                status_ok = tech_status in _SUCCESS
+            else:
+                status_ok = mc.technique_status is None or tech_status == mc.technique_status
             cve_ok = mc.cve is None or technique.get("cve") == mc.cve
             if port_ok and status_ok and cve_ok:
                 return True, f"Matched technique '{technique.get('name', '?')}'"
@@ -599,7 +605,7 @@ def _compute_efficiency(ptt: dict) -> EfficiencyResult:
     for _host, service, _vector, technique in _walk_techniques(ptt):
         attempted += 1
         status = technique.get("status", "unknown")
-        if status == "success":
+        if status in ("success", "exploited"):
             succeeded += 1
         elif status == "failed":
             failed += 1
