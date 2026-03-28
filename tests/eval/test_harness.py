@@ -956,8 +956,7 @@ class TestDameIntegration:
         prep_dir.mkdir()
         (prep_dir / "gemini-extension.json").write_text('{"mcpServers": {}}')
         (prep_dir / "gemini-extension-eval.json").write_text('{"mcpServers": {}}')
-
-        monkeypatch.setenv("GEMINI_API_KEY", "test-key-123")
+        (prep_dir / "GEMINI-eval.md").write_text("# Eval mode")
 
         captured_cmd = []
         def mock_run(cmd, **kwargs):
@@ -976,8 +975,19 @@ class TestDameIntegration:
         assert "podman" in captured_cmd
         assert "--network" in captured_cmd
         assert "eval-net" in captured_cmd
+        assert "opulence_network" in captured_cmd
         assert "dame:linux" in captured_cmd
-        assert "/attack 10.89.0.5" in captured_cmd
+        assert any("/attack 10.89.0.5" in arg for arg in captured_cmd)
+        # Verify OAuth volume is mounted instead of API key
+        assert "dame-gemini:/root/.gemini" in captured_cmd
+        assert not any("GEMINI_API_KEY" in arg for arg in captured_cmd)
+        # Verify workspace mounted at /app
+        assert f"{workspace}:/app" in captured_cmd
+
+        # Verify eval GEMINI.md was copied into extension dir
+        eval_gemini = workspace / "_ext" / "GEMINI.md"
+        assert eval_gemini.exists()
+        assert "Eval mode" in eval_gemini.read_text()
 
         # Verify log file written
         assert (workspace / "dame.log").exists()
@@ -999,17 +1009,6 @@ class TestDameIntegration:
         # No PTT written before timeout
         result = invoke_dame("10.89.0.5", workspace, "eval-net", 5)
         assert result is False
-
-    def test_invoke_dame_missing_api_key(self, monkeypatch, tmp_path, capsys):
-        """Returns False and prints error when GEMINI_API_KEY not set."""
-        workspace = tmp_path / "workspace"
-        workspace.mkdir()
-        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-
-        result = invoke_dame("10.89.0.5", workspace, "eval-net", 300)
-        assert result is False
-        captured = capsys.readouterr()
-        assert "GEMINI_API_KEY" in captured.err
 
     def test_get_compose_container_name(self, tmp_path):
         """Extracts container_name from compose.yaml."""

@@ -54,11 +54,14 @@ logger = logging.getLogger(__name__)
 # Path Constants
 # ---------------------------------------------------------------------------
 
-EVAL_DIR = Path(__file__).parent.parent / "tests" / "eval"
+PROJECT_ROOT = Path(__file__).parent.parent
+EVAL_DIR = PROJECT_ROOT / "tests" / "eval"
 TARGETS_DIR = EVAL_DIR / "targets"
 REGISTRY_PATH = EVAL_DIR / "registry.yaml"
 CATALOG_PATH = EVAL_DIR / "vulnhub_catalog.yaml"
 RESULTS_DIR = EVAL_DIR / "results"
+COMPOSE_FILE = PROJECT_ROOT / "docker-compose.yml"
+QDRANT_NETWORK = "opulence_network"
 
 # ---------------------------------------------------------------------------
 # ANSI colour helpers
@@ -200,7 +203,7 @@ def cmd_list(args) -> int:
             t.get("name", "?"),
             t.get("difficulty", "?"),
             surface,
-            t.get("primary_cve", "N/A"),
+            t.get("primary_cve") or "N/A",
         ))
 
     return 0
@@ -517,6 +520,7 @@ def cmd_run(args) -> int:
 
         # Phase 3: Dame invocation
         dame_succeeded = False
+        qdrant_up = False
         if not container_started:
             print("  [3/6] Dame invocation: SKIPPED (container not running)")
         elif not check_dame_oauth_volume():
@@ -524,6 +528,9 @@ def cmd_run(args) -> int:
         elif not check_dame_image():
             print("  [3/6] Dame invocation: SKIPPED (dame:linux image not found)")
         else:
+            qdrant_up = ensure_qdrant_running()
+            if not qdrant_up:
+                print("         WARNING: Qdrant not available, grimoire lookups will fail.")
             print("  [3/6] Invoking Dame agent...")
             container_name = get_compose_container_name(compose_path)
             if not container_name:
@@ -1137,6 +1144,45 @@ def write_target_files(target_dir: Path, files: dict[str, any], dry_run: bool = 
 PREP_DIR = Path(__file__).parent.parent / "infrastructure" / "PrEP"
 
 
+def ensure_qdrant_running() -> bool:
+    """Ensure Qdrant is running via the main docker-compose. Starts it if needed."""
+    try:
+        # Check if already running
+        proc = subprocess.run(
+            ["podman", "inspect", "--format", "{{.State.Running}}", "qdrant"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if proc.returncode == 0 and "true" in proc.stdout.lower():
+            logger.debug("Qdrant already running")
+            return True
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # Start via main docker-compose
+    if not COMPOSE_FILE.exists():
+        print("  WARNING: docker-compose.yml not found, cannot start Qdrant.", file=sys.stderr)
+        return False
+
+    print("  Starting Qdrant...")
+    try:
+        proc = subprocess.run(
+            ["podman-compose", "-f", str(COMPOSE_FILE), "up", "-d", "qdrant"],
+            capture_output=True, text=True, timeout=120,
+        )
+        if proc.returncode == 0:
+            logger.debug("Qdrant started via docker-compose")
+            return True
+        else:
+            print(f"  WARNING: Failed to start Qdrant: {proc.stderr.strip()}", file=sys.stderr)
+            return False
+    except FileNotFoundError:
+        print("  WARNING: podman-compose not found.", file=sys.stderr)
+        return False
+    except subprocess.TimeoutExpired:
+        print("  WARNING: Qdrant startup timed out.", file=sys.stderr)
+        return False
+
+
 def check_dame_oauth_volume(volume: str = "dame-gemini") -> bool:
     """Check if the dame-gemini volume exists (contains OAuth tokens from manual sign-in)."""
     try:
@@ -1244,19 +1290,30 @@ def invoke_dame(
         shutil.copy2(eval_manifest, eval_ext_dir / "gemini-extension.json")
         logger.debug("Using eval extension manifest (pwncat disabled)")
 
-    # Mount the persistent dame-gemini volume for OAuth credentials
-    # (sign in once via docker-compose Dame, tokens persist in the volume)
+    # Copy eval-specific GEMINI.md (no pwncat, /app paths) into extension dir
+    eval_gemini_md = prep_dir / "GEMINI-eval.md"
+    if eval_gemini_md.exists():
+        shutil.copy2(eval_gemini_md, eval_ext_dir / "GEMINI.md")
+        logger.debug("Using eval-specific GEMINI.md (no pwncat)")
+
+    # Mount workspace at /app (gemini trusts by default), OAuth via dame-gemini volume,
+    # connect to both eval network (target) and opulence_network (Qdrant)
     cmd = [
         "podman", "run", "--rm",
         "--network", network,
-        "-v", f"{workspace}:/artifacts",
+        "--network", QDRANT_NETWORK,
+        "--entrypoint", "",
+        "-v", f"{workspace}:/app",
         "-v", f"{eval_ext_dir}:/ext/opulence:ro",
         "-v", "dame-gemini:/root/.gemini",
         "-e", f"TARGET={target_ip}",
         "-e", "GEMINI_FORCE_FILE_STORAGE=true",
         "dame:linux",
-        "gemini", "--yolo",
-        "-p", f"/attack {target_ip}",
+        "bash", "-c",
+        "mkdir -p /root/.gemini/extensions && "
+        "cp -f /etc/gemini/settings.json /root/.gemini/settings.json && "
+        "gemini extensions link /ext/opulence --consent >/dev/null 2>&1; "
+        f"gemini --yolo -p '/attack {target_ip}'",
     ]
 
     logger.debug("Dame command: %s", " ".join(cmd))
@@ -1281,8 +1338,15 @@ def invoke_dame(
         ptt_path = workspace / target_ip / "ptt.yaml"
         return ptt_path.exists()
 
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
         print(f"  WARNING: Dame timed out after {timeout_seconds}s")
+        # Write whatever output was captured before timeout
+        log_path = workspace / "dame.log"
+        with open(log_path, "w") as fh:
+            fh.write(f"=== STDOUT ===\n{(exc.stdout or b'').decode(errors='replace')}\n")
+            fh.write(f"=== STDERR ===\n{(exc.stderr or b'').decode(errors='replace')}\n")
+            fh.write(f"=== TIMED OUT after {timeout_seconds}s ===\n")
+        logger.debug("Dame timeout log written to %s", log_path)
         # Still check for partial PTT
         ptt_path = workspace / target_ip / "ptt.yaml"
         return ptt_path.exists()
