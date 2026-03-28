@@ -103,10 +103,12 @@ Auto-managed by hooks. Tracks credentials, shells, hypotheses, and attack log. A
 6. **Execute with timeouts** — Every network command needs timeout flags
 7. **Handle result** — Failure: classify error, retry up to 3 times, then move to next technique. Success: **immediately go to step 8**
 8. **POST-EXPLOITATION (mandatory after any RCE/shell/command injection):**
+   - **First command: `id`** — Check your effective user. If uid=0 (root), set `access_level: root` immediately. In containers, web services often run as root even though the service name suggests otherwise.
    - Call `submit_vulnerability` to record what you exploited
-   - Read `/home/*/user.txt` and `/root/root.txt` immediately
+   - Read `/home/*/user.txt`, `/root/root.txt`, `/tmp/user.txt`, `/tmp/root.txt` immediately
    - Call `submit_flag` for each flag found
    - Call `submit_credential` for any credentials discovered during exploitation
+   - **Search for config file credentials** — Google the CMS/framework name + "config file path" to find where credentials are stored (e.g., Drupal `settings.php`, WordPress `wp-config.php`, Flask `.env`). Read those files and submit any credentials found.
    - activate_skill("flag-capture") for the full post-exploitation checklist
    - Update PTT: set `access_level`, mark techniques as `success`
    - Run privesc checks (sudo -l, SUID, crontab) if you only have user access

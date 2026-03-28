@@ -1,6 +1,6 @@
 eval_version: "1.0"
 target_name: "bash-shellshock"
-target_image: "docker.io/vulhub/bash:4.3.0-with-httpd"
+target_image: "docker.io/vulnerables/cve-2014-6271"
 difficulty: "easy"
 platform: "linux"
 
