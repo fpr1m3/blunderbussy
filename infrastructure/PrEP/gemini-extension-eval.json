@@ -1,7 +1,7 @@
 {
   "name": "opulence",
   "version": "1.3.0",
-  "description": "Dame's offensive security extension - skill retrieval, engagement tools, and session state management",
+  "description": "Dame's offensive security extension (eval mode - no pwncat/reverse shells)",
   "mcpServers": {
     "grimoire": {
       "command": "python3",
@@ -17,14 +17,6 @@
       "args": ["/ext/opulence/servers/findings-server.py"],
       "env": {
         "FINDINGS_DIR": "/artifacts"
-      }
-    },
-    "pwncat": {
-      "command": "/opt/pwncat-server-venv/bin/python",
-      "args": ["/ext/opulence/servers/pwncat-server.py"],
-      "env": {
-        "PYTHONUNBUFFERED": "1",
-        "PYTHONPATH": "/ext/opulence"
       }
     }
   }

@@ -28,15 +28,32 @@ Hanging commands burn your entire turn budget. Use these defaults:
 | hydra | `-W` + `-T` | 5 / 30 |
 | smbclient | `-t` | 30s |
 
-### 3. Limit output size
+### 3. Shell command constraints
+
+The CLI's bash parser does **not** support heredocs (`<<EOF`). Use `printf` or `echo` instead:
+```bash
+# WRONG — will be rejected by the bash parser
+cat <<EOF > /tmp/wordlist.txt
+admin
+test
+EOF
+
+# CORRECT
+printf 'admin\ntest\n' > /tmp/wordlist.txt
+
+# CORRECT — multi-line with echo
+echo -e "admin\ntest" > /tmp/wordlist.txt
+```
+
+### 4. Limit output size
 
 Large output (raw HTML, git history, binary strings) pollutes your context window and risks crashing the session. Pipe web content through `html2text` or `head`, limit `git log` with `--oneline -n 20`, redirect large output to files. The `after_tool` hook truncates output exceeding 8KB and strips JavaScript/CSS, but preventing bloat at the source is faster and more reliable.
 
-### 4. Stay in scope
+### 5. Stay in scope
 
 Only target IPs and hosts defined in `/mission/scope.yaml`. If you discover adjacent hosts during post-exploitation, verify they are in scope before engaging.
 
-### 5. Get LHOST before any reverse shell
+### 6. Get LHOST before any reverse shell
 
 Call `pwncat__get_lhost()` to get the VPN tunnel IP (10.10.14.x). This is the only IP reachable by targets. Your container IP (10.89.x.x) is not routable to the target network.
 
@@ -47,6 +64,13 @@ Primary intelligence. Contains hosts, ports, services, versions, vulnerabilities
 
 **PTT** — `/artifacts/{target}/ptt.yaml`
 Task tree tracking exploitation progress. Tells you which techniques have been tried, which failed, and which are still pending. Check this before selecting techniques to avoid repeating failed work.
+
+**CRITICAL: Update the PTT immediately after every discovery or technique result.** Do not wait until the end of the engagement. The PTT is how your work is evaluated — if you discover a vulnerability but don't record it, it didn't happen. After each significant action:
+- Mark technique `status: "success"` or `status: "failed"`
+- Update `access_level` when you gain access (none → user → root)
+- Add flags to `findings.loot` as soon as captured
+- Add credentials to `findings.credentials` when discovered
+- Set engagement `status: "exploited"` when you achieve RCE
 
 **Session State** — `/artifacts/{target}/session/`
 Auto-managed by hooks. Tracks credentials, shells, hypotheses, and attack log. A memory block is injected at session start with current state.
@@ -63,8 +87,17 @@ Auto-managed by hooks. Tracks credentials, shells, hypotheses, and attack log. A
    - P4: Brute force (last resort — risk of lockout)
 5. **Research technique** — Query qdrant-find with `"{platform} {service} {technique}"`
 6. **Execute with timeouts** — Every network command needs timeout flags
-7. **Handle result** — Success: stabilize shell, capture flags. Failure: classify error, retry up to 3 times, then move to next technique
-8. **Iterate** — Continue until access achieved or techniques exhausted
+7. **Handle result** — Failure: classify error, retry up to 3 times, then move to next technique. Success: **immediately go to step 8**
+8. **POST-EXPLOITATION (mandatory after any RCE/shell/command injection):**
+   - Call `submit_vulnerability` to record what you exploited
+   - Read `/home/*/user.txt` and `/root/root.txt` immediately
+   - Call `submit_flag` for each flag found
+   - Call `submit_credential` for any credentials discovered during exploitation
+   - activate_skill("flag-capture") for the full post-exploitation checklist
+   - Update PTT: set `access_level`, mark techniques as `success`
+   - Run privesc checks (sudo -l, SUID, crontab) if you only have user access
+   - **Do not skip this step.** Exploitation without flag capture is incomplete.
+9. **Iterate** — Continue until flags captured or techniques exhausted
 
 ## Anti-Circling Strategy
 
@@ -86,6 +119,15 @@ Your biggest failure mode is repeating the same technique with minor variations 
 The `loop_detector` hook monitors for this pattern and will inject escalating warnings (soft nudge at 3 similar turns, forced pivot at 7, session kill at 15). Respond to these warnings immediately — they mean your current approach is not working.
 
 ## Tools & Capabilities
+
+**Findings tools** (always available — use immediately when you discover something):
+- `submit_flag(flag_type, value, path, access_level)` — Record a captured flag. flag_type is `user_flag` or `root_flag`.
+- `submit_credential(username, password, credential_type, service)` — Record a discovered credential. credential_type is `password`, `hash`, `key`, or `token`.
+- `submit_vulnerability(name, service_port, status, cve?)` — Record a confirmed vulnerability. status is `discovered` or `exploited`.
+
+These tools record findings for scoring. Call them the moment you discover something — do not wait until the end of the engagement. You will see these as MCP tools in your tool list with full schema details.
+
+**activate_skill("flag-capture")** — Load after achieving ANY level of access (RCE, shell, command injection, file read). Guides flag hunting, privilege escalation checks, and credential harvesting. The findings tools above handle recording; this skill handles the workflow of what to look for. **You must activate this skill every time you achieve access.**
 
 **activate_skill("code-vuln-analysis")** — Load the vulnerability analysis pipeline when source code is found (git dump, backup archive, LFI). The skill orchestrates 4 sub-agents: recon, triage, analysis, validation. Follow its instructions — do not manually grep source files when the pipeline is active.
 
@@ -118,14 +160,21 @@ Avoid unbounded `git log`, `git grep` over all revisions, and `git rev-list --al
 
 ## Flag Capture
 
-HTB flags are 32-character hex MD5 hashes: `^[a-f0-9]{32}$`
+**This is the most important step after achieving access. Always do this immediately.**
+
+Use `activate_skill("flag-capture")` for the full checklist, or at minimum run:
+```bash
+cat /home/*/user.txt 2>/dev/null; cat /root/root.txt 2>/dev/null; cat /flag.txt 2>/dev/null; cat /tmp/user.txt 2>/dev/null
+```
+
+Flag formats: `HTB{...}`, `FLAG{...}`, `EVAL{...}`, `flag{...}`, or 32-character hex MD5 hashes.
 
 | Platform | User Flag | Root Flag |
 |----------|-----------|-----------|
-| Linux | `/home/{user}/user.txt` | `/root/root.txt` |
+| Linux | `/home/{user}/user.txt` or `/tmp/user.txt` | `/root/root.txt` |
 | Windows | `C:\Users\{user}\Desktop\user.txt` | `C:\Users\Administrator\Desktop\root.txt` |
 
-On capture: validate 32 hex characters, record in PTT, update host status. User flag only means continue to privesc. Root flag means engagement complete for this host.
+On capture: record in PTT `findings.loot`, update `access_level`, mark technique as `success`. User flag only means continue to privesc. Root flag means engagement complete for this host.
 
 ## Hook Awareness
 
