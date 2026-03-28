@@ -20,8 +20,25 @@ QDRANT_URL = os.environ.get("QDRANT_URL", "http://qdrant:6333")
 COLLECTION = os.environ.get("COLLECTION_NAME", "skills")
 PROBE_TIMEOUT = 3  # seconds
 
-# Cache availability for process lifetime
+# Cache availability and embedder for process lifetime
 _available: bool | None = None
+_embedder = None
+
+FASTEMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+VECTOR_NAME = "fast-all-minilm-l6-v2"
+
+
+def get_embedder():
+    """Lazy-load fastembed TextEmbedding model. Returns None if unavailable."""
+    global _embedder
+    if _embedder is not None:
+        return _embedder
+    try:
+        from fastembed import TextEmbedding
+        _embedder = TextEmbedding(FASTEMBED_MODEL)
+        return _embedder
+    except ImportError:
+        return None
 
 
 def check_qdrant() -> bool:
@@ -41,7 +58,7 @@ def check_qdrant() -> bool:
 
 
 def handle_find(query: str) -> dict:
-    """Handle qdrant-find tool call with graceful degradation."""
+    """Handle qdrant-find tool call with semantic vector search."""
     if not check_qdrant():
         return {
             "content": [{
@@ -53,25 +70,89 @@ def handle_find(query: str) -> dict:
                     "Do NOT retry qdrant-find during this session."
                 ),
             }],
-            "isError": False,  # Not an error — just unavailable
+            "isError": False,
         }
 
-    # Qdrant is available — delegate to the real server
-    # This path is used in production with the real mcp-server-qdrant
-    # In eval mode, we never reach here (qdrant is unavailable)
-    try:
-        import subprocess
-        result = subprocess.run(
-            ["uvx", "mcp-server-qdrant"],
-            input=json.dumps({"query": query}),
-            capture_output=True, text=True, timeout=30,
-        )
-        return json.loads(result.stdout) if result.stdout else {
-            "content": [{"type": "text", "text": "No results found."}]
+    embedder = get_embedder()
+    if embedder is None:
+        return {
+            "content": [{
+                "type": "text",
+                "text": (
+                    "EMBEDDING MODEL UNAVAILABLE: fastembed is not installed. "
+                    "Proceed without skill lookups — use your built-in knowledge instead."
+                ),
+            }],
+            "isError": False,
         }
+
+    try:
+        # Embed query
+        embeddings = list(embedder.embed([query]))
+        vector = embeddings[0].tolist()
+
+        # Search Qdrant with named vector
+        search_url = f"{QDRANT_URL}/collections/{COLLECTION}/points/search"
+        body = json.dumps({
+            "vector": {
+                "name": VECTOR_NAME,
+                "vector": vector,
+            },
+            "limit": 5,
+            "with_payload": True,
+        }).encode()
+        req = urllib.request.Request(
+            search_url, data=body, method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+
+        results = data.get("result", [])
+        if not results:
+            return {
+                "content": [{"type": "text", "text": f"No techniques found for: {query}"}],
+            }
+
+        # Format results as technique cards
+        cards = []
+        for r in results:
+            meta = r.get("payload", {}).get("metadata", {})
+            score = r.get("score", 0)
+            name = meta.get("name", "Unknown")
+            category = meta.get("category", "")
+            cve = meta.get("references", {}).get("cve")
+            execution = meta.get("execution", [])
+            prereqs = meta.get("prerequisites", {})
+            indicators = meta.get("trigger", {}).get("indicators", [])
+            success = meta.get("success_indicators", [])
+
+            card = f"## {name}"
+            if cve:
+                card += f" ({cve})"
+            card += f"\nScore: {score:.2f} | Category: {category}"
+            if indicators:
+                card += f"\nTriggers: {', '.join(str(i) for i in indicators)}"
+            if prereqs:
+                tools = prereqs.get("tools", [])
+                card += f"\nPrereqs: access={prereqs.get('access', '?')}"
+                if tools:
+                    card += f", tools={tools}"
+            if execution:
+                card += "\nExecution:"
+                for i, step in enumerate(execution, 1):
+                    card += f"\n  {i}. {step}"
+            if success:
+                card += f"\nSuccess indicators: {', '.join(str(s) for s in success)}"
+            cards.append(card)
+
+        return {
+            "content": [{"type": "text", "text": "\n\n".join(cards)}],
+        }
+
     except Exception as e:
         return {
-            "content": [{"type": "text", "text": f"Qdrant query failed: {e}"}],
+            "content": [{"type": "text", "text": f"Qdrant search failed: {e}"}],
             "isError": True,
         }
 
