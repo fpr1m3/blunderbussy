@@ -1207,7 +1207,7 @@ def run_setup_scripts(target_name: str, container_name: str) -> None:
                 capture_output=True, text=True, timeout=30,
             )
             proc = subprocess.run(
-                ["podman", "exec", container_name, "sh", dest],
+                ["podman", "exec", "--user", "root", container_name, "sh", dest],
                 capture_output=True, text=True, timeout=120,
             )
             if proc.returncode == 0:

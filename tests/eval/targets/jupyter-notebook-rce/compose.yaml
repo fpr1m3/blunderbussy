@@ -4,7 +4,7 @@ services:
     container_name: eval-jupyter-notebook-rce
     command: start-notebook.sh --NotebookApp.token=''
     ports:
-      - "8888:8888"
+      - "18888:8888"
     networks:
       - eval-net
 

