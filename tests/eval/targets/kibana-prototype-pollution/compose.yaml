@@ -1,0 +1,20 @@
+services:
+  eval-target:
+    image: docker.io/vulhub/kibana:6.5.4
+    container_name: eval-kibana-proto
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - eval-net
+
+  elasticsearch:
+    image: docker.io/vulhub/elasticsearch:6.8.6
+    container_name: eval-kibana-es
+    networks:
+      - eval-net
+
+networks:
+  eval-net:
+    driver: bridge

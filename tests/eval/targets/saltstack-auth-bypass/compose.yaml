@@ -1,0 +1,15 @@
+services:
+  eval-target:
+    image: docker.io/vulhub/saltstack:2019.2.3
+    container_name: eval-saltstack-auth-bypass
+    ports:
+      - "4505:4505"
+      - "4506:4506"
+      - "8000:8000"
+      - "2223:22"
+    networks:
+      - eval-net
+
+networks:
+  eval-net:
+    driver: bridge

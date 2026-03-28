@@ -1,0 +1,13 @@
+services:
+  eval-target:
+    image: docker.io/vulhub/jupyter-notebook:5.2.2
+    container_name: eval-jupyter-notebook-rce
+    command: start-notebook.sh --NotebookApp.token=''
+    ports:
+      - "8888:8888"
+    networks:
+      - eval-net
+
+networks:
+  eval-net:
+    driver: bridge

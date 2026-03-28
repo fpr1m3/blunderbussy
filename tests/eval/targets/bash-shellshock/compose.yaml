@@ -1,0 +1,15 @@
+services:
+  eval-target:
+    image: docker.io/vulhub/bash:4.3.0-with-httpd
+    container_name: eval-bash-shellshock
+    ports:
+      - "8083:80"
+    volumes:
+      - ./victim.cgi:/usr/lib/cgi-bin/victim.cgi:ro
+      - ./safe.cgi:/usr/lib/cgi-bin/safe.cgi:ro
+    networks:
+      - eval-net
+
+networks:
+  eval-net:
+    driver: bridge

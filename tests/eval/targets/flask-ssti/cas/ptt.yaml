@@ -1,0 +1,22 @@
+engagement:
+  status: "pending"
+  start_time: null
+  end_time: null
+  hosts:
+    - ip: "EVAL_TARGET_IP"
+      hostname: "eval-flask-ssti"
+      access_level: "none"
+      services:
+        - port: 8000
+          protocol: "tcp"
+          name: "http"
+          vectors:
+            - name: "Jinja2 SSTI via name parameter"
+              techniques:
+                - name: "Test SSTI with {{7*7}} in name parameter"
+                  status: "pending"
+                - name: "Escalate SSTI to RCE via MRO traversal"
+                  status: "pending"
+      findings:
+        loot: []
+        credentials: []

@@ -1,0 +1,35 @@
+engagement:
+  target: "metabase-pre-auth-rce"
+  phase: "initial"
+
+techniques:
+  - id: "recon-metabase"
+    name: "Metabase Service Enumeration"
+    status: "pending"
+    description: "Enumerate Metabase web application on port 3000"
+    target_port: 3000
+
+  - id: "token-leak"
+    name: "Setup Token Leak"
+    status: "pending"
+    description: "Leak setup-token from /api/session/properties endpoint"
+    target_port: 3000
+    depends_on: "recon-metabase"
+
+  - id: "h2-injection"
+    name: "JDBC H2 Injection"
+    status: "pending"
+    description: "Exploit setup-token to inject H2 JDBC connection with INIT=RUNSCRIPT"
+    depends_on: "token-leak"
+
+  - id: "post-exploit"
+    name: "Post-Exploitation"
+    status: "pending"
+    description: "Extract credentials and capture flags"
+    depends_on: "h2-injection"
+
+  - id: "privesc"
+    name: "Privilege Escalation"
+    status: "pending"
+    description: "Escalate from metabase user to root"
+    depends_on: "post-exploit"

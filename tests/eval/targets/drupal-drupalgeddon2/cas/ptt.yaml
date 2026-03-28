@@ -1,0 +1,24 @@
+engagement:
+  status: "pending"
+  start_time: null
+  end_time: null
+  hosts:
+    - ip: "EVAL_TARGET_IP"
+      hostname: "eval-drupal-drupalgeddon2"
+      access_level: "none"
+      services:
+        - port: 80
+          protocol: "tcp"
+          name: "http"
+          vectors:
+            - name: "Drupalgeddon2 Form API RCE"
+              techniques:
+                - name: "Exploit Form API AJAX handler for code execution"
+                  status: "pending"
+                  cve: "CVE-2018-7600"
+                - name: "Establish reverse shell via Drupalgeddon2"
+                  status: "pending"
+                  cve: "CVE-2018-7600"
+      findings:
+        loot: []
+        credentials: []

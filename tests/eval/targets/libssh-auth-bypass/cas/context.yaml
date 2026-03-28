@@ -1,0 +1,21 @@
+target:
+  name: "libssh-auth-bypass"
+  ip: "${TARGET_IP}"
+  platform: "linux"
+
+services:
+  - port: 22
+    protocol: "tcp"
+    service: "ssh"
+    product: "libssh"
+    version: "0.8.1"
+    vulnerabilities:
+      - cve: "CVE-2018-10933"
+        name: "libssh Authentication Bypass"
+        description: "Server-side state machine flaw allows client to send SSH2_MSG_USERAUTH_SUCCESS instead of SSH2_MSG_USERAUTH_REQUEST to bypass authentication"
+        severity: "critical"
+        cvss: 9.1
+    quick_wins:
+      - "Send SSH2_MSG_USERAUTH_SUCCESS message to bypass authentication"
+      - "Use paramiko or custom script to manipulate SSH handshake"
+      - "Connect as any user without valid credentials"

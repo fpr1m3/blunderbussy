@@ -1,0 +1,21 @@
+target:
+  name: "elasticsearch-groovy-rce"
+  ip: "${TARGET_IP}"
+  platform: "linux"
+
+services:
+  - port: 9200
+    protocol: "tcp"
+    service: "http"
+    product: "Elasticsearch"
+    version: "1.4.2"
+    vulnerabilities:
+      - cve: "CVE-2015-1427"
+        name: "Elasticsearch Groovy Sandbox Bypass"
+        description: "Groovy scripting sandbox can be bypassed via _search API to run arbitrary Java code"
+        severity: "critical"
+        cvss: 9.8
+    quick_wins:
+      - "Create an index with a document first: PUT /test/test/1 with JSON body"
+      - "Use _search with script_fields and groovy lang to run commands"
+      - "Bypass sandbox via java.lang.Runtime.getRuntime() method"

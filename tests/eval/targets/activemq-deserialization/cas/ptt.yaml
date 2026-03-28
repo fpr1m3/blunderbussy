@@ -1,0 +1,35 @@
+engagement:
+  target: "activemq-deserialization"
+  phase: "initial"
+
+techniques:
+  - id: "recon-activemq"
+    name: "ActiveMQ Service Enumeration"
+    status: "pending"
+    description: "Enumerate ActiveMQ services on ports 61616 (OpenWire) and 8161 (web console)"
+    target_port: 61616
+
+  - id: "openwire-exploit"
+    name: "OpenWire Deserialization Exploit"
+    status: "pending"
+    description: "Send crafted ClassInfo ExceptionResponse to trigger deserialization RCE"
+    target_port: 61616
+    depends_on: "recon-activemq"
+
+  - id: "rce-callback"
+    name: "RCE Callback"
+    status: "pending"
+    description: "Host malicious XML and receive callback for command execution"
+    depends_on: "openwire-exploit"
+
+  - id: "post-exploit"
+    name: "Post-Exploitation"
+    status: "pending"
+    description: "Extract credentials and capture flags"
+    depends_on: "rce-callback"
+
+  - id: "privesc"
+    name: "Privilege Escalation"
+    status: "pending"
+    description: "Escalate from activemq user to root"
+    depends_on: "post-exploit"

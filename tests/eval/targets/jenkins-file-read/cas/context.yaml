@@ -1,0 +1,27 @@
+target:
+  name: "jenkins-file-read"
+  ip: "${TARGET_IP}"
+  platform: "linux"
+
+services:
+  - port: 8080
+    protocol: "tcp"
+    service: "http"
+    product: "Jenkins"
+    version: "2.441"
+    vulnerabilities:
+      - cve: "CVE-2024-23897"
+        name: "Jenkins CLI Arbitrary File Read"
+        description: "args4j library @-file expansion allows unauthenticated users to read arbitrary files via Jenkins CLI"
+        severity: "critical"
+        cvss: 9.8
+    quick_wins:
+      - "Download jenkins-cli.jar from /jnlpJars/jenkins-cli.jar"
+      - "Use CLI with @/etc/passwd to test file read"
+      - "Read /var/jenkins_home/secrets/initialAdminPassword"
+      - "Read /var/jenkins_home/users/*/config.xml for credentials"
+  - port: 50000
+    protocol: "tcp"
+    service: "jenkins-agent"
+    product: "Jenkins"
+    version: "2.441"

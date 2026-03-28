@@ -1,0 +1,35 @@
+engagement:
+  target: "php-fpm-rce"
+  phase: "initial"
+
+techniques:
+  - id: "recon-web"
+    name: "Web Service Enumeration"
+    status: "pending"
+    description: "Enumerate nginx web server and identify PHP backend"
+    target_port: 80
+
+  - id: "path-info-test"
+    name: "Path Info Manipulation Test"
+    status: "pending"
+    description: "Test fastcgi_split_path_info regex bypass with newline injection"
+    target_port: 80
+    depends_on: "recon-web"
+
+  - id: "fpm-exploit"
+    name: "PHP-FPM Buffer Underflow Exploit"
+    status: "pending"
+    description: "Exploit buffer underflow to inject PHP_VALUE and achieve code execution"
+    depends_on: "path-info-test"
+
+  - id: "post-exploit"
+    name: "Post-Exploitation"
+    status: "pending"
+    description: "Extract credentials and capture flags"
+    depends_on: "fpm-exploit"
+
+  - id: "privesc"
+    name: "Privilege Escalation"
+    status: "pending"
+    description: "Escalate from www-data to root"
+    depends_on: "post-exploit"

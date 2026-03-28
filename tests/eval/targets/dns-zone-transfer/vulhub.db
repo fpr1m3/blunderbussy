@@ -1,0 +1,16 @@
+$TTL    604800
+@       IN      SOA     ns1.vulhub.org. admin.vulhub.org. (
+                          2         ; Serial
+                     604800         ; Refresh
+                      86400         ; Retry
+                    2419200         ; Expire
+                     604800 )       ; Negative Cache TTL
+;
+@       IN      NS      ns1.vulhub.org.
+@       IN      A       192.168.1.1
+ns1     IN      A       192.168.1.1
+www     IN      A       192.168.1.2
+mail    IN      A       192.168.1.3
+admin   IN      A       192.168.1.4
+dev     IN      A       192.168.1.5
+flag    IN      TXT     "EVAL{dns-zt-zone-flag}"

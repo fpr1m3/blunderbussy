@@ -1,0 +1,35 @@
+engagement:
+  target: "redis-lua-sandbox-escape"
+  phase: "initial"
+
+techniques:
+  - id: "recon-redis"
+    name: "Redis Service Enumeration"
+    status: "pending"
+    description: "Connect to Redis on port 6379, enumerate version and configuration"
+    target_port: 6379
+
+  - id: "lua-sandbox-test"
+    name: "Lua Sandbox Probe"
+    status: "pending"
+    description: "Test Lua sandbox restrictions and identify Debian-patched escape vector"
+    target_port: 6379
+    depends_on: "recon-redis"
+
+  - id: "sandbox-escape"
+    name: "Lua Sandbox Escape"
+    status: "pending"
+    description: "Use package.loadlib to load liblua and call os.execute for RCE"
+    depends_on: "lua-sandbox-test"
+
+  - id: "post-exploit"
+    name: "Post-Exploitation"
+    status: "pending"
+    description: "Extract credentials and capture flags"
+    depends_on: "sandbox-escape"
+
+  - id: "privesc"
+    name: "Privilege Escalation"
+    status: "pending"
+    description: "Escalate from redis user to root"
+    depends_on: "post-exploit"

@@ -1,0 +1,21 @@
+target:
+  name: "spring4shell"
+  ip: "${TARGET_IP}"
+  platform: "linux"
+
+services:
+  - port: 8080
+    protocol: "tcp"
+    service: "http"
+    product: "Apache Tomcat / Spring Framework"
+    version: "5.3.17"
+    vulnerabilities:
+      - cve: "CVE-2022-22965"
+        name: "Spring4Shell"
+        description: "ClassLoader property manipulation via data binding on JDK 9+ with Tomcat"
+        severity: "critical"
+        cvss: 9.8
+    quick_wins:
+      - "Send POST with class.module.classLoader.resources.context.parent.pipeline.first.* params"
+      - "Manipulate Tomcat AccessLogValve to write JSP webshell"
+      - "Access written webshell for command execution"

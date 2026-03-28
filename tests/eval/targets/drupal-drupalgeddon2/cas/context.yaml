@@ -1,0 +1,27 @@
+target:
+  ip: "EVAL_TARGET_IP"
+  hostname: "eval-drupal-drupalgeddon2"
+  platform: "linux"
+
+services:
+  - port: 80
+    protocol: "tcp"
+    name: "http"
+    product: "Apache httpd"
+    version: "2.4"
+    banner: "Apache/2.4 (Debian)"
+    vulnerabilities:
+      - cve: "CVE-2018-7600"
+        title: "Drupalgeddon2 - Remote Code Execution"
+        severity: "critical"
+        description: >
+          Drupal before 7.58, 8.x before 8.3.9, 8.4.x before 8.4.6, and
+          8.5.x before 8.5.1 allows remote attackers to execute arbitrary
+          code because of an issue affecting multiple subsystems with default
+          or common module configurations. The vulnerability exists in the
+          Form API (FAPI) AJAX request processing.
+
+quick_wins:
+  - vector: "CVE-2018-7600 Drupalgeddon2"
+    reason: "Critical pre-auth RCE with widely available exploits; no authentication required"
+    priority: 1

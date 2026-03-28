@@ -1,0 +1,49 @@
+target:
+  name: "zabbix-trapper-rce"
+  ip: "${TARGET_IP}"
+  platform: "linux"
+  difficulty: "hard"
+
+services:
+  - port: 10051
+    protocol: "tcp"
+    service: "zabbix-trapper"
+    product: "Zabbix Server"
+    version: "3.0.3"
+    description: "Zabbix server trapper port for receiving agent data and trapper items"
+    vulnerabilities:
+      - cve: "CVE-2017-2824"
+        description: "Command injection via crafted trapper item data that gets written to database and executed by agent"
+        severity: "critical"
+
+  - port: 8089
+    protocol: "tcp"
+    service: "http"
+    product: "Zabbix Web Frontend"
+    version: "3.0.3"
+    description: "Zabbix web interface (Apache/PHP)"
+
+backend_services:
+  - name: "mysql"
+    port: 3306
+    protocol: "tcp"
+    service: "mysql"
+    product: "MySQL"
+    version: "5.x"
+    description: "MySQL database backend (not directly exposed)"
+
+  - name: "zabbix-agent"
+    port: 10050
+    protocol: "tcp"
+    service: "zabbix-agent"
+    product: "Zabbix Agent"
+    version: "3.0.3"
+    description: "Zabbix agent that executes commands from database (not directly exposed)"
+
+quick_wins:
+  - "Zabbix 3.0.3 trapper port accepts unauthenticated data submissions"
+  - "CVE-2017-2824 allows SQL injection via trapper item data field"
+  - "Injected SQL inserts malicious command into items table"
+  - "Zabbix agent periodically checks and executes items from database"
+  - "Default Zabbix web credentials: Admin/zabbix"
+  - "Database credentials are in environment variables"

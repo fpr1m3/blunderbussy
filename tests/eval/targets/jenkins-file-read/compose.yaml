@@ -1,0 +1,13 @@
+services:
+  eval-target:
+    image: docker.io/vulhub/jenkins:2.441
+    container_name: eval-jenkins-file-read
+    ports:
+      - "8088:8080"
+      - "50000:50000"
+    networks:
+      - eval-net
+
+networks:
+  eval-net:
+    driver: bridge

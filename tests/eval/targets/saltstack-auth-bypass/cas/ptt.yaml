@@ -1,0 +1,74 @@
+engagement:
+  target: "saltstack-auth-bypass"
+  state: "initial"
+
+hosts:
+  - ip: "${TARGET_IP}"
+    hostname: "eval-saltstack-auth-bypass"
+    os: "linux"
+    status: "up"
+
+services:
+  - host: "${TARGET_IP}"
+    port: 4505
+    protocol: "tcp"
+    state: "open"
+    service: "zmq"
+    version: "unknown"
+
+  - host: "${TARGET_IP}"
+    port: 4506
+    protocol: "tcp"
+    state: "open"
+    service: "zmq"
+    version: "unknown"
+
+  - host: "${TARGET_IP}"
+    port: 8000
+    protocol: "tcp"
+    state: "open"
+    service: "http"
+    version: "unknown"
+
+  - host: "${TARGET_IP}"
+    port: 22
+    protocol: "tcp"
+    state: "open"
+    service: "ssh"
+    version: "unknown"
+
+vectors:
+  - id: "clearfuncs-auth-bypass"
+    service: "zmq:4506"
+    type: "authentication_bypass"
+    cve: "CVE-2020-11651"
+    status: "pending"
+    description: "ClearFuncs exposed methods allow unauthenticated callers to retrieve root key and execute commands"
+
+  - id: "clearfuncs-directory-traversal"
+    service: "zmq:4506"
+    type: "directory_traversal"
+    cve: "CVE-2020-11652"
+    status: "pending"
+    description: "ClearFuncs token methods allow directory traversal to read arbitrary files"
+
+pending_techniques:
+  - technique: "zeromq_enumeration"
+    target_service: "zmq:4505,4506"
+    priority: "high"
+    description: "Enumerate ZeroMQ services to confirm SaltStack master"
+
+  - technique: "clearfuncs_exploit"
+    target_service: "zmq:4506"
+    priority: "critical"
+    description: "Exploit CVE-2020-11651 to call _prep_auth_caller and get root key"
+
+  - technique: "salt_master_rce"
+    target_service: "zmq:4506"
+    priority: "critical"
+    description: "Use root key to execute commands via salt master"
+
+  - technique: "credential_extraction"
+    target_service: "zmq:4506"
+    priority: "medium"
+    description: "Extract master key and any stored credentials"

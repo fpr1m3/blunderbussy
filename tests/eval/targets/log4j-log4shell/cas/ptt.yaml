@@ -1,0 +1,35 @@
+engagement:
+  target: "log4j-log4shell"
+  phase: "initial"
+
+techniques:
+  - id: "recon-solr"
+    name: "Solr Service Enumeration"
+    status: "pending"
+    description: "Enumerate Solr admin interface and version"
+    target_port: 8983
+
+  - id: "log4shell-inject"
+    name: "Log4Shell JNDI Injection"
+    status: "pending"
+    description: "Inject JNDI payload via Solr parameters to trigger callback"
+    target_port: 8983
+    depends_on: "recon-solr"
+
+  - id: "jndi-callback"
+    name: "JNDI Callback Listener"
+    status: "pending"
+    description: "Set up LDAP/RMI listener and deliver exploit payload"
+    depends_on: "log4shell-inject"
+
+  - id: "rce-execution"
+    name: "Remote Code Execution"
+    status: "pending"
+    description: "Execute commands on target via Log4Shell RCE chain"
+    depends_on: "jndi-callback"
+
+  - id: "privesc"
+    name: "Privilege Escalation"
+    status: "pending"
+    description: "Escalate from application user to root"
+    depends_on: "rce-execution"

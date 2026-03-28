@@ -1,0 +1,29 @@
+target:
+  name: "activemq-deserialization"
+  ip: "${TARGET_IP}"
+  platform: "linux"
+
+services:
+  - port: 61616
+    protocol: "tcp"
+    service: "openwire"
+    product: "Apache ActiveMQ"
+    version: "5.17.3"
+    vulnerabilities:
+      - cve: "CVE-2023-46604"
+        name: "ActiveMQ OpenWire Deserialization RCE"
+        description: "ClassInfo ExceptionResponse deserialization in OpenWire protocol allows unauthenticated remote code execution"
+        severity: "critical"
+        cvss: 10.0
+    quick_wins:
+      - "Send crafted OpenWire ClassInfo command to port 61616"
+      - "Use ExceptionResponse with ClassPathXmlApplicationContext to load remote XML"
+      - "Host malicious XML with Spring bean executing system commands"
+  - port: 8161
+    protocol: "tcp"
+    service: "http"
+    product: "ActiveMQ Web Console"
+    version: "5.17.3"
+    quick_wins:
+      - "Default credentials: admin/admin"
+      - "Web console may expose configuration details"

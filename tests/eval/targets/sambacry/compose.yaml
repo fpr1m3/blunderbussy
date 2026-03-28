@@ -1,0 +1,11 @@
+networks:
+  eval-net:
+    driver: bridge
+services:
+  eval-target:
+    container_name: eval-sambacry
+    image: docker.io/vulhub/samba:4.6.3
+    networks:
+    - eval-net
+    ports:
+    - 8082:445

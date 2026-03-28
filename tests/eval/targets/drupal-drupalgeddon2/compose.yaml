@@ -1,0 +1,12 @@
+services:
+  eval-target:
+    image: docker.io/vulhub/drupal:8.5.0
+    container_name: eval-drupal-drupalgeddon2
+    ports:
+      - "8085:80"
+    networks:
+      - eval-net
+
+networks:
+  eval-net:
+    driver: bridge

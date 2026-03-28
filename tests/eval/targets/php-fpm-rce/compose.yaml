@@ -1,0 +1,25 @@
+services:
+  nginx:
+    image: docker.io/library/nginx:1
+    container_name: eval-php-fpm-nginx
+    ports:
+      - "8087:80"
+    volumes:
+      - ./default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./www:/usr/share/nginx/html:ro
+    depends_on:
+      - php
+    networks:
+      - eval-net
+
+  php:
+    image: docker.io/vulhub/php:7.2.10-fpm
+    container_name: eval-php-fpm
+    volumes:
+      - ./www:/var/www/html:ro
+    networks:
+      - eval-net
+
+networks:
+  eval-net:
+    driver: bridge

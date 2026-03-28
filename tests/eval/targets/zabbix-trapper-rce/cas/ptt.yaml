@@ -1,0 +1,70 @@
+engagement:
+  target: "zabbix-trapper-rce"
+  state: "initial"
+
+hosts:
+  - ip: "${TARGET_IP}"
+    hostname: "eval-zabbix-server"
+    os: "linux"
+    status: "up"
+
+services:
+  - host: "${TARGET_IP}"
+    port: 10051
+    protocol: "tcp"
+    state: "open"
+    service: "zabbix-trapper"
+    version: "3.0.3"
+
+  - host: "${TARGET_IP}"
+    port: 8089
+    protocol: "tcp"
+    state: "open"
+    service: "http"
+    product: "Zabbix Web Frontend"
+    version: "3.0.3"
+
+vectors:
+  - id: "trapper-command-injection"
+    service: "zabbix-trapper:10051"
+    type: "command_injection"
+    cve: "CVE-2017-2824"
+    status: "pending"
+    description: "Crafted trapper data triggers SQL injection that inserts malicious commands into items table, executed by Zabbix agent"
+
+  - id: "zabbix-web-default-creds"
+    service: "http:8089"
+    type: "default_credentials"
+    status: "pending"
+    description: "Zabbix web frontend may use default Admin/zabbix credentials"
+
+pending_techniques:
+  - technique: "trapper_port_enumeration"
+    target_service: "zabbix-trapper:10051"
+    priority: "high"
+    description: "Enumerate Zabbix trapper port and confirm version"
+
+  - technique: "web_enumeration"
+    target_service: "http:8089"
+    priority: "high"
+    description: "Enumerate Zabbix web frontend and attempt default login"
+
+  - technique: "trapper_sqli"
+    target_service: "zabbix-trapper:10051"
+    priority: "critical"
+    description: "Send crafted trapper item data to inject SQL into database"
+
+  - technique: "trapper_rce"
+    target_service: "zabbix-trapper:10051"
+    priority: "critical"
+    description: "Inject command into items table via SQLi, wait for agent to execute it"
+
+  - technique: "credential_extraction"
+    target_service: "local"
+    priority: "medium"
+    description: "Extract database credentials from environment or config files"
+
+  - technique: "privilege_escalation"
+    target_service: "local"
+    priority: "high"
+    description: "Escalate from zabbix service user to root"

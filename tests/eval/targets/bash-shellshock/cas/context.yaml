@@ -1,0 +1,28 @@
+target:
+  ip: "EVAL_TARGET_IP"
+  hostname: "eval-bash-shellshock"
+  platform: "linux"
+
+services:
+  - port: 80
+    protocol: "tcp"
+    name: "http"
+    product: "Apache httpd"
+    version: "2.4"
+    banner: "Apache/2.4 (Unix)"
+    vulnerabilities:
+      - cve: "CVE-2014-6271"
+        title: "Shellshock - GNU Bash Remote Code Execution"
+        severity: "critical"
+        description: >
+          GNU Bash through 4.3 processes trailing strings after function
+          definitions in the values of environment variables, which allows
+          remote attackers to execute arbitrary code via a crafted environment.
+          When exploited through CGI scripts that use bash, HTTP headers
+          (User-Agent, Referer, etc.) are passed as environment variables,
+          enabling RCE.
+
+quick_wins:
+  - vector: "CVE-2014-6271 Shellshock via CGI"
+    reason: "Critical CVE with trivial exploitation; CGI scripts using bash are present"
+    priority: 1

@@ -1,0 +1,65 @@
+services:
+  mysql:
+    image: docker.io/library/mysql:5
+    container_name: eval-zabbix-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: zabbix
+    networks:
+      - eval-net
+
+  server:
+    image: docker.io/vulhub/zabbix:3.0.3-server
+    container_name: eval-zabbix-server
+    command: server
+    ports:
+      - "10051:10051"
+    environment:
+      DATABASE_HOST: mysql
+      DATABASE_PORT: "3306"
+      DATABASE_USER: root
+      DATABASE_PASS: root
+      DATABASE_NAME: zabbix
+    depends_on:
+      - mysql
+    networks:
+      - eval-net
+
+  agent:
+    image: docker.io/vulhub/zabbix:3.0.3-server
+    container_name: eval-zabbix-agent
+    command: agent
+    environment:
+      DATABASE_HOST: mysql
+      DATABASE_PORT: "3306"
+      DATABASE_USER: root
+      DATABASE_PASS: root
+      DATABASE_NAME: zabbix
+      ZBX_SRV_HOST: server
+      ZBX_SRV_HOST_ACT: server
+    depends_on:
+      - server
+    networks:
+      - eval-net
+
+  web:
+    image: docker.io/vulhub/zabbix:3.0.3-web
+    container_name: eval-zabbix-web
+    ports:
+      - "8089:80"
+    environment:
+      DATABASE_HOST: mysql
+      DATABASE_PORT: "3306"
+      DATABASE_USER: root
+      DATABASE_PASS: root
+      DATABASE_NAME: zabbix
+      ZBX_SRV_HOST: server
+      ZBX_SRV_PORT: "10051"
+    depends_on:
+      - server
+    networks:
+      - eval-net
+
+networks:
+  eval-net:
+    driver: bridge

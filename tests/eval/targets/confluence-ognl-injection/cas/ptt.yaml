@@ -1,0 +1,35 @@
+engagement:
+  target: "confluence-ognl-injection"
+  phase: "initial"
+
+techniques:
+  - id: "recon-confluence"
+    name: "Confluence Service Enumeration"
+    status: "pending"
+    description: "Enumerate Confluence web application, identify version"
+    target_port: 8090
+
+  - id: "ognl-injection"
+    name: "OGNL Injection Test"
+    status: "pending"
+    description: "Test OGNL expression injection in URI path"
+    target_port: 8090
+    depends_on: "recon-confluence"
+
+  - id: "rce-exploit"
+    name: "OGNL RCE Exploitation"
+    status: "pending"
+    description: "Achieve command execution via OGNL injection payload"
+    depends_on: "ognl-injection"
+
+  - id: "post-exploit"
+    name: "Post-Exploitation"
+    status: "pending"
+    description: "Extract database credentials and capture flags"
+    depends_on: "rce-exploit"
+
+  - id: "privesc"
+    name: "Privilege Escalation"
+    status: "pending"
+    description: "Escalate from confluence user to root"
+    depends_on: "post-exploit"

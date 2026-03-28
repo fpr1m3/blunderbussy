@@ -1,0 +1,21 @@
+engagement:
+  end_time: null
+  hosts:
+  - access_level: none
+    findings:
+      credentials: []
+      loot: []
+    hostname: eval-sambacry
+    ip: EVAL_TARGET_IP
+    services:
+    - name: smb
+      port: 445
+      protocol: tcp
+      vectors:
+      - name: CVE-2017-7494 exploit
+        techniques:
+        - cve: CVE-2017-7494
+          name: Exploit CVE-2017-7494
+          status: pending
+  start_time: null
+  status: pending

@@ -1,0 +1,21 @@
+target:
+  name: "redis-lua-sandbox-escape"
+  ip: "${TARGET_IP}"
+  platform: "linux"
+
+services:
+  - port: 6379
+    protocol: "tcp"
+    service: "redis"
+    product: "Redis"
+    version: "5.0.7"
+    vulnerabilities:
+      - cve: "CVE-2022-0543"
+        name: "Redis Lua Sandbox Escape"
+        description: "Debian/Ubuntu-patched Redis Lua sandbox can be escaped via package.loadlib to load liblua and call os.execute"
+        severity: "critical"
+        cvss: 10.0
+    quick_wins:
+      - "Connect to Redis on port 6379 (no auth by default)"
+      - "Use EVAL with Lua script exploiting package.loadlib"
+      - "Load liblua5.1.so.0 and call luaopen_os to access os.execute"

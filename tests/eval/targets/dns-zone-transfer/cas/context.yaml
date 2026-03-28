@@ -1,0 +1,25 @@
+target:
+  ip: "EVAL_TARGET_IP"
+  hostname: "eval-dns-zone-transfer"
+  platform: "linux"
+
+services:
+  - port: 53
+    protocol: "tcp"
+    name: "dns"
+    product: "ISC BIND"
+    version: "9.10.3"
+    banner: "ISC BIND 9.10.3"
+    vulnerabilities:
+      - title: "DNS Zone Transfer Allowed (AXFR)"
+        severity: "medium"
+        description: >
+          BIND DNS server is configured with allow-transfer { any; }, permitting
+          any client to perform a full zone transfer. This leaks all DNS records
+          including hostnames, IP addresses, and TXT records that may contain
+          sensitive information.
+
+quick_wins:
+  - vector: "DNS Zone Transfer (AXFR)"
+    reason: "Zone transfer allowed to any client; full zone dump reveals internal hostnames and flags"
+    priority: 1

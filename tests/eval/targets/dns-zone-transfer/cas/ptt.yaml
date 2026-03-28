@@ -1,0 +1,24 @@
+engagement:
+  status: "pending"
+  start_time: null
+  end_time: null
+  hosts:
+    - ip: "EVAL_TARGET_IP"
+      hostname: "eval-dns-zone-transfer"
+      access_level: "none"
+      services:
+        - port: 53
+          protocol: "tcp"
+          name: "dns"
+          vectors:
+            - name: "DNS Zone Transfer (AXFR)"
+              techniques:
+                - name: "Perform AXFR zone transfer for vulhub.org"
+                  status: "pending"
+                - name: "Extract hostnames and records from zone data"
+                  status: "pending"
+                - name: "Extract TXT record flags"
+                  status: "pending"
+      findings:
+        loot: []
+        credentials: []

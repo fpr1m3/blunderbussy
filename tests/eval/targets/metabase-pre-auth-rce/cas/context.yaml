@@ -1,0 +1,21 @@
+target:
+  name: "metabase-pre-auth-rce"
+  ip: "${TARGET_IP}"
+  platform: "linux"
+
+services:
+  - port: 3000
+    protocol: "tcp"
+    service: "http"
+    product: "Metabase"
+    version: "0.46.6"
+    vulnerabilities:
+      - cve: "CVE-2023-38646"
+        name: "Metabase Pre-Auth RCE"
+        description: "Setup-token leaked via /api/session/properties allows unauthenticated JDBC H2 injection leading to RCE"
+        severity: "critical"
+        cvss: 9.8
+    quick_wins:
+      - "GET /api/session/properties to leak setup-token"
+      - "POST to /api/setup/validate with JDBC H2 connection string containing INIT=RUNSCRIPT"
+      - "Use H2 INIT parameter to execute arbitrary Java code"

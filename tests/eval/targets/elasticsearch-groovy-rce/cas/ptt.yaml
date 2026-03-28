@@ -1,0 +1,35 @@
+engagement:
+  target: "elasticsearch-groovy-rce"
+  phase: "initial"
+
+techniques:
+  - id: "recon-elasticsearch"
+    name: "Elasticsearch Service Enumeration"
+    status: "pending"
+    description: "Enumerate Elasticsearch REST API on port 9200, identify version and plugins"
+    target_port: 9200
+
+  - id: "index-creation"
+    name: "Index Document Creation"
+    status: "pending"
+    description: "Create test index and document required for script execution"
+    target_port: 9200
+    depends_on: "recon-elasticsearch"
+
+  - id: "groovy-exploit"
+    name: "Groovy Sandbox Bypass"
+    status: "pending"
+    description: "Exploit Groovy sandbox bypass via _search API with script_fields"
+    depends_on: "index-creation"
+
+  - id: "post-exploit"
+    name: "Post-Exploitation"
+    status: "pending"
+    description: "Extract credentials and capture flags"
+    depends_on: "groovy-exploit"
+
+  - id: "privesc"
+    name: "Privilege Escalation"
+    status: "pending"
+    description: "Escalate from elasticsearch user to root"
+    depends_on: "post-exploit"

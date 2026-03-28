@@ -1,0 +1,24 @@
+engagement:
+  status: "pending"
+  start_time: null
+  end_time: null
+  hosts:
+    - ip: "EVAL_TARGET_IP"
+      hostname: "eval-bash-shellshock"
+      access_level: "none"
+      services:
+        - port: 80
+          protocol: "tcp"
+          name: "http"
+          vectors:
+            - name: "Shellshock CGI exploitation"
+              techniques:
+                - name: "Send crafted User-Agent header to CGI endpoint"
+                  status: "pending"
+                  cve: "CVE-2014-6271"
+                - name: "Establish reverse shell via Shellshock"
+                  status: "pending"
+                  cve: "CVE-2014-6271"
+      findings:
+        loot: []
+        credentials: []

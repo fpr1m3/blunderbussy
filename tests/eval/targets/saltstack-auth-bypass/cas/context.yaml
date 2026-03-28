@@ -1,0 +1,47 @@
+target:
+  name: "saltstack-auth-bypass"
+  ip: "${TARGET_IP}"
+  platform: "linux"
+  difficulty: "hard"
+
+services:
+  - port: 4505
+    protocol: "tcp"
+    service: "zmq"
+    product: "ZeroMQ"
+    description: "SaltStack ZeroMQ publisher port"
+    vulnerabilities:
+      - cve: "CVE-2020-11651"
+        description: "ClearFuncs authentication bypass allows unauthenticated access to salt master methods"
+        severity: "critical"
+      - cve: "CVE-2020-11652"
+        description: "Directory traversal via ClearFuncs allows reading arbitrary files"
+        severity: "high"
+
+  - port: 4506
+    protocol: "tcp"
+    service: "zmq"
+    product: "ZeroMQ"
+    description: "SaltStack ZeroMQ request/reply port"
+    vulnerabilities:
+      - cve: "CVE-2020-11651"
+        description: "ClearFuncs authentication bypass on request server"
+        severity: "critical"
+
+  - port: 8000
+    protocol: "tcp"
+    service: "http"
+    product: "SaltStack REST API"
+    description: "Salt REST API (CherryPy)"
+
+  - port: 22
+    protocol: "tcp"
+    service: "ssh"
+    product: "OpenSSH"
+    description: "SSH service"
+
+quick_wins:
+  - "ZeroMQ ports 4505/4506 indicate SaltStack master"
+  - "CVE-2020-11651 allows unauthenticated _prep_auth_caller access"
+  - "Root key extraction enables full master control"
+  - "Salt master runs as root by default"

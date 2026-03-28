@@ -1,0 +1,12 @@
+services:
+  eval-target:
+    image: docker.io/vulhub/elasticsearch:1.4.2
+    container_name: eval-elasticsearch-groovy
+    ports:
+      - "9200:9200"
+    networks:
+      - eval-net
+
+networks:
+  eval-net:
+    driver: bridge

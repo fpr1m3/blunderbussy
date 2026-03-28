@@ -1,0 +1,35 @@
+engagement:
+  target: "libssh-auth-bypass"
+  phase: "initial"
+
+techniques:
+  - id: "recon-ssh"
+    name: "SSH Service Enumeration"
+    status: "pending"
+    description: "Identify SSH service, banner grab to determine libssh version"
+    target_port: 22
+
+  - id: "auth-bypass"
+    name: "SSH Authentication Bypass"
+    status: "pending"
+    description: "Send SSH2_MSG_USERAUTH_SUCCESS to bypass server-side auth check"
+    target_port: 22
+    depends_on: "recon-ssh"
+
+  - id: "shell-access"
+    name: "Interactive Shell"
+    status: "pending"
+    description: "Obtain interactive shell via bypassed SSH session"
+    depends_on: "auth-bypass"
+
+  - id: "post-exploit"
+    name: "Post-Exploitation"
+    status: "pending"
+    description: "Extract credentials and capture flags"
+    depends_on: "shell-access"
+
+  - id: "privesc"
+    name: "Privilege Escalation"
+    status: "pending"
+    description: "Escalate from application user to root"
+    depends_on: "post-exploit"

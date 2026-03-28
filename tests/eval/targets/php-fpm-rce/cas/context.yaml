@@ -1,0 +1,21 @@
+target:
+  name: "php-fpm-rce"
+  ip: "${TARGET_IP}"
+  platform: "linux"
+
+services:
+  - port: 80
+    protocol: "tcp"
+    service: "http"
+    product: "nginx + PHP-FPM"
+    version: "PHP 7.2.10"
+    vulnerabilities:
+      - cve: "CVE-2019-11043"
+        name: "PHP-FPM Buffer Underflow"
+        description: "Path info manipulation in nginx fastcgi_split_path_info causes buffer underflow in PHP-FPM, leading to RCE"
+        severity: "critical"
+        cvss: 9.8
+    quick_wins:
+      - "Test path info manipulation: /index.php/path%0ainfo"
+      - "Use phuip-fpizdam or similar tool to exploit buffer underflow"
+      - "Inject PHP_VALUE via corrupted FastCGI params for code execution"

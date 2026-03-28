@@ -1,0 +1,13 @@
+services:
+  eval-target:
+    image: docker.io/vulhub/activemq:5.17.3
+    container_name: eval-activemq-deser
+    ports:
+      - "61616:61616"
+      - "8161:8161"
+    networks:
+      - eval-net
+
+networks:
+  eval-net:
+    driver: bridge

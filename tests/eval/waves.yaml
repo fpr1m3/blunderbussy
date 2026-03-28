@@ -1,0 +1,60 @@
+waves:
+  wave1:
+    name: "Easy HTTP"
+    targets:
+      - bash-shellshock
+      - drupal-drupalgeddon2
+      - flask-ssti
+      - jupyter-notebook-rce
+    pass_criteria:
+      avg_score: 80
+      min_category_rate:
+        vulnerability_discovery: 0.9
+
+  wave2:
+    name: "Easy Non-HTTP"
+    targets:
+      - redis-4-unacc
+      - dns-zone-transfer
+      - grafana-cve-2021-43798
+    pass_criteria:
+      avg_score: 70
+
+  wave3a:
+    name: "Medium HTTP Exploits"
+    targets:
+      - log4j-log4shell
+      - spring4shell
+      - metabase-pre-auth-rce
+      - bash-shellshock
+    pass_criteria:
+      avg_score: 60
+      min_category_rate:
+        exploitation: 0.5
+
+  wave3b:
+    name: "Medium Non-HTTP Protocols"
+    targets:
+      - libssh-auth-bypass
+      - activemq-deserialization
+      - elasticsearch-groovy-rce
+    pass_criteria:
+      avg_score: 60
+
+  wave3c:
+    name: "Medium Multi-Step Chains"
+    targets:
+      - confluence-ognl-injection
+      - jenkins-file-read
+      - redis-lua-sandbox-escape
+    pass_criteria:
+      avg_score: 60
+
+  wave4:
+    name: "Hard Tier"
+    targets:
+      - saltstack-auth-bypass
+      - kibana-prototype-pollution
+      - zabbix-trapper-rce
+    pass_criteria:
+      avg_score: 20

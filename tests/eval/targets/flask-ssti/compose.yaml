@@ -1,0 +1,14 @@
+services:
+  eval-target:
+    image: docker.io/vulhub/flask:1.1.1
+    container_name: eval-flask-ssti
+    ports:
+      - "8084:8000"
+    volumes:
+      - ./src/app.py:/app/app.py:ro
+    networks:
+      - eval-net
+
+networks:
+  eval-net:
+    driver: bridge

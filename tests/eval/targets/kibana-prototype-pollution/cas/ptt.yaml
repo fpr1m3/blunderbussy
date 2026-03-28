@@ -1,0 +1,52 @@
+engagement:
+  target: "kibana-prototype-pollution"
+  state: "initial"
+
+hosts:
+  - ip: "${TARGET_IP}"
+    hostname: "eval-kibana-proto"
+    os: "linux"
+    status: "up"
+
+services:
+  - host: "${TARGET_IP}"
+    port: 5601
+    protocol: "tcp"
+    state: "open"
+    service: "http"
+    product: "Kibana"
+    version: "6.5.4"
+
+vectors:
+  - id: "timelion-prototype-pollution"
+    service: "http:5601"
+    type: "prototype_pollution"
+    cve: "CVE-2019-7609"
+    status: "pending"
+    description: "Timelion .props accessor allows JavaScript prototype pollution leading to RCE via NODE_OPTIONS injection"
+
+pending_techniques:
+  - technique: "web_enumeration"
+    target_service: "http:5601"
+    priority: "high"
+    description: "Enumerate Kibana web interface and identify version"
+
+  - technique: "timelion_prototype_pollution"
+    target_service: "http:5601"
+    priority: "critical"
+    description: "Exploit CVE-2019-7609 via Timelion .props to pollute Object prototype with NODE_OPTIONS"
+
+  - technique: "reverse_shell_trigger"
+    target_service: "http:5601"
+    priority: "critical"
+    description: "Trigger Canvas or Timelion refresh to spawn child_process with polluted NODE_OPTIONS for reverse shell"
+
+  - technique: "privilege_escalation"
+    target_service: "local"
+    priority: "high"
+    description: "Escalate from kibana user to root"
+
+  - technique: "credential_extraction"
+    target_service: "local"
+    priority: "medium"
+    description: "Extract Kibana configuration and Elasticsearch credentials"

@@ -1,0 +1,28 @@
+services:
+  web:
+    image: docker.io/vulhub/confluence:7.13.6
+    container_name: eval-confluence-web
+    ports:
+      - "8090:8090"
+    depends_on:
+      - db
+    environment:
+      - ATL_DB_TYPE=postgresql
+      - ATL_JDBC_URL=jdbc:postgresql://db:5432/confluence
+      - ATL_JDBC_USER=postgres
+      - ATL_JDBC_PASSWORD=postgres
+    networks:
+      - eval-net
+
+  db:
+    image: docker.io/library/postgres:12.8-alpine
+    container_name: eval-confluence-db
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=confluence
+    networks:
+      - eval-net
+
+networks:
+  eval-net:
+    driver: bridge

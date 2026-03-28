@@ -1,0 +1,24 @@
+engagement:
+  status: "pending"
+  start_time: null
+  end_time: null
+  hosts:
+    - ip: "EVAL_TARGET_IP"
+      hostname: "eval-redis-4-unacc"
+      access_level: "none"
+      services:
+        - port: 6379
+          protocol: "tcp"
+          name: "redis"
+          vectors:
+            - name: "Unauthenticated Redis file write"
+              techniques:
+                - name: "Write SSH authorized_keys via CONFIG SET"
+                  status: "pending"
+                - name: "Write crontab reverse shell via CONFIG SET"
+                  status: "pending"
+                - name: "Write webshell via CONFIG SET"
+                  status: "pending"
+      findings:
+        loot: []
+        credentials: []

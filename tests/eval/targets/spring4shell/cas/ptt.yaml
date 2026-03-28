@@ -1,0 +1,35 @@
+engagement:
+  target: "spring4shell"
+  phase: "initial"
+
+techniques:
+  - id: "recon-spring"
+    name: "Spring Application Enumeration"
+    status: "pending"
+    description: "Enumerate Spring MVC application, identify endpoints and framework version"
+    target_port: 8080
+
+  - id: "spring4shell-exploit"
+    name: "ClassLoader Property Manipulation"
+    status: "pending"
+    description: "Exploit Spring4Shell to write JSP webshell via Tomcat AccessLogValve"
+    target_port: 8080
+    depends_on: "recon-spring"
+
+  - id: "webshell-access"
+    name: "Webshell Command Execution"
+    status: "pending"
+    description: "Access uploaded JSP webshell for RCE"
+    depends_on: "spring4shell-exploit"
+
+  - id: "post-exploit"
+    name: "Post-Exploitation"
+    status: "pending"
+    description: "Extract credentials and capture flags"
+    depends_on: "webshell-access"
+
+  - id: "privesc"
+    name: "Privilege Escalation"
+    status: "pending"
+    description: "Escalate from application user to root"
+    depends_on: "post-exploit"

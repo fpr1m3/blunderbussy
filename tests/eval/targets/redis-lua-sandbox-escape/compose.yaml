@@ -1,0 +1,12 @@
+services:
+  eval-target:
+    image: docker.io/vulhub/redis:5.0.7
+    container_name: eval-redis-lua-escape
+    ports:
+      - "6380:6379"
+    networks:
+      - eval-net
+
+networks:
+  eval-net:
+    driver: bridge

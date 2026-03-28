@@ -1,0 +1,25 @@
+target:
+  ip: "EVAL_TARGET_IP"
+  hostname: "eval-redis-4-unacc"
+  platform: "linux"
+
+services:
+  - port: 6379
+    protocol: "tcp"
+    name: "redis"
+    product: "Redis"
+    version: "4.0.14"
+    banner: "Redis key-value store 4.0.14"
+    vulnerabilities:
+      - title: "Unauthenticated Redis Access"
+        severity: "critical"
+        description: >
+          Redis instance is running without authentication (no requirepass set).
+          An attacker can connect and execute arbitrary Redis commands, including
+          CONFIG SET to write files to disk (SSH authorized_keys, crontab, or
+          webshell) to achieve remote code execution.
+
+quick_wins:
+  - vector: "Unauthenticated Redis file write"
+    reason: "No auth required; CONFIG SET dir/dbfilename allows arbitrary file write for RCE"
+    priority: 1

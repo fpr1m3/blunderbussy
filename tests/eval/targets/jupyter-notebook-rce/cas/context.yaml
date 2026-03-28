@@ -1,0 +1,26 @@
+target:
+  ip: "EVAL_TARGET_IP"
+  hostname: "eval-jupyter-notebook-rce"
+  platform: "linux"
+
+services:
+  - port: 8888
+    protocol: "tcp"
+    name: "http"
+    product: "Jupyter Notebook"
+    version: "5.2.2"
+    banner: "Jupyter Notebook 5.2.2"
+    vulnerabilities:
+      - title: "Unauthenticated Jupyter Notebook - Arbitrary Code Execution"
+        severity: "critical"
+        description: >
+          Jupyter Notebook is running with an empty authentication token
+          (--NotebookApp.token=''), allowing any user to access the notebook
+          interface without credentials. An attacker can create or modify
+          notebooks to execute arbitrary Python code on the server, including
+          operating system commands via subprocess modules.
+
+quick_wins:
+  - vector: "Unauthenticated Jupyter Notebook code execution"
+    reason: "No auth token required; direct Python code execution via notebook cells"
+    priority: 1

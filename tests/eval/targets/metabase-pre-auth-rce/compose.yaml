@@ -1,0 +1,12 @@
+services:
+  eval-target:
+    image: docker.io/vulhub/metabase:0.46.6
+    container_name: eval-metabase-pre-auth-rce
+    ports:
+      - "3001:3000"
+    networks:
+      - eval-net
+
+networks:
+  eval-net:
+    driver: bridge

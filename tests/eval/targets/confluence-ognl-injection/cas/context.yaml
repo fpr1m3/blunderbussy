@@ -1,0 +1,21 @@
+target:
+  name: "confluence-ognl-injection"
+  ip: "${TARGET_IP}"
+  platform: "linux"
+
+services:
+  - port: 8090
+    protocol: "tcp"
+    service: "http"
+    product: "Atlassian Confluence"
+    version: "7.13.6"
+    vulnerabilities:
+      - cve: "CVE-2022-26134"
+        name: "Confluence OGNL Injection"
+        description: "Pre-authentication OGNL injection in URI path allows remote code execution"
+        severity: "critical"
+        cvss: 9.8
+    quick_wins:
+      - "Send OGNL expression in URI path: /${ognl_payload}/"
+      - "Test with simple command execution payload in OGNL"
+      - "Extract database credentials from confluence.cfg.xml"

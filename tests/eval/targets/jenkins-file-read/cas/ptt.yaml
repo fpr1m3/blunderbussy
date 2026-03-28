@@ -1,0 +1,35 @@
+engagement:
+  target: "jenkins-file-read"
+  phase: "initial"
+
+techniques:
+  - id: "recon-jenkins"
+    name: "Jenkins Service Enumeration"
+    status: "pending"
+    description: "Enumerate Jenkins web interface and version on port 8080"
+    target_port: 8080
+
+  - id: "cli-file-read"
+    name: "Jenkins CLI File Read"
+    status: "pending"
+    description: "Download jenkins-cli.jar and exploit args4j @-file expansion"
+    target_port: 8080
+    depends_on: "recon-jenkins"
+
+  - id: "cred-extract"
+    name: "Credential Extraction"
+    status: "pending"
+    description: "Read Jenkins secrets and user config files via file read"
+    depends_on: "cli-file-read"
+
+  - id: "auth-rce"
+    name: "Authenticated RCE"
+    status: "pending"
+    description: "Login with extracted credentials and use Script Console for RCE"
+    depends_on: "cred-extract"
+
+  - id: "privesc"
+    name: "Privilege Escalation"
+    status: "pending"
+    description: "Escalate from jenkins user to root"
+    depends_on: "auth-rce"

@@ -17,6 +17,9 @@ catalog:
     cves: ["CVE-2017-12615"]
     category: tomcat
     services: [http]
+    ports:
+      - container: 8080
+        name: http
     difficulty_estimate: easy
     notes: "PUT method file upload. JSP webshell."
 
@@ -24,6 +27,9 @@ catalog:
     cves: ["CVE-2017-10271"]
     category: weblogic
     services: [http]
+    ports:
+      - container: 7001
+        name: http
     difficulty_estimate: medium
     notes: "XMLDecoder deserialization RCE."
 
@@ -54,3 +60,182 @@ catalog:
     services: [http]
     difficulty_estimate: medium
     notes: "LFI via phpMyAdmin. Session file inclusion for RCE."
+
+  # === Easy tier ===
+
+  - image: "docker.io/vulhub/redis:4.0.14"
+    cves: []
+    category: redis
+    services: [redis]
+    difficulty_estimate: easy
+    notes: "Unauthenticated Redis. Write SSH keys, crontab, or webshell."
+
+  - image: "docker.io/vulhub/bind:9.10.3"
+    cves: []
+    category: dns
+    services: [dns]
+    difficulty_estimate: easy
+    notes: "DNS zone transfer misconfiguration. Information disclosure."
+
+  - image: "docker.io/vulhub/bash:4.3.0-with-httpd"
+    cves: ["CVE-2014-6271"]
+    category: bash
+    services: [http]
+    difficulty_estimate: easy
+    notes: "Shellshock via CGI. Classic env injection to RCE."
+
+  - image: "docker.io/vulhub/flask:1.1.1"
+    cves: []
+    category: flask
+    services: [http]
+    difficulty_estimate: easy
+    notes: "Jinja2 SSTI. Template injection to RCE."
+
+  - image: "docker.io/vulhub/drupal:8.5.0"
+    cves: ["CVE-2018-7600"]
+    category: drupal
+    services: [http]
+    difficulty_estimate: easy
+    notes: "Drupalgeddon2. Pre-auth RCE via Form API."
+
+  - image: "docker.io/vulhub/jupyter-notebook:5.2.2"
+    cves: []
+    category: jupyter
+    services: [http]
+    difficulty_estimate: easy
+    notes: "Unauthenticated Jupyter notebook. Direct code execution."
+
+  - image: "docker.io/vulhub/grafana:8.2.6"
+    cves: ["CVE-2021-43798"]
+    category: grafana
+    services: [http]
+    difficulty_estimate: easy
+    notes: "Path traversal. Read /etc/passwd, grafana.ini, sqlite DB."
+
+  # === Medium tier ===
+
+  - image: "docker.io/vulhub/solr:8.11.0"
+    cves: ["CVE-2021-44228"]
+    category: log4j
+    services: [http]
+    difficulty_estimate: medium
+    notes: "Log4Shell via Solr. JNDI injection to RCE. Requires callback server."
+
+  - image: "docker.io/vulhub/spring-webmvc:5.3.17"
+    cves: ["CVE-2022-22965"]
+    category: spring
+    services: [http]
+    difficulty_estimate: medium
+    notes: "Spring4Shell. ClassLoader manipulation to webshell."
+
+  - image: "docker.io/vulhub/libssh:0.8.1"
+    cves: ["CVE-2018-10933"]
+    category: ssh
+    services: [ssh]
+    difficulty_estimate: medium
+    notes: "libssh auth bypass. Send userauth_success to skip auth."
+
+  - image: "docker.io/vulhub/php:7.2.10-fpm"
+    cves: ["CVE-2019-11043"]
+    category: php
+    services: [http]
+    ports:
+      - container: 80
+        name: http
+    difficulty_estimate: medium
+    notes: "PHP-FPM underflow RCE via path manipulation. Needs nginx frontend."
+
+  - image: "docker.io/vulhub/confluence:7.13.6"
+    cves: ["CVE-2022-26134"]
+    category: confluence
+    services: [http]
+    ports:
+      - container: 8090
+        name: http
+    difficulty_estimate: medium
+    notes: "OGNL injection. Pre-auth RCE. Needs postgres backend."
+
+  - image: "docker.io/vulhub/jenkins:2.441"
+    cves: ["CVE-2024-23897"]
+    category: jenkins
+    services: [http]
+    ports:
+      - container: 8080
+        name: http
+    difficulty_estimate: medium
+    notes: "CLI arbitrary file read via args4j. Cred extraction to RCE."
+
+  - image: "docker.io/vulhub/metabase:0.46.6"
+    cves: ["CVE-2023-38646"]
+    category: metabase
+    services: [http]
+    ports:
+      - container: 3000
+        name: http
+    difficulty_estimate: medium
+    notes: "Pre-auth RCE. Setup token leak + JDBC injection."
+
+  - image: "docker.io/vulhub/activemq:5.17.3"
+    cves: ["CVE-2023-46604"]
+    category: activemq
+    services: [openwire, http]
+    ports:
+      - container: 61616
+        name: openwire
+      - container: 8161
+        name: http
+    difficulty_estimate: medium
+    notes: "ClassInfo deserialization RCE via OpenWire protocol."
+
+  - image: "docker.io/vulhub/elasticsearch:1.4.2"
+    cves: ["CVE-2015-1427"]
+    category: elasticsearch
+    services: [http]
+    ports:
+      - container: 9200
+        name: http
+    difficulty_estimate: medium
+    notes: "Groovy sandbox escape. Script execution via search API."
+
+  - image: "docker.io/vulhub/redis:5.0.7"
+    cves: ["CVE-2022-0543"]
+    category: redis
+    services: [redis]
+    difficulty_estimate: medium
+    notes: "Debian Redis Lua sandbox escape. package.loadlib to RCE."
+
+  # === Hard tier ===
+
+  - image: "docker.io/vulhub/saltstack:2019.2.3"
+    cves: ["CVE-2020-11651", "CVE-2020-11652"]
+    category: saltstack
+    services: [zeromq, http, ssh]
+    ports:
+      - container: 4505
+        name: zmq-pub
+      - container: 4506
+        name: zmq-req
+    difficulty_estimate: hard
+    notes: "Auth bypass + directory traversal. ClearFuncs exploit to master takeover."
+
+  - image: "docker.io/vulhub/kibana:6.5.4"
+    cves: ["CVE-2019-7609"]
+    category: kibana
+    services: [http]
+    ports:
+      - container: 5601
+        name: http
+    difficulty_estimate: hard
+    notes: "Timelion prototype pollution to reverse shell. Needs elasticsearch backend."
+
+  - image: "docker.io/vulhub/zabbix:3.0.3-server"
+    cves: ["CVE-2017-2824"]
+    category: zabbix
+    services: [zabbix-trapper, http]
+    ports:
+      - container: 10051
+        name: zabbix-trapper
+      - container: 80
+        name: http
+    difficulty_estimate: hard
+    notes: "Trapper command injection → SQLi → RCE. Complex 4-container setup."

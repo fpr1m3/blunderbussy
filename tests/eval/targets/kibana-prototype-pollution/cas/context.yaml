@@ -1,0 +1,33 @@
+target:
+  name: "kibana-prototype-pollution"
+  ip: "${TARGET_IP}"
+  platform: "linux"
+  difficulty: "hard"
+
+services:
+  - port: 5601
+    protocol: "tcp"
+    service: "http"
+    product: "Kibana"
+    version: "6.5.4"
+    description: "Kibana web interface with Timelion visualization plugin"
+    vulnerabilities:
+      - cve: "CVE-2019-7609"
+        description: "Prototype pollution in Timelion visualization allows RCE via NODE_OPTIONS environment variable injection"
+        severity: "critical"
+
+backend_services:
+  - name: "elasticsearch"
+    port: 9200
+    protocol: "tcp"
+    service: "http"
+    product: "Elasticsearch"
+    version: "6.8.6"
+    description: "Elasticsearch backend (not directly exposed)"
+
+quick_wins:
+  - "Kibana 6.5.4 is vulnerable to CVE-2019-7609 prototype pollution"
+  - "Timelion visualization endpoint allows .props accessor abuse"
+  - "Prototype pollution injects NODE_OPTIONS env var"
+  - "Canvas or Timelion refresh triggers node child_process with polluted env"
+  - "Reverse shell via NODE_OPTIONS --require with crafted JS file"

