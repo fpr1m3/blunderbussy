@@ -11,11 +11,11 @@ engagement:
           protocol: "tcp"
           name: "http"
           vectors:
-            - name: "Jinja2 SSTI via name parameter"
+            - name: "Template injection in web application"
               techniques:
-                - name: "Test SSTI with {{7*7}} in name parameter"
+                - name: "Confirm template injection vulnerability"
                   status: "pending"
-                - name: "Escalate SSTI to RCE via MRO traversal"
+                - name: "Escalate template injection to code execution"
                   status: "pending"
       findings:
         loot: []

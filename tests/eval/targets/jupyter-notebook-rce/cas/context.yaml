@@ -24,3 +24,10 @@ quick_wins:
   - vector: "Unauthenticated Jupyter Notebook code execution"
     reason: "No auth token required; direct Python code execution via notebook cells"
     priority: 1
+
+attack_guidance:
+  notes:
+    - "Jupyter REST API endpoints discovered: /api/kernels, /api/contents, /api/terminals"
+    - "No authentication token required — all API endpoints are accessible without credentials"
+    - "Python 3 kernel available — code execution possible through kernel or notebook API"
+    - "Prefer REST API interaction over WebSocket terminals for reliability"

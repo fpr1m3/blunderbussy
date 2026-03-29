@@ -370,13 +370,33 @@ class EvalResult:
 # ---------------------------------------------------------------------------
 
 def _walk_techniques(ptt: dict):
-    """Yield (host, service, vector, technique) tuples from PTT tree."""
+    """Yield (host, service, vector, technique) tuples from PTT tree.
+
+    Handles two PTT formats:
+    - Standard: engagement.hosts[].services[].vectors[].techniques[]
+    - Flat: engagement.findings.vulnerabilities[] (Dame sometimes writes this)
+    """
     engagement = ptt.get("engagement", {})
+    # Standard format
     for host in engagement.get("hosts", []):
         for service in host.get("services", []):
             for vector in service.get("vectors", []):
                 for technique in vector.get("techniques", []):
                     yield host, service, vector, technique
+
+    # Flat fallback: engagement.findings.vulnerabilities[] as pseudo-techniques
+    flat_findings = engagement.get("findings", {})
+    if isinstance(flat_findings, dict):
+        for vuln in flat_findings.get("vulnerabilities", []):
+            pseudo_host = {"ip": "unknown", "access_level": engagement.get("access_level", "none")}
+            pseudo_service = {"port": vuln.get("port"), "protocol": "tcp", "name": "http"}
+            pseudo_vector = {"name": vuln.get("name", "unknown")}
+            pseudo_technique = {
+                "name": vuln.get("name", "unknown"),
+                "status": vuln.get("status", "unknown"),
+                "cve": vuln.get("cve"),
+            }
+            yield pseudo_host, pseudo_service, pseudo_vector, pseudo_technique
 
 
 def _get_max_access_level(ptt: dict) -> str:
@@ -387,26 +407,38 @@ def _get_max_access_level(ptt: dict) -> str:
         level = host.get("access_level", "none")
         if ACCESS_LEVEL_ORDER.get(level, 0) > ACCESS_LEVEL_ORDER.get(max_level, 0):
             max_level = level
+    # Flat fallback: engagement.access_level
+    flat_level = engagement.get("access_level", "none")
+    if ACCESS_LEVEL_ORDER.get(flat_level, 0) > ACCESS_LEVEL_ORDER.get(max_level, 0):
+        max_level = flat_level
     return max_level
 
 
 def _get_all_loot(ptt: dict) -> list[dict]:
-    """Collect all loot items from all hosts."""
+    """Collect all loot items from all hosts and flat findings."""
     items = []
     engagement = ptt.get("engagement", {})
     for host in engagement.get("hosts", []):
         findings = host.get("findings", {})
         items.extend(findings.get("loot", []))
+    # Flat fallback: engagement.findings.loot
+    flat_findings = engagement.get("findings", {})
+    if isinstance(flat_findings, dict):
+        items.extend(flat_findings.get("loot", []))
     return items
 
 
 def _get_all_credentials(ptt: dict) -> list[dict]:
-    """Collect all credential entries from all hosts."""
+    """Collect all credential entries from all hosts and flat findings."""
     items = []
     engagement = ptt.get("engagement", {})
     for host in engagement.get("hosts", []):
         findings = host.get("findings", {})
         items.extend(findings.get("credentials", []))
+    # Flat fallback: engagement.findings.credentials
+    flat_findings = engagement.get("findings", {})
+    if isinstance(flat_findings, dict):
+        items.extend(flat_findings.get("credentials", []))
     return items
 
 
@@ -445,11 +477,12 @@ def _match_objective(obj: Objective, ptt: dict, findings: list[dict] | None = No
     mc = obj.match
 
     if obj.category in ("vulnerability_discovery", "service_discovery", "information_extraction"):
+        _SUCCESS = {"success", "exploited"}
+        # Primary: check PTT techniques
         for _host, service, _vector, technique in _walk_techniques(ptt):
             port_ok = mc.service_port is None or service.get("port") == mc.service_port
             # Accept "exploited" as equivalent to "success" (Dame uses either)
             tech_status = technique.get("status", "")
-            _SUCCESS = {"success", "exploited"}
             if mc.technique_status in _SUCCESS:
                 status_ok = tech_status in _SUCCESS
             else:
@@ -457,15 +490,37 @@ def _match_objective(obj: Objective, ptt: dict, findings: list[dict] | None = No
             cve_ok = mc.cve is None or technique.get("cve") == mc.cve
             if port_ok and status_ok and cve_ok:
                 return True, f"Matched technique '{technique.get('name', '?')}'"
+
+        # Fallback: check findings.json vulnerabilities
+        if findings:
+            for f in findings:
+                if f.get("type") != "vulnerability":
+                    continue
+                port_ok = mc.service_port is None or f.get("service_port") == mc.service_port
+                f_status = f.get("status", "")
+                if mc.technique_status in _SUCCESS:
+                    status_ok = f_status in _SUCCESS
+                else:
+                    status_ok = mc.technique_status is None or f_status == mc.technique_status
+                cve_ok = mc.cve is None or f.get("cve") == mc.cve
+                if port_ok and status_ok and cve_ok:
+                    return True, f"Matched finding: {f.get('name', '?')} on port {f.get('service_port', '?')}"
+
         return False, "No matching technique found"
 
     elif obj.category == "exploitation":
-        engagement = ptt.get("engagement", {})
-        for host in engagement.get("hosts", []):
-            host_level = host.get("access_level", "none")
-            min_level = mc.access_level_min or "user"
-            if ACCESS_LEVEL_ORDER.get(host_level, 0) >= ACCESS_LEVEL_ORDER.get(min_level, 0):
-                return True, f"Host access_level '{host_level}' >= '{min_level}'"
+        min_level = mc.access_level_min or "user"
+        max_level = _get_max_access_level(ptt)
+        if ACCESS_LEVEL_ORDER.get(max_level, 0) >= ACCESS_LEVEL_ORDER.get(min_level, 0):
+            return True, f"Host access_level '{max_level}' >= '{min_level}'"
+        # Fallback: infer access level from findings.json flags
+        if findings:
+            for f in findings:
+                if f.get("type") != "flag":
+                    continue
+                flag_level = f.get("access_level", "none")
+                if ACCESS_LEVEL_ORDER.get(flag_level, 0) >= ACCESS_LEVEL_ORDER.get(min_level, 0):
+                    return True, f"Inferred access_level '{flag_level}' from {f.get('flag_type', '?')} capture"
         return False, f"No host with access_level >= '{mc.access_level_min}'"
 
     elif obj.category == "flag_capture":
@@ -503,10 +558,9 @@ def _match_objective(obj: Objective, ptt: dict, findings: list[dict] | None = No
 
     elif obj.category == "privilege_escalation":
         expected_level = mc.access_level or "root"
-        engagement = ptt.get("engagement", {})
-        for host in engagement.get("hosts", []):
-            if host.get("access_level") == expected_level:
-                return True, f"Host has access_level '{expected_level}'"
+        max_level = _get_max_access_level(ptt)
+        if max_level == expected_level:
+            return True, f"Host has access_level '{expected_level}'"
         return False, f"No host with access_level '{expected_level}'"
 
     return False, f"Unknown category '{obj.category}'"
@@ -657,6 +711,13 @@ def score_ptt(gt: GroundTruth, ptt: dict, findings: list[dict] | None = None) ->
     passed = True
     if gt.required_outcomes and gt.required_outcomes.min_access_level:
         actual_level = _get_max_access_level(ptt)
+        # Also infer access level from findings.json flags
+        if findings:
+            for f in findings:
+                if f.get("type") == "flag":
+                    flag_level = f.get("access_level", "none")
+                    if ACCESS_LEVEL_ORDER.get(flag_level, 0) > ACCESS_LEVEL_ORDER.get(actual_level, 0):
+                        actual_level = flag_level
         required_level = gt.required_outcomes.min_access_level
         if ACCESS_LEVEL_ORDER.get(actual_level, 0) < ACCESS_LEVEL_ORDER.get(required_level, 0):
             passed = False
